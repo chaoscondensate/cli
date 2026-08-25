@@ -97,11 +97,12 @@ jobs:
       - name: Verify cask archive digests
         shell: bash
         run: |
-          for archive in \
-            forecast-ledger_*_darwin_arm64.tar.gz \
-            forecast-ledger_*_darwin_x86_64.tar.gz; do
+          for archive_path in \
+            dist/forecast-ledger_*_darwin_arm64.tar.gz \
+            dist/forecast-ledger_*_darwin_x86_64.tar.gz; do
+            archive="$(basename "$archive_path")"
             expected="$(awk -v name="$archive" '$2 == name { print $1 }' dist/published/checksums.txt)"
-            actual="$(sha256sum "dist/$archive" | awk '{ print $1 }')"
+            actual="$(sha256sum "$archive_path" | awk '{ print $1 }')"
             if [[ -z "$expected" || "$actual" != "$expected" ]]; then
               echo "Digest mismatch for $archive." >&2
               exit 1
