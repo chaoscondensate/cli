@@ -125,8 +125,10 @@ workflow with the current latest stable tag. The workflow:
 - accepts only an annotated stable SemVer tag that matches GitHub's latest
   stable release;
 - verifies that the tap token has push access before rebuilding anything;
-- rebuilds the Chocolatey package from the exact tag, uploads it when missing,
-  then downloads, attests, and tests the published package bytes;
+- rebuilds the Chocolatey package from the exact tag, binds it to the checksum
+  of the already-published Windows archive, uploads it when missing or replaces
+  it only when that embedded checksum is invalid, then downloads, attests, and
+  tests the published package bytes;
 - regenerates the formula without republishing release assets;
 - binds every formula archive digest to the already-published `checksums.txt` and
   validates the generated Ruby syntax;

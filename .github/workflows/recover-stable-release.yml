@@ -82,17 +82,98 @@ jobs:
           version: v2.18.0
           args: release --clean --skip=publish
 
-      - name: Publish or download Chocolatey package
+      - name: Download published checksums
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RECOVERY_TAG: ${{ inputs.tag }}
+        run: |
+          mkdir -p dist/published
+          gh release download "$RECOVERY_TAG" \
+            --repo chaoscondensate/cli \
+            --pattern checksums.txt \
+            --dir dist/published
+
+      - name: Bind Chocolatey package to published Windows archive
+        shell: pwsh
+        env:
+          RECOVERY_TAG: ${{ inputs.tag }}
+        run: |
+          $packages = @(Get-ChildItem -Path dist -Filter *.nupkg)
+          if ($packages.Count -ne 1) {
+            throw "Expected one generated Chocolatey package, found $($packages.Count)."
+          }
+          $version = $env:RECOVERY_TAG.Substring(1)
+          $archiveName = "forecast-ledger_${version}_windows_x86_64.zip"
+          $escapedArchiveName = [regex]::Escape($archiveName)
+          $checksumLines = @(Get-Content dist/published/checksums.txt | Where-Object {
+            $_ -match "^[0-9a-fA-F]{64}\s+$escapedArchiveName$"
+          })
+          if ($checksumLines.Count -ne 1) {
+            throw "Expected one checksum for $archiveName, found $($checksumLines.Count)."
+          }
+          $publishedChecksum = ($checksumLines[0] -split '\s+')[0].ToLowerInvariant()
+
+          $work = New-Item -ItemType Directory -Force dist/chocolatey-repack
+          $zipPath = Join-Path $work.FullName package.zip
+          $unpackedPath = Join-Path $work.FullName unpacked
+          Copy-Item $packages[0].FullName $zipPath
+          Expand-Archive -Path $zipPath -DestinationPath $unpackedPath
+          $installScript = Join-Path $unpackedPath tools/chocolateyinstall.ps1
+          $content = Get-Content -Raw $installScript
+          $pattern = "(checksum64\s*=\s*')[0-9a-fA-F]{64}(')"
+          if ([regex]::Matches($content, $pattern).Count -ne 1) {
+            throw "Expected exactly one checksum64 entry in the Chocolatey install script."
+          }
+          $replacement = '${1}' + $publishedChecksum + '${2}'
+          [regex]::Replace($content, $pattern, $replacement) |
+            Set-Content -NoNewline -Encoding utf8 $installScript
+
+          $repacked = New-Item -ItemType Directory -Force dist/repacked-chocolatey
+          Push-Location $unpackedPath
+          try {
+            choco pack forecast-ledger.nuspec --outputdirectory $repacked.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "Could not repack the Chocolatey package."
+            }
+          } finally {
+            Pop-Location
+          }
+          if (@(Get-ChildItem -Path $repacked.FullName -Filter *.nupkg).Count -ne 1) {
+            throw "Expected exactly one repacked Chocolatey package."
+          }
+
+      - name: Publish or verify Chocolatey package
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RECOVERY_TAG: ${{ inputs.tag }}
         run: |
-          $packages = @(Get-ChildItem -Path dist -Filter *.nupkg)
+          function Get-PackageChecksum([string]$PackagePath, [string]$InspectName) {
+            $inspectRoot = Join-Path dist $InspectName
+            $zipPath = "$inspectRoot.zip"
+            Copy-Item $PackagePath $zipPath
+            Expand-Archive -Path $zipPath -DestinationPath $inspectRoot
+            $content = Get-Content -Raw (Join-Path $inspectRoot tools/chocolateyinstall.ps1)
+            $match = [regex]::Match($content, "checksum64\s*=\s*'(?<checksum>[0-9a-fA-F]{64})'")
+            if (-not $match.Success) {
+              throw "Could not read checksum64 from $PackagePath."
+            }
+            return $match.Groups['checksum'].Value.ToLowerInvariant()
+          }
+
+          $packages = @(Get-ChildItem -Path dist/repacked-chocolatey -Filter *.nupkg)
           if ($packages.Count -ne 1) {
-            throw "Expected one Chocolatey package, found $($packages.Count)."
+            throw "Expected one corrected Chocolatey package, found $($packages.Count)."
           }
           $package = $packages[0]
+          $version = $env:RECOVERY_TAG.Substring(1)
+          $archiveName = "forecast-ledger_${version}_windows_x86_64.zip"
+          $escapedArchiveName = [regex]::Escape($archiveName)
+          $checksumLine = @(Get-Content dist/published/checksums.txt | Where-Object {
+            $_ -match "^[0-9a-fA-F]{64}\s+$escapedArchiveName$"
+          })
+          $publishedChecksum = ($checksumLine[0] -split '\s+')[0].ToLowerInvariant()
           $release = gh api "repos/chaoscondensate/cli/releases/tags/$env:RECOVERY_TAG" | ConvertFrom-Json
           $asset = @($release.assets | Where-Object name -eq $package.Name)
           if ($asset.Count -eq 0) {
@@ -100,7 +181,20 @@ jobs:
             if ($LASTEXITCODE -ne 0) {
               throw "Could not attach the Chocolatey package to the GitHub Release."
             }
-          } elseif ($asset.Count -gt 1) {
+          } elseif ($asset.Count -eq 1) {
+            New-Item -ItemType Directory -Force dist/current-chocolatey | Out-Null
+            gh release download $env:RECOVERY_TAG --repo chaoscondensate/cli --pattern $package.Name --dir dist/current-chocolatey
+            if ($LASTEXITCODE -ne 0) {
+              throw "Could not download the current Chocolatey package."
+            }
+            $currentPackage = @(Get-ChildItem -Path dist/current-chocolatey -Filter *.nupkg)[0]
+            if ((Get-PackageChecksum $currentPackage.FullName current-chocolatey-inspect) -ne $publishedChecksum) {
+              gh release upload $env:RECOVERY_TAG $package.FullName --repo chaoscondensate/cli --clobber
+              if ($LASTEXITCODE -ne 0) {
+                throw "Could not replace the invalid Chocolatey package."
+              }
+            }
+          } else {
             throw "The GitHub Release contains more than one matching Chocolatey package."
           }
           New-Item -ItemType Directory -Force dist/published-chocolatey | Out-Null
@@ -110,6 +204,10 @@ jobs:
           }
           if (@(Get-ChildItem -Path dist/published-chocolatey -Filter *.nupkg).Count -ne 1) {
             throw "Expected exactly one published Chocolatey package."
+          }
+          $publishedPackage = @(Get-ChildItem -Path dist/published-chocolatey -Filter *.nupkg)[0]
+          if ((Get-PackageChecksum $publishedPackage.FullName published-chocolatey-inspect) -ne $publishedChecksum) {
+            throw "The published Chocolatey package does not match the published Windows archive checksum."
           }
 
       - name: Attest Chocolatey package
@@ -127,18 +225,6 @@ jobs:
           choco install forecast-ledger --source $source --version $version --yes --no-progress
           forecast-ledger version --json
           choco uninstall forecast-ledger --yes --no-progress
-
-      - name: Download published checksums
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RECOVERY_TAG: ${{ inputs.tag }}
-        run: |
-          mkdir -p dist/published
-          gh release download "$RECOVERY_TAG" \
-            --repo chaoscondensate/cli \
-            --pattern checksums.txt \
-            --dir dist/published
 
       - name: Check out current release automation
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
