@@ -262,37 +262,30 @@ jobs:
             dist/published/checksums.txt \
             dist/homebrew/Formula/forecast-ledger.rb
 
+      - name: Check out Homebrew tap
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: chaoscondensate/homebrew-tap
+          ref: main
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: dist/homebrew-tap
+
       - name: Publish Homebrew formula
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           RECOVERY_TAG: ${{ inputs.tag }}
         run: |
-          formula_path="Formula/forecast-ledger.rb"
-          formula_file="dist/homebrew/$formula_path"
-          content="$(base64 -w 0 "$formula_file")"
-          existing_sha="$(gh api "repos/chaoscondensate/homebrew-tap/contents/$formula_path" --jq '.sha' 2>/dev/null || true)"
-          arguments=(
-            --method PUT
-            "repos/chaoscondensate/homebrew-tap/contents/$formula_path"
-            -f "message=chore: update forecast-ledger to $RECOVERY_TAG"
-            -f branch=main
-            -f "content=$content"
-          )
-          if [[ -n "$existing_sha" ]]; then
-            arguments+=(-f "sha=$existing_sha")
-          fi
-          gh api "${arguments[@]}" --silent
-
-          cask_path="Casks/forecast-ledger.rb"
-          cask_sha="$(gh api "repos/chaoscondensate/homebrew-tap/contents/$cask_path" --jq '.sha' 2>/dev/null || true)"
-          if [[ -n "$cask_sha" ]]; then
-            gh api --method DELETE \
-              "repos/chaoscondensate/homebrew-tap/contents/$cask_path" \
-              -f "message=chore: replace forecast-ledger cask with formula" \
-              -f branch=main \
-              -f "sha=$cask_sha" \
-              --silent
+          cp dist/homebrew/Formula/forecast-ledger.rb \
+            dist/homebrew-tap/Formula/forecast-ledger.rb
+          rm -f dist/homebrew-tap/Casks/forecast-ledger.rb
+          git -C dist/homebrew-tap config user.name github-actions[bot]
+          git -C dist/homebrew-tap config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git -C dist/homebrew-tap add --all
+          if git -C dist/homebrew-tap diff --cached --quiet; then
+            echo "Homebrew formula is already current."
+          else
+            git -C dist/homebrew-tap commit -m "chore: update forecast-ledger to $RECOVERY_TAG"
+            git -C dist/homebrew-tap push origin HEAD:main
           fi
 
       - name: Attest published release artifacts
