@@ -103,7 +103,6 @@ homebrew_casks:
       args:
         - completion
       base_name: forecast-ledger
-      shell_parameter_format: arg
       shells:
         - bash
         - zsh
@@ -112,8 +111,9 @@ homebrew_casks:
       Documentation and project context:
         https://chaoscondensate.com/
     hooks:
-      post:
+      pre:
         install: |
           if OS.mac?
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/forecast-ledger"]
+            system_command "/usr/bin/codesign", args: ["--force", "--sign", "-", "#{staged_path}/forecast-ledger"]
           end

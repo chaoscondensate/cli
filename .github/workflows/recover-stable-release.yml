@@ -130,6 +130,25 @@ jobs:
               exit 1
             fi
           done
+          if grep -Fq "  postflight do" "$cask_file"; then
+            sed -i 's/^  postflight do$/  preflight do/' "$cask_file"
+          fi
+          if ! grep -Fq '/usr/bin/codesign' "$cask_file"; then
+            sed -i '/system_command "\/usr\/bin\/xattr"/a\      system_command "/usr/bin/codesign", args: ["--force", "--sign", "-", "#{staged_path}/forecast-ledger"]' "$cask_file"
+          fi
+          sed -i '/^[[:space:]]*shell_parameter_format: :arg,$/d' "$cask_file"
+          if ! grep -Fq "  preflight do" "$cask_file"; then
+            echo "Recovered cask does not remove quarantine before generated completions." >&2
+            exit 1
+          fi
+          if ! grep -Fq '/usr/bin/codesign' "$cask_file"; then
+            echo "Recovered cask does not ad-hoc sign the macOS binary before execution." >&2
+            exit 1
+          fi
+          if grep -Fq 'shell_parameter_format: :arg' "$cask_file"; then
+            echo "Recovered cask uses an incompatible completion argument format." >&2
+            exit 1
+          fi
           ruby -c "$cask_file"
 
       - name: Publish Homebrew cask

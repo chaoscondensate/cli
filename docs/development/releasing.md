@@ -135,10 +135,12 @@ GoReleaser, so an invalid token fails before any GitHub Release is published.
 
 The initial pipeline creates checksums, SBOMs, and GitHub artifact attestations,
 but it does not Apple-sign or notarize the macOS binaries. The Homebrew cask
-uses Homebrew's documented unsigned-binary fallback to remove the quarantine
-attribute after installation. This status must be stated in release notes.
+uses an unsigned-binary fallback during preflight: it removes the quarantine
+attribute and applies a local ad-hoc signature before Homebrew executes the
+binary to generate shell completions. This status must be stated in release
+notes.
 
 Before calling the release channel stable, prefer Apple Developer ID signing
-and notarization, remove the cask's `xattr` post-install hook, and add a native
-verification step for the signed archives. Windows code signing is also not yet
-configured and must be documented as such.
+and notarization, remove the cask's `xattr` and `codesign` preflight fallback,
+and add a native verification step for the signed archives. Windows code
+signing is also not yet configured and must be documented as such.
