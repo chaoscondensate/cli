@@ -28,10 +28,10 @@ The CLI must follow the human-first and composable behavior in the Command Line 
 
 ### 1. Use a hexagonal single-binary architecture
 
-The provisional executable name is `chaos`, with module path `github.com/chaoscondensate/cli`. One `main` selects either the CLI adapter or MCP stdio adapter; both call the same application services. The intended package boundaries are:
+The executable name is `forecast-ledger`, with module path `github.com/chaoscondensate/cli`. One `main` selects either the CLI adapter or MCP stdio adapter; both call the same application services. The intended package boundaries are:
 
 ```text
-cmd/chaos                 process entrypoint and version metadata
+cmd/forecast-ledger       process entrypoint and version metadata
 internal/app              use-case orchestration and transactions
 internal/ledger           typed v1 model, selectors, lifecycle rules
 internal/document         JSON/YAML source tree and format-preserving patches
@@ -52,7 +52,7 @@ Alternative considered: implement the MCP server by shelling out to CLI commands
 
 ### 2. Pin and embed the released contract by content
 
-The repository vendors the exact v1 schema, reference fixtures needed for conformance, crypto vector, and source attribution under a versioned internal data directory. Builds embed those bytes and expose the supported schema commit and digest in `chaos version --json`. Runtime validation never downloads a schema or follows a remote `$ref`.
+The repository vendors the exact v1 schema, reference fixtures needed for conformance, crypto vector, and source attribution under a versioned internal data directory. Builds embed those bytes and expose the supported schema commit and digest in `forecast-ledger version --json`. Runtime validation never downloads a schema or follows a remote `$ref`.
 
 The release tag was moved during the RFC removal while retaining version 1.0.0. Therefore, a tag URL alone is not sufficient for build reproducibility. Dependency updates use an explicit review task that records old/new commit and digest, runs the upstream fixture suite through the Go implementation, and requires a compatibility decision.
 
@@ -71,7 +71,7 @@ Alternative considered: unmarshal and reserialize the entire file. Rejected beca
 The CLI surface is:
 
 ```text
-chaos
+forecast-ledger
 ├── init
 ├── validate
 ├── status
@@ -144,7 +144,7 @@ Alternative considered: automate a specific source-control or hosting workflow. 
 
 ### 9. Run MCP v1 over stdio with capability gates
 
-The implementation uses a pinned stable official MCP Go SDK. The initial compatibility target is the newest stable SDK/spec pair available during implementation; it is recorded in `chaos version` and covered by protocol tests rather than following prereleases automatically. Stdio is the only v1 transport, and protocol stdout is isolated from all human logging.
+The implementation uses a pinned stable official MCP Go SDK. The initial compatibility target is the newest stable SDK/spec pair available during implementation; it is recorded in `forecast-ledger version` and covered by protocol tests rather than following prereleases automatically. Stdio is the only v1 transport, and protocol stdout is isolated from all human logging.
 
 The server starts with one or more canonical ledger roots, package-output roots, and separate secret roots. It is read-only by default. Independent startup grants enable write, network, and reveal operations; package creation needs write, reveal needs write+reveal, and OTS network operations need network. Path resolution rejects `..`, symlink/junction escape, UNC/drive escape outside allowed roots, and case-folding surprises.
 
@@ -184,7 +184,7 @@ Releases use `CGO_ENABLED=0` where the final filesystem-lock implementation perm
 - **[An evidence package can be incomplete or overwrite unrelated files]** → Validate the full artifact set first, use deterministic manifests, write to a new explicit output directory, reject collisions, and recover or remove only CLI-created partial output after failure.
 - **[MCP agents may invoke costly or sensitive actions]** → Read-only default, separate write/network/reveal grants, root confinement, structured side-effect descriptions, locks, limits, and redaction tests.
 - **[Automated outcome checks can overstate truth]** → Keep outcome evidence a separate layer, report source availability separately from human evaluation, and state protocol limitations in every report.
-- **[Provisional `chaos` name may collide on a target platform]** → Run package-manager and executable collision checks before the first public beta; if a rename is necessary, do it before declaring a stable CLI contract.
+- **[The executable name may later collide on a target platform]** → Keep collision checks in release review and rename before declaring a stable CLI contract if `forecast-ledger` becomes unavailable.
 
 ## Migration Plan
 

@@ -1,0 +1,170 @@
+// Package service coordinates transport-neutral Forecast Ledger operations.
+package service
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/chaoscondensate/cli/internal/app"
+	"github.com/chaoscondensate/cli/internal/document"
+	"github.com/chaoscondensate/cli/internal/ledger"
+	"github.com/chaoscondensate/cli/internal/storage"
+	"github.com/chaoscondensate/cli/internal/validation"
+)
+
+type LoadedLedger struct {
+	Path     string
+	Document *document.Document
+	Model    *ledger.Ledger
+}
+
+type LedgerStatus struct {
+	LedgerID          ledger.Slug `json:"ledger_id"`
+	SchemaVersion     string      `json:"schema_version"`
+	Questions         int         `json:"questions"`
+	Forecasts         int         `json:"forecasts"`
+	PublicForecasts   int         `json:"public_forecasts"`
+	SealedForecasts   int         `json:"sealed_forecasts"`
+	RevealedForecasts int         `json:"revealed_forecasts"`
+	Unanchored        int         `json:"unanchored"`
+	Pending           int         `json:"pending"`
+	Verified          int         `json:"verified"`
+	Failed            int         `json:"failed"`
+}
+
+func LoadAndValidateLedger(ctx context.Context, filename string, stdin io.Reader) (*LoadedLedger, error) {
+	if ctx != nil && ctx.Err() != nil {
+		return nil, app.NewError(app.CodeInterrupted, "operation was interrupted", ctx.Err())
+	}
+	var parsed *document.Document
+	var path string
+	var artifacts fs.FS
+	var err error
+	if filename == "-" {
+		if stdin == nil {
+			return nil, app.NewError(app.CodeUsage, "stdin is not available", nil)
+		}
+		parsed, err = parseStdin(stdin)
+	} else {
+		resolved, resolveErr := storage.ResolveLedgerPath(filename, true)
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		file, openErr := os.Open(resolved)
+		if openErr != nil {
+			return nil, app.NewError(app.CodeIO, "ledger file cannot be opened", openErr)
+		}
+		defer file.Close()
+		path = resolved
+		artifacts = os.DirFS(filepath.Dir(resolved))
+		var format document.Format
+		switch strings.ToLower(filepath.Ext(resolved)) {
+		case ".json":
+			format = document.FormatJSON
+		case ".yaml", ".yml":
+			format = document.FormatYAML
+		default:
+			return nil, app.NewError(app.CodeUsage, "ledger filename must end in .json, .yaml, or .yml", nil)
+		}
+		parsed, err = parseLedgerReader(file, format)
+	}
+	if err != nil {
+		applicationErr := app.NewError(app.CodeInvalidData, "ledger cannot be parsed", err)
+		var parseErr *document.ParseError
+		if errors.As(err, &parseErr) {
+			return nil, app.WithDetails(applicationErr, map[string]any{"issues": []document.Diagnostic{parseErr.Diagnostic}})
+		}
+		return nil, applicationErr
+	}
+	structural, err := validation.DefaultStructuralValidator()
+	if err != nil {
+		return nil, app.NewError(app.CodeInternal, "embedded ledger schema cannot be loaded", err)
+	}
+	schemaIssues, err := structural.Validate(parsed.Root.Any())
+	if err != nil {
+		return nil, app.NewError(app.CodeInternal, "ledger schema validation could not run", err)
+	}
+	if len(schemaIssues) > 0 {
+		return nil, app.WithDetails(app.NewError(app.CodeInvalidData, "ledger does not match Forecast Ledger v1", nil), map[string]any{"issues": schemaIssues})
+	}
+	model, err := validation.DecodeLedger(parsed)
+	if err != nil {
+		return nil, app.NewError(app.CodeInternal, "validated ledger cannot be mapped to the domain model", err)
+	}
+	semanticIssues, err := validation.ValidateSemantics(model, artifacts)
+	if err != nil {
+		return nil, app.NewError(app.CodeInternal, "ledger semantic validation could not run", err)
+	}
+	if len(semanticIssues) > 0 {
+		return nil, app.WithDetails(app.NewError(app.CodeInvalidData, "ledger has semantic validation errors", nil), map[string]any{"issues": semanticIssues})
+	}
+	return &LoadedLedger{Path: path, Document: parsed, Model: model}, nil
+}
+
+func StatusForLedger(loaded *LoadedLedger) (LedgerStatus, error) {
+	if loaded == nil || loaded.Model == nil {
+		return LedgerStatus{}, errors.New("loaded ledger is nil")
+	}
+	status := LedgerStatus{
+		LedgerID: loaded.Model.LedgerID, SchemaVersion: string(loaded.Model.SchemaVersion), Questions: len(loaded.Model.Questions),
+	}
+	for _, question := range loaded.Model.Questions {
+		for _, forecast := range question.Forecasts {
+			status.Forecasts++
+			switch forecast.Visibility {
+			case ledger.VisibilityPublic:
+				status.PublicForecasts++
+			case ledger.VisibilitySealed:
+				status.SealedForecasts++
+			case ledger.VisibilityRevealed:
+				status.RevealedForecasts++
+			}
+			switch {
+			case forecast.Integrity.Unanchored != nil:
+				status.Unanchored++
+			case forecast.Integrity.Pending != nil:
+				status.Pending++
+			case forecast.Integrity.Verified != nil:
+				status.Verified++
+			case forecast.Integrity.Failed != nil:
+				status.Failed++
+			}
+		}
+	}
+	return status, nil
+}
+
+func parseStdin(reader io.Reader) (*document.Document, error) {
+	limit := document.DefaultLimits.MaxBytes
+	raw, err := io.ReadAll(io.LimitReader(reader, limit+1))
+	if err != nil {
+		return nil, fmt.Errorf("read ledger from stdin: %w", err)
+	}
+	if int64(len(raw)) > limit {
+		// Let the normal parser return its stable size-limit diagnostic.
+		return document.ParseYAML(bytes.NewReader(raw), document.DefaultLimits)
+	}
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') {
+		return document.ParseJSON(bytes.NewReader(raw), document.DefaultLimits)
+	}
+	return document.ParseYAML(bytes.NewReader(raw), document.DefaultLimits)
+}
+
+func parseLedgerReader(reader io.Reader, format document.Format) (*document.Document, error) {
+	switch format {
+	case document.FormatJSON:
+		return document.ParseJSON(reader, document.DefaultLimits)
+	case document.FormatYAML:
+		return document.ParseYAML(reader, document.DefaultLimits)
+	default:
+		return nil, fmt.Errorf("unknown ledger format %q", format)
+	}
+}

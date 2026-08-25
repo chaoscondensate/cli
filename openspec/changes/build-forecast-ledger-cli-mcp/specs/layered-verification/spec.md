@@ -47,7 +47,7 @@ Every human and JSON verification report SHALL state that v1 evidence does not b
 The system SHALL build a local evidence package from an explicitly selected ledger, its exact target artifacts, receipts, and any explicitly selected disclosed reveal material. The package SHALL include a deterministic manifest of stable relative paths and SHA-256 digests, MUST exclude keys, credentials, secret paths, and unrevealed sealed plaintext, and MUST NOT require a source-control repository, hosting service, or network access.
 
 #### Scenario: Build from a standalone ledger
-- **WHEN** a user runs `chaos publish build --file ledger.yaml --output evidence` for a ledger stored outside source control
+- **WHEN** a user runs `forecast-ledger publish build --file ledger.yaml --output evidence` for a ledger stored outside source control
 - **THEN** the command creates a complete local evidence package without reading source-control metadata or contacting a remote service
 
 #### Scenario: Repeat package build
@@ -55,8 +55,8 @@ The system SHALL build a local evidence package from an explicitly selected ledg
 - **THEN** the manifest bytes and digest are identical and contain no secret or machine-specific path
 
 ### Requirement: Verify a retained package locally
-Given an evidence package, `chaos publish verify` SHALL require an explicit `--file` for the ledger inside the package and an explicit `--manifest` for the package manifest. It SHALL check every manifest path and digest before running the applicable content, reveal, and existence layers. Package verification SHALL work from local files without requiring the original authoring location, a source-control repository, or a hosting service.
+Given an evidence package, `forecast-ledger publish verify` SHALL require an explicit `--file` for the ledger inside the package and an explicit `--manifest` for the package manifest. It SHALL check every manifest path and digest before running the applicable content, reveal, and existence layers. Package verification SHALL work from local files without requiring the original authoring location, a source-control repository, or a hosting service.
 
 #### Scenario: Offline package verification
-- **WHEN** a verifier runs `chaos publish verify --file evidence/ledger.yaml --manifest evidence/manifest.json` and has the Bitcoin verification source required by OpenTimestamps
+- **WHEN** a verifier runs `forecast-ledger publish verify --file evidence/ledger.yaml --manifest evidence/manifest.json` and has the Bitcoin verification source required by OpenTimestamps
 - **THEN** manifest integrity plus the applicable content, reveal, and existence layers can be checked without contacting the package's original publication location

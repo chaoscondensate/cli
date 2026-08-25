@@ -1,0 +1,23 @@
+NAME:
+   forecast-ledger forecast show - Show a forecast
+
+USAGE:
+   forecast-ledger forecast show [options]
+
+DESCRIPTION:
+   Example:
+     forecast-ledger forecast show --file ledger.yaml --question q-launch --forecast f-001
+
+OPTIONS:
+   --file string, -f string  Ledger file path; use - for stdin
+   --question string         Stable question ID
+   --forecast string         Stable forecast ID
+   --help, -h                show help
+
+GLOBAL OPTIONS:
+   --json              Write stable JSON output
+   --plain             Write plain text without decoration
+   --quiet, -q         Suppress successful output
+   --verbose, -v       Write additional diagnostics to stderr
+   --no-input          Never prompt; fail when input is missing
+   --timeout duration  Limit network or wait operations (default: 30s)

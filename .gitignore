@@ -1,0 +1,5 @@
+/dist/
+/forecast-ledger
+/forecast-ledger.exe
+*.test
+*.out

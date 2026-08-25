@@ -1,44 +1,44 @@
 ## 1. Project Foundation and Guidance
 
-- [ ] 1.1 Check `chaos` executable/package-name collisions on macOS, Linux, Windows, Homebrew, Scoop, and Winget; confirm or rename before exposing stable commands
-- [ ] 1.2 Create the `github.com/chaoscondensate/cli` Go module, `cmd/chaos` entrypoint, internal package skeleton, and reproducible developer build commands
-- [ ] 1.3 Select and pin reviewed versions of `urfave/cli/v3`, the stable official MCP Go SDK, JSON Schema/YAML, crypto, locking, and other dependencies; record license and vulnerability review results
-- [ ] 1.4 Vendor the v1.0.0 schema, upstream valid/invalid fixtures, reference attribution, and seal vector from commit `e409463d702888fefd253b32f21b9b2f864aabed`; assert the schema and release digests in tests
-- [ ] 1.5 Implement build/version metadata for binary version, source revision, schema version/commit/digest, Go version, and supported MCP protocol
-- [ ] 1.6 Write `AGENTS.md` with project context, source precedence, English-only public content, package boundaries, explicit `--file`, append-only history, secret rules, conformance gates, required checks, and open-source/business positioning
+- [x] 1.1 Check `forecast-ledger` executable/package-name collisions on macOS, Linux, Windows, Homebrew, Scoop, and Winget; confirm before exposing stable commands
+- [x] 1.2 Create the `github.com/chaoscondensate/cli` Go module, `cmd/forecast-ledger` entrypoint, internal package skeleton, and reproducible developer build commands
+- [x] 1.3 Select and pin reviewed versions of `urfave/cli/v3`, the stable official MCP Go SDK, JSON Schema/YAML, crypto, locking, and other dependencies; record license and vulnerability review results
+- [x] 1.4 Vendor the v1.0.0 schema, upstream valid/invalid fixtures, reference attribution, and seal vector from commit `e409463d702888fefd253b32f21b9b2f864aabed`; assert the schema and release digests in tests
+- [x] 1.5 Implement build/version metadata for binary version, source revision, schema version/commit/digest, Go version, and supported MCP protocol
+- [x] 1.6 Write `AGENTS.md` with project context, source precedence, English-only public content, package boundaries, explicit `--file`, append-only history, secret rules, conformance gates, required checks, and open-source/business positioning
 
 ## 2. Document Model and Validation
 
-- [ ] 2.1 Define typed Forecast Ledger v1 models for identities, platforms, questions, all four forecast value types, lifecycle states, integrity, OTS metadata, sealed commitments, and resolutions
-- [ ] 2.2 Implement bounded JSON parsing with duplicate-key, invalid Unicode, float, and unsafe-integer rejection plus precise document locations
-- [ ] 2.3 Implement bounded YAML parsing with duplicate-key, alias/depth/size checks and a retained source tree for comments, order, style, and newline convention
-- [ ] 2.4 Embed and run the pinned Draft 2020-12 schema and format assertions without runtime network resolution
-- [ ] 2.5 Port upstream semantic checks for IDs, references, timezones, chronology, status/resolution rules, value/type agreement, probabilities, quantiles, target digests, and revealed mirrors
-- [ ] 2.6 Add source-tree patching that changes selected nodes while preserving untouched JSON/YAML data and YAML presentation
-- [ ] 2.7 Run all upstream valid and invalid fixtures through the Go validator, including explicit rejection of the RFC 3161 negative fixture
-- [ ] 2.8 Add parity tests against the upstream Python validator and fuzz/resource-limit tests for JSON and YAML readers
+- [x] 2.1 Define typed Forecast Ledger v1 models for identities, platforms, questions, all four forecast value types, lifecycle states, integrity, OTS metadata, sealed commitments, and resolutions
+- [x] 2.2 Implement bounded JSON parsing with duplicate-key, invalid Unicode, float, and unsafe-integer rejection plus precise document locations
+- [x] 2.3 Implement bounded YAML parsing with duplicate-key, alias/depth/size checks and a retained source tree for comments, order, style, and newline convention
+- [x] 2.4 Embed and run the pinned Draft 2020-12 schema and format assertions without runtime network resolution
+- [x] 2.5 Port upstream semantic checks for IDs, references, timezones, chronology, status/resolution rules, value/type agreement, probabilities, quantiles, target digests, and revealed mirrors
+- [x] 2.6 Add source-tree patching that changes selected nodes while preserving untouched JSON/YAML data and YAML presentation
+- [x] 2.7 Run all upstream valid and invalid fixtures through the Go validator, including explicit rejection of the RFC 3161 negative fixture
+- [x] 2.8 Add parity tests against the upstream Python validator and fuzz/resource-limit tests for JSON and YAML readers
 
 ## 3. Storage, Paths, Transactions, and Errors
 
-- [ ] 3.1 Define stable domain error codes/details and CLI exit-code mappings for usage, invalid data, not found, conflict, verification, I/O, network, pending, internal, and interrupt outcomes
-- [ ] 3.2 Implement explicit ledger/artifact path resolution, safe relative-path handling, symlink/junction checks, Windows drive/UNC rules, and root confinement helpers
-- [ ] 3.3 Implement cross-platform exclusive ledger locks shared by CLI and MCP operations, with deterministic conflict reporting
-- [ ] 3.4 Implement parse-validate-patch-validate transactions with same-directory temporary files, flush, OS-specific safe replacement, and recovery journals
-- [ ] 3.5 Add crash-injection, permission, existing-output, concurrent-writer, path-traversal, case-folding, and Windows replacement tests
+- [x] 3.1 Define stable domain error codes/details and CLI exit-code mappings for usage, invalid data, not found, conflict, verification, I/O, network, pending, internal, and interrupt outcomes
+- [x] 3.2 Implement explicit ledger/artifact path resolution, safe relative-path handling, symlink/junction checks, Windows drive/UNC rules, and root confinement helpers
+- [x] 3.3 Implement cross-platform exclusive ledger locks shared by CLI and MCP operations, with deterministic conflict reporting
+- [x] 3.4 Implement parse-validate-patch-validate transactions with same-directory temporary files, flush, OS-specific safe replacement, and recovery journals
+- [x] 3.5 Add crash-injection, permission, existing-output, concurrent-writer, path-traversal, case-folding, and Windows replacement tests
 
 ## 4. CLI Contract and Presentation
 
-- [ ] 4.1 Build the urfave command tree for init, validate, status, platform, question, forecast, target, timestamp, verify, publish, MCP, completion, and version
-- [ ] 4.2 Require `--file/-f` on every ledger operation and stable question/forecast selectors on every record operation; allow `--file -` only for eligible read-only commands
-- [ ] 4.3 Implement examples-first English help, typo guidance, full subcommand help, and shell completion for bash, zsh, fish, and PowerShell
-- [ ] 4.4 Implement human, plain, quiet, verbose, and stable JSON presenters with strict stdout/stderr separation, TTY detection, `NO_COLOR`, and secret redaction
-- [ ] 4.5 Implement `--no-input`, `--dry-run`, timeouts, context cancellation, and prompt rules for multi-file or network actions
-- [ ] 4.6 Add golden tests for help, stdout/stderr, JSON schemas, errors, exit codes, non-TTY output, cancellation, and accidental secret disclosure
+- [x] 4.1 Build the urfave command tree for init, validate, status, platform, question, forecast, target, timestamp, verify, publish, MCP, completion, and version
+- [x] 4.2 Require `--file/-f` on every ledger operation and stable question/forecast selectors on every record operation; allow `--file -` only for eligible read-only commands
+- [x] 4.3 Implement examples-first English help, typo guidance, full subcommand help, and shell completion for bash, zsh, fish, and PowerShell
+- [x] 4.4 Implement human, plain, quiet, verbose, and stable JSON presenters with strict stdout/stderr separation, TTY detection, `NO_COLOR`, and secret redaction
+- [x] 4.5 Implement `--no-input`, `--dry-run`, timeouts, context cancellation, and prompt rules for multi-file or network actions
+- [x] 4.6 Add golden tests for help, stdout/stderr, JSON schemas, errors, exit codes, non-TTY output, cancellation, and accidental secret disclosure
 
 ## 5. Ledger Authoring Operations
 
-- [ ] 5.1 Implement `chaos init` for new JSON/YAML ledgers with explicit identity, ledger ID, timezone, and no-overwrite behavior
-- [ ] 5.2 Implement `chaos validate` and read-only `chaos status` with local checks only and structured summaries
+- [ ] 5.1 Implement `forecast-ledger init` for new JSON/YAML ledgers with explicit identity, ledger ID, timezone, and no-overwrite behavior
+- [x] 5.2 Implement `forecast-ledger validate` and read-only `forecast-ledger status` with local checks only and structured summaries
 - [ ] 5.3 Implement platform add, update, list, show, and safe remove operations with reference-conflict checks
 - [ ] 5.4 Implement question add, constrained update, list, show, and typed resolve/annul/dispute transitions with evidence and chronology checks
 - [ ] 5.5 Implement public forecast add/list/show with all four value types, stable IDs, input-file/stdin support, and append-only supersession links
@@ -50,8 +50,8 @@
 - [ ] 6.2 Implement typed public/sealed/revealed `forecast-envelope/v1` projections that exclude integrity and key hints exactly as specified
 - [ ] 6.3 Implement target build/check commands with explicit selectors or `--all`, deterministic safe paths, SHA-256 reporting, and collision protection
 - [ ] 6.4 Implement protected secret-file creation and reading with no overwrite, POSIX owner-only mode, Windows owner ACL, location checks, and complete output/log redaction
-- [ ] 6.5 Implement atomic `chaos forecast seal` with OS CSPRNG salt/key/nonce, SHA-256 commitment, exact AAD, ChaCha20-Poly1305, and key-write-before-ledger semantics
-- [ ] 6.6 Implement `chaos forecast reveal` with authenticate/decrypt/commitment/ID/canonical checks before mutation and retained original seal evidence
+- [ ] 6.5 Implement atomic `forecast-ledger forecast seal` with OS CSPRNG salt/key/nonce, SHA-256 commitment, exact AAD, ChaCha20-Poly1305, and key-write-before-ledger semantics
+- [ ] 6.6 Implement `forecast-ledger forecast reveal` with authenticate/decrypt/commitment/ID/canonical checks before mutation and retained original seal evidence
 - [ ] 6.7 Reproduce the upstream seal vector and target bytes exactly; add negative, cross-language, cross-platform, property, and fuzz tests
 
 ## 7. Pure-Go OpenTimestamps
@@ -84,7 +84,7 @@
 
 ## 10. MCP Server
 
-- [ ] 10.1 Pin a stable official MCP Go SDK/spec pair and implement `chaos mcp serve` over stdio with protocol-only stdout and version negotiation tests
+- [ ] 10.1 Pin a stable official MCP Go SDK/spec pair and implement `forecast-ledger mcp serve` over stdio with protocol-only stdout and version negotiation tests
 - [ ] 10.2 Implement read-only defaults, canonical ledger/package-output/secret roots, and separate write, network, and reveal startup grants
 - [ ] 10.3 Define closed typed schemas and handlers for validation, status, inspection, list/show, target check, timestamp status, layered verification, and evidence-package verification tools
 - [ ] 10.4 Add write-gated tools for ledger initialization, platform/question operations, public forecasts, resolution, target build, and evidence-package creation

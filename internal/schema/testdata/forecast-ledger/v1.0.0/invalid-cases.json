@@ -1,0 +1,146 @@
+[
+  {
+    "name": "schema-version-mismatch",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      { "op": "replace", "path": "/schema_version", "value": "2.0.0" }
+    ],
+    "expect_contains": "$.schema_version"
+  },
+  {
+    "name": "impossible-timestamp",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      { "op": "replace", "path": "/created_at", "value": "2026-99-99T99:99:99+99:99" }
+    ],
+    "expect_contains": "$.created_at"
+  },
+  {
+    "name": "binary-question-with-numeric-value",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/0/forecasts/0/value",
+        "value": { "kind": "numeric", "point": "42" }
+      }
+    ],
+    "expect_contains": "$.questions[0]"
+  },
+  {
+    "name": "sealed-forecast-with-plaintext",
+    "base": "examples/valid/team-ledger.yaml",
+    "operations": [
+      { "op": "replace", "path": "/questions/0/forecasts/0/visibility", "value": "sealed" }
+    ],
+    "expect_contains": "$.questions[0].forecasts[0]"
+  },
+  {
+    "name": "invalid-sha256-length",
+    "base": "examples/valid/team-ledger.yaml",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/0/forecasts/0/commitment/commitment_hash/value",
+        "value": "a"
+      }
+    ],
+    "expect_contains": "$.questions[0].forecasts[0]"
+  },
+  {
+    "name": "multiple-choice-probabilities-do-not-sum",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/1/forecasts/0/value/probabilities/2/probability_bp",
+        "value": 1200
+      }
+    ],
+    "expect_contains": "probabilities sum to 9900"
+  },
+  {
+    "name": "unknown-platform-reference",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/0/platform_refs/0/platform",
+        "value": "missing-platform"
+      }
+    ],
+    "expect_contains": "unknown platform"
+  },
+  {
+    "name": "duplicate-question-id",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/1/id",
+        "value": "q-central-bank-cut"
+      }
+    ],
+    "expect_contains": "duplicate id"
+  },
+  {
+    "name": "forecast-outside-window",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/0/forecasts/0/forecasted_at",
+        "value": "2026-09-11T10:00:00+01:00"
+      },
+      {
+        "op": "replace",
+        "path": "/questions/0/forecasts/0/recorded_at",
+        "value": "2026-09-11T10:01:00+01:00"
+      }
+    ],
+    "expect_contains": "must fall inside the question forecast window"
+  },
+  {
+    "name": "tampered-revealed-value",
+    "base": "examples/valid/team-ledger.yaml",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/0/forecasts/0/value/probability_bp",
+        "value": 6600
+      }
+    ],
+    "expect_contains": "does not match the decrypted sealed bundle"
+  },
+  {
+    "name": "unsupported-rfc3161-timestamp",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/0/forecasts/0/integrity",
+        "value": {
+          "status": "pending",
+          "target": {
+            "scope": "forecast-envelope/v1",
+            "canonicalization": "RFC8785",
+            "artifact_path": "proofs/targets/f-central-bank-cut-001.json",
+            "digest": {
+              "algorithm": "sha-256",
+              "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          },
+          "timestamps": [
+            {
+              "type": "rfc3161",
+              "response_path": "proofs/targets/f-central-bank-cut-001.tsr",
+              "tsa_url": "https://tsa.example.com/",
+              "state": "pending"
+            }
+          ]
+        }
+      }
+    ],
+    "expect_contains": "$.questions[0].forecasts[0].integrity"
+  }
+]

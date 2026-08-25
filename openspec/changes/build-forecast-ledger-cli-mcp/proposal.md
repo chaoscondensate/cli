@@ -4,11 +4,11 @@ Forecast Ledger v1.0.0 has a published data and cryptographic contract, but its 
 
 ## What Changes
 
-- Add a single Go binary, provisionally named `chaos`, built with `urfave/cli/v3` and distributed for supported macOS, Linux, and Windows architectures.
+- Add a single Go binary named `forecast-ledger`, built with `urfave/cli/v3` and distributed for supported macOS, Linux, and Windows architectures.
 - Embed the exact Forecast Ledger v1.0.0 schema and implement its structural, format, semantic, canonicalization, and cryptographic checks offline. The initial contract is pinned to schema commit `e409463d702888fefd253b32f21b9b2f864aabed` and schema SHA-256 `e63bdd01f0241aa4d94d5ccc45e84bcea70a6a7fd46ab77cff4802b3f8b8fc65`.
 - Require an explicit `--file` (`-f`) for every ledger operation; never guess a ledger when multiple files may exist. Require stable question and forecast IDs for record-specific operations.
 - Add commands for ledger initialization and inspection, full validation, platform/question management, append-only public forecasts and forecast updates, question resolution, canonical target generation, sealing, revealing, OpenTimestamps lifecycle management, layered verification, and portable evidence-package creation and verification.
-- Make `chaos forecast seal` the atomic high-level operation that generates the ciphertext and hides plaintext. Do not expose partial "encrypt" or "hide" mutations that can leave an invalid or unsafe ledger state.
+- Make `forecast-ledger forecast seal` the atomic high-level operation that generates the ciphertext and hides plaintext. Do not expose partial "encrypt" or "hide" mutations that can leave an invalid or unsafe ledger state.
 - Use OpenTimestamps as the only timestamp protocol supported by v1. RFC 3161 input is out of scope and must be rejected as unsupported.
 - Add an MCP server over stdio that exposes the same domain operations with structured schemas, explicit ledger paths, bounded filesystem access, deterministic errors, and secret redaction.
 - Add project guidance (`AGENTS.md`), English documentation, examples, conformance fixtures, release automation, checksums, SBOM/provenance, and a cross-platform test matrix.

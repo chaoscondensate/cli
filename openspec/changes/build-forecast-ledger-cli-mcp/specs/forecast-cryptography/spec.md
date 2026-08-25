@@ -16,7 +16,7 @@ The system SHALL build the exact RFC 8785 JCS `forecast-envelope/v1` target for 
 - **THEN** every platform produces byte-identical target content and the same SHA-256 digest
 
 ### Requirement: Atomic sealed forecast creation
-`chaos forecast seal` SHALL accept the private bundle through a secret-safe channel, generate a fresh 32-byte salt, 32-byte key, and 12-byte nonce from the operating-system CSPRNG, construct the published `forecast-seal/v1` plaintext and associated data, calculate the SHA-256 commitment, and encrypt with ChaCha20-Poly1305. It SHALL write the key to an explicit protected destination before appending a sealed record that contains no plaintext value, rationale, key factors, or comment.
+`forecast-ledger forecast seal` SHALL accept the private bundle through a secret-safe channel, generate a fresh 32-byte salt, 32-byte key, and 12-byte nonce from the operating-system CSPRNG, construct the published `forecast-seal/v1` plaintext and associated data, calculate the SHA-256 commitment, and encrypt with ChaCha20-Poly1305. It SHALL write the key to an explicit protected destination before appending a sealed record that contains no plaintext value, rationale, key factors, or comment.
 
 #### Scenario: Successful seal
 - **WHEN** a user supplies a valid private forecast bundle and a new protected key-file path
@@ -31,7 +31,7 @@ The system SHALL build the exact RFC 8785 JCS `forecast-envelope/v1` target for 
 - **THEN** the system refuses because publication cannot be undone and suggests creating a new sealed forecast if appropriate
 
 ### Requirement: Verified reveal
-`chaos forecast reveal` SHALL accept the key only through a secret-safe channel and MUST authenticate and decrypt the original ciphertext, verify the commitment and bound IDs, validate the canonical plaintext, and derive the public mirror before changing the ledger. Reveal SHALL retain the original commitment, nonce, ciphertext, and timestamp target relationship.
+`forecast-ledger forecast reveal` SHALL accept the key only through a secret-safe channel and MUST authenticate and decrypt the original ciphertext, verify the commitment and bound IDs, validate the canonical plaintext, and derive the public mirror before changing the ledger. Reveal SHALL retain the original commitment, nonce, ciphertext, and timestamp target relationship.
 
 #### Scenario: Correct reveal key
 - **WHEN** the supplied key opens the selected sealed forecast and every binding check succeeds
