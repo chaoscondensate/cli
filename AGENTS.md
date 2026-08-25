@@ -96,6 +96,43 @@ read-only by default. Write, network, and reveal are separate grants. Ledger,
 package-output, and secret roots are explicit and separately confined. Expected
 domain failures are recoverable tool errors, not protocol termination.
 
+## Documentation is part of the change
+
+Do not treat implementation as complete while public information is stale.
+Every code, CLI, MCP, schema, security, compatibility, packaging, or release
+change must include a documentation impact review and update the affected
+material in the same change.
+
+At minimum, check:
+
+- `README.md` for product status, installation, quick starts, limitations, and
+  links a first-time user needs;
+- `docs/getting-started`, `docs/how-to`, `docs/reference`, and
+  `docs/explanation` for user-facing behavior and concepts;
+- CLI help, examples, flag names, output contracts, and MCP tool/resource
+  descriptions for interface changes;
+- `docs/security` and security warnings for trust-boundary, secret-handling,
+  cryptographic, network, or evidence-claim changes;
+- `docs/development/documentation-baseline.md`, release instructions, platform
+  support, package lists, compatibility pins, and maturity statements when
+  implementation or distribution status changes; and
+- contribution, governance, support, licensing, and third-party notices when
+  project process, ownership, dependencies, or incorporated material changes.
+
+Keep current behavior, planned behavior, and unavailable behavior visibly
+separate. Do not publish aspirational commands as working examples, and do not
+claim a package, platform, protocol, security property, or audit status that the
+repository and release pipeline do not demonstrate. Commands in documentation
+must use the real binary name, command tree, flags, filenames, and supported
+platform syntax.
+
+All public project text is English, short, plain, and consistent with the
+evidence boundaries in this file. New maintained pages under `docs/` require the
+repository's `doc-metadata` block and reachable navigation. Prefer updating an
+existing canonical page over duplicating guidance. When no documentation file
+needs a change, record that conclusion in the implementation handoff instead of
+silently ignoring documentation.
+
 ## Conformance and checks
 
 Use the selected toolchain and pinned modules from `go.mod`. Before completing a
@@ -108,6 +145,10 @@ go test ./...
 go vet ./...
 go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 ```
+
+Run `go test ./internal/doccheck` after documentation changes. Check links,
+examples, release artifact names, and cross-platform commands in proportion to
+the change; passing prose lint is not evidence that an example actually works.
 
 Security-sensitive parsers and canonicalization need negative, property, and
 fuzz coverage. Cryptographic target/seal changes must reproduce the published
