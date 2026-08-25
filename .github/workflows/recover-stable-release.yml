@@ -117,9 +117,13 @@ jobs:
           $work = New-Item -ItemType Directory -Force dist/chocolatey-repack
           $zipPath = Join-Path $work.FullName package.zip
           $unpackedPath = Join-Path $work.FullName unpacked
+          $stagingPath = Join-Path $work.FullName staging
           Copy-Item $packages[0].FullName $zipPath
           Expand-Archive -Path $zipPath -DestinationPath $unpackedPath
-          $installScript = Join-Path $unpackedPath tools/chocolateyinstall.ps1
+          New-Item -ItemType Directory -Force $stagingPath | Out-Null
+          Copy-Item (Join-Path $unpackedPath forecast-ledger.nuspec) $stagingPath
+          Copy-Item (Join-Path $unpackedPath tools) $stagingPath -Recurse
+          $installScript = Join-Path $stagingPath tools/chocolateyinstall.ps1
           $content = Get-Content -Raw $installScript
           $pattern = "(checksum64\s*=\s*')[0-9a-fA-F]{64}(')"
           if ([regex]::Matches($content, $pattern).Count -ne 1) {
@@ -130,7 +134,7 @@ jobs:
             Set-Content -NoNewline -Encoding utf8 $installScript
 
           $repacked = New-Item -ItemType Directory -Force dist/repacked-chocolatey
-          Push-Location $unpackedPath
+          Push-Location $stagingPath
           try {
             choco pack forecast-ledger.nuspec --outputdirectory $repacked.FullName
             if ($LASTEXITCODE -ne 0) {
@@ -151,15 +155,27 @@ jobs:
         run: |
           function Get-PackageChecksum([string]$PackagePath, [string]$InspectName) {
             $inspectRoot = Join-Path dist $InspectName
-            $zipPath = "$inspectRoot.zip"
-            Copy-Item $PackagePath $zipPath
-            Expand-Archive -Path $zipPath -DestinationPath $inspectRoot
+            New-Item -ItemType Directory -Force $inspectRoot | Out-Null
+            tar -xf $PackagePath -C $inspectRoot
+            if ($LASTEXITCODE -ne 0) {
+              throw "Could not extract $PackagePath."
+            }
             $content = Get-Content -Raw (Join-Path $inspectRoot tools/chocolateyinstall.ps1)
             $match = [regex]::Match($content, "checksum64\s*=\s*'(?<checksum>[0-9a-fA-F]{64})'")
             if (-not $match.Success) {
               throw "Could not read checksum64 from $PackagePath."
             }
             return $match.Groups['checksum'].Value.ToLowerInvariant()
+          }
+
+          function Test-PackageLayout([string]$PackagePath) {
+            $entries = @(tar -tf $PackagePath)
+            if ($LASTEXITCODE -ne 0) {
+              throw "Could not list $PackagePath."
+            }
+            $relationships = @($entries | Where-Object { $_ -eq '_rels/.rels' }).Count
+            $contentTypes = @($entries | Where-Object { $_ -eq '[Content_Types].xml' }).Count
+            return $relationships -eq 1 -and $contentTypes -eq 1
           }
 
           $packages = @(Get-ChildItem -Path dist/repacked-chocolatey -Filter *.nupkg)
@@ -188,7 +204,8 @@ jobs:
               throw "Could not download the current Chocolatey package."
             }
             $currentPackage = @(Get-ChildItem -Path dist/current-chocolatey -Filter *.nupkg)[0]
-            if ((Get-PackageChecksum $currentPackage.FullName current-chocolatey-inspect) -ne $publishedChecksum) {
+            $currentChecksum = Get-PackageChecksum $currentPackage.FullName current-chocolatey-inspect
+            if ($currentChecksum -ne $publishedChecksum -or -not (Test-PackageLayout $currentPackage.FullName)) {
               gh release upload $env:RECOVERY_TAG $package.FullName --repo chaoscondensate/cli --clobber
               if ($LASTEXITCODE -ne 0) {
                 throw "Could not replace the invalid Chocolatey package."
@@ -208,6 +225,9 @@ jobs:
           $publishedPackage = @(Get-ChildItem -Path dist/published-chocolatey -Filter *.nupkg)[0]
           if ((Get-PackageChecksum $publishedPackage.FullName published-chocolatey-inspect) -ne $publishedChecksum) {
             throw "The published Chocolatey package does not match the published Windows archive checksum."
+          }
+          if (-not (Test-PackageLayout $publishedPackage.FullName)) {
+            throw "The published Chocolatey package contains duplicate package metadata entries."
           }
 
       - name: Attest Chocolatey package
