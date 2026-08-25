@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability privately
+    url: https://github.com/chaoscondensate/cli/security/advisories/new
+    about: Do not disclose suspected vulnerabilities, keys, credentials, or private ledger data in a public issue.
+  - name: Report a conduct incident privately
+    url: https://github.com/chaoscondensate/cli/blob/main/CODE_OF_CONDUCT.md#report-an-incident-privately
+    about: Follow the confidential email route in the Code of Conduct; do not open a public issue.
+  - name: Ask about the Forecast Ledger schema
+    url: https://github.com/chaoscondensate/schema/issues
+    about: Use the schema repository for data-contract and interoperability questions.

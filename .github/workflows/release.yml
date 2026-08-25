@@ -40,7 +40,7 @@ jobs:
       - name: Require public release documents
         shell: bash
         run: |
-          for file in LICENSE README.md; do
+          for file in CITATION.cff LICENSE README.md; do
             if [[ ! -f "$file" ]]; then
               echo "$file is required before a public release." >&2
               exit 1
@@ -66,6 +66,18 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Check release citation metadata
+        shell: bash
+        run: |
+          release_date="$(git for-each-ref --format='%(taggerdate:short)' "refs/tags/$GITHUB_REF_NAME")"
+          if [[ -z "$release_date" ]]; then
+            echo "Could not read the annotated tag date for $GITHUB_REF_NAME." >&2
+            exit 1
+          fi
+          go run ./tools/citationcheck \
+            --version "${GITHUB_REF_NAME#v}" \
+            --date "$release_date"
 
       - name: Install Syft
         uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0

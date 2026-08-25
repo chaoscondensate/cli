@@ -1,0 +1,64 @@
+name: Documentation problem
+description: Report missing, unclear, outdated, or incorrect public documentation.
+title: "[Docs]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Documentation reports are public. Do not paste protected keys, credentials, private ledgers, unrevealed forecasts, personal data, or proprietary examples. Use synthetic and redacted material.
+  - type: input
+    id: location
+    attributes:
+      label: Page or location
+      description: Link the page or name the file, heading, command help, or release asset.
+      placeholder: https://github.com/chaoscondensate/cli/blob/main/README.md#install
+    validations:
+      required: true
+  - type: dropdown
+    id: problem_type
+    attributes:
+      label: Problem type
+      options:
+        - Incorrect
+        - Missing
+        - Unclear
+        - Outdated
+        - Broken link or example
+        - Accessibility
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: current_problem
+    attributes:
+      label: What is wrong
+      description: Explain what a reader sees and why it prevents or misleads the task.
+    validations:
+      required: true
+  - type: textarea
+    id: expected_information
+    attributes:
+      label: What the documentation should say or enable
+    validations:
+      required: true
+  - type: input
+    id: relevant_version
+    attributes:
+      label: Relevant version
+      description: Give the CLI version when the report depends on released behavior; otherwise write `not version-specific`.
+    validations:
+      required: true
+  - type: textarea
+    id: suggested_change
+    attributes:
+      label: Suggested change
+      description: Optional wording, example, link, or accessibility improvement.
+  - type: checkboxes
+    id: public_data_confirmation
+    attributes:
+      label: Public-data confirmation
+      options:
+        - label: I removed keys, credentials, private ledger content, unrevealed forecasts, personal data, and other secrets.
+          required: true
+        - label: This report does not disclose a suspected vulnerability or a conduct incident.
+          required: true

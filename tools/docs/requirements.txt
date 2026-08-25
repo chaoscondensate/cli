@@ -1,0 +1,2 @@
+# Keep documentation and repository-compliance tools exact and reviewable.
+reuse[charset-normalizer]==6.2.0

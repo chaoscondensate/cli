@@ -1,0 +1,40 @@
+version = 1
+
+# Original project files use the repository license policy. Later entries
+# override this default for copied third-party material.
+[[annotations]]
+path = "**"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Chaos Condensate contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+# Repository-local OpenSpec skills are third-party development inputs. Their
+# manifests declare MIT, but do not identify a copyright holder.
+[[annotations]]
+path = ".agents/skills/**"
+precedence = "override"
+SPDX-FileCopyrightText = "NONE"
+SPDX-License-Identifier = "MIT"
+
+# These files are exact or format-preserving copies of the upstream Forecast
+# Ledger schema repository and retain its license and copyright notice.
+[[annotations]]
+path = [
+  "internal/schema/testdata/forecast-ledger/v1.0.0/**",
+  "internal/schema/vendor/forecast-ledger/v1.0.0/**",
+  "third_party/forecast-ledger/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 ChaosCondensate contributors"
+SPDX-License-Identifier = "MIT"
+
+# This project adaptation follows the upstream Contributor Covenant share-alike
+# terms stated in its attribution section.
+[[annotations]]
+path = "CODE_OF_CONDUCT.md"
+precedence = "override"
+SPDX-FileCopyrightText = [
+  "2026 Chaos Condensate contributors",
+  "Contributor Covenant contributors",
+]
+SPDX-License-Identifier = "CC-BY-SA-4.0"

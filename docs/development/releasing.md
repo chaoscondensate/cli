@@ -1,5 +1,15 @@
 # Release process
 
+<!-- doc-metadata
+coverage: development
+reviewed: 2026-08-25
+owner: release
+generated: false
+security-critical: true
+prerequisites: build.md, dependencies.md
+next: index.md
+-->
+
 Forecast Ledger releases use GoReleaser 2.18.0. A pushed annotated SemVer tag
 creates a GitHub Release, six cross-platform archives, SHA-256 checksums, archive
 SBOMs, a GitHub artifact attestation, and a Homebrew formula update.
@@ -144,3 +154,5 @@ Before calling the release channel stable, prefer Apple Developer ID signing
 and notarization, remove the formula's `xattr` and `codesign` install fallback,
 and add a native verification step for the signed archives. Windows code
 signing is also not yet configured and must be documented as such.
+
+[Development documentation](index.md) · [Documentation index](../index.md)

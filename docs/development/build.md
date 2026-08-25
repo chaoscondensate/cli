@@ -1,5 +1,15 @@
 # Developer build
 
+<!-- doc-metadata
+coverage: development
+reviewed: 2026-08-25
+owner: interface
+generated: false
+security-critical: false
+prerequisites: ../../AGENTS.md
+next: dependencies.md
+-->
+
 The project requires the reviewed Go 1.27.0 toolchain selected through
 `go.mod`.
 
@@ -32,3 +42,5 @@ To run the differential validator check, install the pinned schema repository's
 Python development requirements and set `FORECAST_LEDGER_UPSTREAM_ROOT` to a
 checkout at commit `e409463d702888fefd253b32f21b9b2f864aabed` before running
 `go test ./internal/validation`.
+
+[Development documentation](index.md) · [Documentation index](../index.md)

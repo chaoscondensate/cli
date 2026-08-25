@@ -1,0 +1,61 @@
+name: Feature request
+description: Propose a user outcome or maintained workflow for Forecast Ledger CLI.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Start with the user problem, not only a command name. Broad behavior, protocol, dependency, or security changes may require an OpenSpec proposal before implementation.
+
+        This form is public. Do not include keys, credentials, private ledger content, unrevealed forecasts, personal data, confidential business information, or proprietary source material.
+  - type: textarea
+    id: user_problem
+    attributes:
+      label: User problem
+      description: Who has the problem, what are they trying to do, and what blocks them now?
+    validations:
+      required: true
+  - type: textarea
+    id: desired_outcome
+    attributes:
+      label: Desired outcome
+      description: Describe observable success without requiring one implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: example_workflow
+    attributes:
+      label: Example workflow
+      description: Show a synthetic CLI or MCP workflow if it makes the proposal clearer.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Explain current workarounds or other designs and their limits.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and evidence impact
+      description: Note effects on the schema, existing ledgers, stable output, CLI/MCP parity, cryptography, timestamps, verification claims, or platforms. Write `none known` when appropriate.
+    validations:
+      required: true
+  - type: textarea
+    id: security_privacy
+    attributes:
+      label: Security and privacy considerations
+      description: Note new file, network, secret, write, reveal, or trust boundaries. Write `none known` when appropriate.
+    validations:
+      required: true
+  - type: checkboxes
+    id: public_data_confirmation
+    attributes:
+      label: Public-data confirmation
+      options:
+        - label: I used only synthetic and non-sensitive examples.
+          required: true
+        - label: This request does not disclose a suspected vulnerability or a conduct incident.
+          required: true

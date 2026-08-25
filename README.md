@@ -3,21 +3,32 @@
 [![CI](https://github.com/chaoscondensate/cli/actions/workflows/ci.yml/badge.svg)](https://github.com/chaoscondensate/cli/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-`forecast-ledger` is an open-source, local-first command-line tool and MCP
-server for creating and checking portable forecast records. It is designed for
-people and teams who want an explicit history of what they predicted, when they
-recorded it, and what evidence is available later.
+Create and independently check portable forecast evidence without requiring
+Git or a hosted service.
+
+Forecast Ledger CLI provides the `forecast-ledger` command and a local MCP
+server for portable forecast records. It is intended for individual
+forecasters, forecasting teams and researchers, and developers who need a
+reviewable file format and automation interface instead of a required hosted
+account.
 
 The broader project is described at [chaoscondensate.com](https://chaoscondensate.com/).
 The interoperable data contract is maintained in the
 [Forecast Ledger schema repository](https://github.com/chaoscondensate/schema).
 
 > [!IMPORTANT]
-> This project is in active pre-release development. Local validation, status,
-> version metadata, document parsing, schema checks, and core storage foundations
-> are available. Authoring, sealing, OpenTimestamps, publication packages, and
-> the MCP tool surface are still being completed. Do not treat the current build
+> **Status: Preview and unaudited.** Release `v0.1.0` provides local validation,
+> status, version metadata, document parsing, schema checks, and core storage
+> foundations. Authoring, sealing, OpenTimestamps, publication packages, and
+> the MCP tool surface are not yet available. The project has no recorded
+> independent security or cryptographic audit. Do not treat the current build
 > as a finished evidence system.
+
+Release archives target macOS, Linux, and Windows on amd64 and arm64. The CLI
+can check whether a ledger follows the pinned data contract and report the
+evidence actually present. Even after the planned evidence workflows are
+complete, it will not by itself prove authorship, ledger completeness, forecast
+truth, an exact self-reported time, or the correctness of an outcome source.
 
 ## Why Forecast Ledger?
 
@@ -153,15 +164,25 @@ AI coding agents should read [AGENTS.md](AGENTS.md) before changing behavior.
 
 ## Contributing and support
 
-Issues and focused pull requests are welcome. Please use
+Issues and focused pull requests are welcome. Read the
+[contribution guide](CONTRIBUTING.md) before changing behavior. Please use
 [GitHub Issues](https://github.com/chaoscondensate/cli/issues) for bugs, feature
 proposals, documentation gaps, and release problems. For security-sensitive
 reports, do not publish secrets, private ledgers, or unrevealed forecast material
-in an issue.
+in an issue. Use the [security policy](SECURITY.md) to report a suspected
+vulnerability privately. Community participation is governed by the
+[Code of Conduct](CODE_OF_CONDUCT.md), which also provides a confidential
+reporting route.
+
+See the [support guide](SUPPORT.md) for usage, bug, schema, security, conduct,
+and broader Chaos Condensate routes and their boundaries.
+Project roles and decision rights are defined in [governance](GOVERNANCE.md).
 
 ## License
 
-Licensed under the [Apache License 2.0](LICENSE).
+Original project material is licensed under the
+[Apache License 2.0](LICENSE), SPDX identifier `Apache-2.0`. See the
+[licensing policy](LICENSE_POLICY.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
 
 The embedded Forecast Ledger contract and conformance fixtures retain their
 upstream attribution; see [`third_party/forecast-ledger`](third_party/forecast-ledger/).

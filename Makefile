@@ -1,10 +1,13 @@
-.PHONY: build test release-check release-snapshot
+.PHONY: build test license-check release-check release-snapshot
 
 build:
 	sh scripts/build.sh
 
 test:
 	go test ./...
+
+license-check:
+	reuse lint
 
 release-check:
 	goreleaser check

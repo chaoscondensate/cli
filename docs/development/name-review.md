@@ -1,5 +1,15 @@
 # Executable name review
 
+<!-- doc-metadata
+coverage: development
+reviewed: 2026-08-25
+owner: release
+generated: false
+security-critical: false
+prerequisites: ../../AGENTS.md
+next: releasing.md
+-->
+
 Reviewed: 2026-08-25
 
 ## Decision
@@ -34,3 +44,5 @@ package-manager manifest.
 Use `ChaosCondensate.ForecastLedger` as the Winget package identifier and
 `forecast-ledger` as the Homebrew/Scoop package token and installed command. Do
 not install `chaos` as a compatibility alias.
+
+[Development documentation](index.md) · [Documentation index](../index.md)

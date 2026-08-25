@@ -1,5 +1,15 @@
 # Dependency baseline
 
+<!-- doc-metadata
+coverage: development
+reviewed: 2026-08-25
+owner: security
+generated: false
+security-critical: true
+prerequisites: ../../AGENTS.md
+next: build.md
+-->
+
 Reviewed: 2026-08-25
 
 Runtime dependencies are pinned to stable tagged releases in `go.mod`. The
@@ -52,3 +62,5 @@ go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 Do not add a runtime logging, configuration, assertion, secret-manager, or
 general-purpose cryptography dependency without a documented need, license
 review, vulnerability scan, and conformance impact review.
+
+[Development documentation](index.md) · [Documentation index](../index.md)

@@ -1,39 +1,39 @@
 ## 1. Decisions and Documentation Baseline
 
-- [ ] 1.1 Reconcile this change with documentation tasks 11.1–11.6 in `build-forecast-ledger-cli-mcp`, assigning each deliverable to one checklist and eliminating duplicate ownership
-- [ ] 1.2 Inventory the implemented CLI commands, MCP tools/resources, supported platforms, release artifacts, schema pin, maturity labels, audit status, network behavior, and known limitations that documentation must reflect
-- [ ] 1.3 Record maintainer-approved values for the OSI software license, copyright holder and years, documentation/assets licensing, third-party notice policy, and contributor sign-off or agreement policy
-- [ ] 1.4 Record non-placeholder security and conduct contacts, public support and issue channels, canonical repository URL, governance owners, release authority, and supported-version policy
-- [ ] 1.5 Define the approved one-sentence product value, intended audiences, product name, executable name, maturity vocabulary, and evidence-claim vocabulary in plain English
-- [ ] 1.6 Create a traceability matrix from every requirement in both delta specs to its document, generator, test, owner, and release gate
+- [x] 1.1 Reconcile this change with documentation tasks 11.1–11.6 in `build-forecast-ledger-cli-mcp`, assigning each deliverable to one checklist and eliminating duplicate ownership
+- [x] 1.2 Inventory the implemented CLI commands, MCP tools/resources, supported platforms, release artifacts, schema pin, maturity labels, audit status, network behavior, and known limitations that documentation must reflect
+- [x] 1.3 Record maintainer-approved values for the OSI software license, copyright holder and years, documentation/assets licensing, third-party notice policy, and contributor sign-off or agreement policy
+- [x] 1.4 Record non-placeholder security and conduct contacts, public support and issue channels, canonical repository URL, governance owners, release authority, and supported-version policy
+- [x] 1.5 Define the approved one-sentence product value, intended audiences, product name, executable name, maturity vocabulary, and evidence-claim vocabulary in plain English
+- [x] 1.6 Create a traceability matrix from every requirement in both delta specs to its document, generator, test, owner, and release gate
 
 ## 2. Documentation System and Editorial Standards
 
-- [ ] 2.1 Create the repository-first `docs/` structure and indexes for getting started, tutorials, how-to guides, reference, explanation, and security, with relative navigation and no orphan pages
-- [ ] 2.2 Write the documentation style guide covering plain international English, headings, links, code blocks, terminology, capitalization, callouts, version labels, deprecations, and prohibited overclaims
-- [ ] 2.3 Write the claims and terminology guide for valid, sealed, timestamped, anchored, verified, revealed, published, evidence, proof, authorship, completeness, truth, and outcome evidence
-- [ ] 2.4 Define the accessible visual system for colors, contrast, status labels, diagrams, terminal captures, alt text, text equivalents, and safety callouts
-- [ ] 2.5 Define page metadata and ownership conventions for supported versions, last substantive review, generated content, security-critical pages, prerequisites, and next steps
-- [ ] 2.6 Add navigation and coverage validation that detects orphan pages, missing indexes, invalid relative links, missing language tags, and missing required page metadata
+- [x] 2.1 Create the repository-first `docs/` structure and indexes for getting started, tutorials, how-to guides, reference, explanation, and security, with relative navigation and no orphan pages
+- [x] 2.2 Write the documentation style guide covering plain international English, headings, links, code blocks, terminology, capitalization, callouts, version labels, deprecations, and prohibited overclaims
+- [x] 2.3 Write the claims and terminology guide for valid, sealed, timestamped, anchored, verified, revealed, published, evidence, proof, authorship, completeness, truth, and outcome evidence
+- [x] 2.4 Define the accessible visual system for colors, contrast, status labels, diagrams, terminal captures, alt text, text equivalents, and safety callouts
+- [x] 2.5 Define page metadata and ownership conventions for supported versions, last substantive review, generated content, security-critical pages, prerequisites, and next steps
+- [x] 2.6 Add navigation and coverage validation that detects orphan pages, missing indexes, invalid relative links, missing language tags, and missing required page metadata
 
 ## 3. Open-Source Legal and Community Health
 
-- [ ] 3.1 Add the approved license text and SPDX identifier, copyright notices, documentation/assets policy, vendored-material rules, and third-party notices without inferring terms from another repository
-- [ ] 3.2 Configure and pass a pinned REUSE/SPDX-compatible licensing compliance check for source, documentation, examples, generated assets, fixtures, and vendored files
-- [ ] 3.3 Write `CONTRIBUTING.md` with cross-platform setup, architecture and source precedence, work selection, change flow, tests, docs checks, conformance gates, review rules, release boundaries, and contribution support
-- [ ] 3.4 Adopt and configure `CODE_OF_CONDUCT.md` with scope, enforcement responsibilities, confidential contact, and expected response process; link it from README and contribution guidance
-- [ ] 3.5 Write `SECURITY.md` with supported versions, private reporting, requested evidence, safe-harbor language, acknowledgment/update targets, coordinated disclosure, and advisory location
-- [ ] 3.6 Write `SUPPORT.md` that routes usage, bugs, security, conduct, schema interoperability, and broader Chaos Condensate questions without unapproved service-level promises
-- [ ] 3.7 Write `GOVERNANCE.md` with current roles, decision process, protocol-affecting review, release authority, access expectations, conflicts, inactive-maintainer handling, and governance evolution
-- [ ] 3.8 Add bug, documentation, and feature-request issue forms that request actionable redacted evidence and warn against keys, credentials, or private ledger content
-- [ ] 3.9 Add public issue configuration that directs security and conduct matters to confidential channels and disables unsupported blank-report paths
-- [ ] 3.10 Add a pull-request template covering scope, tests, platform impact, schema/crypto compatibility, documentation, security, changelog, and release-note impact
-- [ ] 3.11 Add ownership/review rules for security-critical docs, generated references, release material, licensing, and community policy files
-- [ ] 3.12 Add valid `CITATION.cff` metadata and a release check that synchronizes approved author/maintainer, license, version, date, and canonical URL fields
+- [x] 3.1 Add the approved license text and SPDX identifier, copyright notices, documentation/assets policy, vendored-material rules, and third-party notices without inferring terms from another repository
+- [x] 3.2 Configure and pass a pinned REUSE/SPDX-compatible licensing compliance check for source, documentation, examples, generated assets, fixtures, and vendored files
+- [x] 3.3 Write `CONTRIBUTING.md` with cross-platform setup, architecture and source precedence, work selection, change flow, tests, docs checks, conformance gates, review rules, release boundaries, and contribution support
+- [x] 3.4 Adopt and configure `CODE_OF_CONDUCT.md` with scope, enforcement responsibilities, confidential contact, and expected response process; link it from README and contribution guidance
+- [x] 3.5 Write `SECURITY.md` with supported versions, private reporting, requested evidence, safe-harbor language, acknowledgment/update targets, coordinated disclosure, and advisory location
+- [x] 3.6 Write `SUPPORT.md` that routes usage, bugs, security, conduct, schema interoperability, and broader Chaos Condensate questions without unapproved service-level promises
+- [x] 3.7 Write `GOVERNANCE.md` with current roles, decision process, protocol-affecting review, release authority, access expectations, conflicts, inactive-maintainer handling, and governance evolution
+- [x] 3.8 Add bug, documentation, and feature-request issue forms that request actionable redacted evidence and warn against keys, credentials, or private ledger content
+- [x] 3.9 Add public issue configuration that directs security and conduct matters to confidential channels and disables unsupported blank-report paths
+- [x] 3.10 Add a pull-request template covering scope, tests, platform impact, schema/crypto compatibility, documentation, security, changelog, and release-note impact
+- [x] 3.11 Add ownership/review rules for security-critical docs, generated references, release material, licensing, and community policy files
+- [x] 3.12 Add valid `CITATION.cff` metadata and a release check that synchronizes approved author/maintainer, license, version, date, and canonical URL fields
 
 ## 4. Product README
 
-- [ ] 4.1 Write the README opening with product name, one-sentence value, intended audience, explicit maturity/audit status, supported platforms, and a short statement of what the tool does and does not prove
+- [x] 4.1 Write the README opening with product name, one-sentence value, intended audience, explicit maturity/audit status, supported platforms, and a short statement of what the tool does and does not prove
 - [ ] 4.2 Add verified installation and checksum links plus a complete public-forecast quick start using explicit `--file`, representative output, created-file explanations, and final validation
 - [ ] 4.3 Add concise routes to sealed forecasts, timestamps, layered verification, portable evidence packages, MCP setup, command reference, and troubleshooting without duplicating their manuals
 - [ ] 4.4 Add local-data, telemetry, network, key-custody, experimental-component, and security-reporting summaries with links to complete policies

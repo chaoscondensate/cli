@@ -95,12 +95,17 @@
 
 ## 11. Documentation and Examples
 
-- [ ] 11.1 Write the English README with project scope, install/uninstall, support links, first public forecast, first sealed forecast, OTS, reveal, verify, and publication quick starts
-- [ ] 11.2 Generate or write terminal/web command reference with examples for every command and stable JSON/exit-code documentation
-- [ ] 11.3 Write security documentation for key custody, backups, protocol limits, OTS trust sources, outcome-evidence limits, vulnerability reporting, and no-audit caveat
-- [ ] 11.4 Write MCP setup documentation for stdio clients, roots, permission grants, tool side effects, secret-file handling, and troubleshooting
-- [ ] 11.5 Document the pinned schema update process, moved-tag risk, source precedence, conformance procedure, and mandatory RFC 3161 rejection
-- [ ] 11.6 Add checked examples and scripted tutorials for individual/team, all four forecast types, append-only updates, sealed/revealed records, and portable evidence packages for standalone ledgers
+Public documentation delivery is owned by the
+`establish-open-source-product-documentation` change. These completed handoff
+items prevent the same deliverables from being tracked in two checklists; they
+do not assert that the documentation itself is complete.
+
+- [x] 11.1 Hand off README and workflow quick starts to documentation tasks 4.1–4.8, 5.3–5.4, and 6.1–6.3
+- [x] 11.2 Hand off CLI reference, JSON, and exit-code documentation to tasks 7.1–7.2 and 7.5–7.6
+- [x] 11.3 Hand off security and evidence-limit documentation to tasks 3.5, 4.4, 8.2–8.3, and 8.6
+- [x] 11.4 Hand off MCP setup and safety documentation to tasks 6.4 and 7.3
+- [x] 11.5 Hand off schema-update and conformance documentation to tasks 6.7, 7.5, 8.1, and 8.6
+- [x] 11.6 Hand off checked examples and tutorials to tasks 5.3–5.4, 6.1–6.6, and 9.1–9.6
 
 ## 12. CI, Security, and Releases
 

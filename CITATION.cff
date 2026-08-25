@@ -1,0 +1,22 @@
+cff-version: "1.2.0"
+message: "If you use Forecast Ledger CLI in research, cite the exact released version described by this file."
+title: "Forecast Ledger CLI"
+type: software
+authors:
+  - family-names: "Korchak"
+    given-names: "Andrey"
+    alias: "57uff3r"
+version: "0.1.0"
+date-released: "2026-08-25"
+license: "Apache-2.0"
+repository-code: "https://github.com/chaoscondensate/cli"
+url: "https://github.com/chaoscondensate/cli"
+abstract: >-
+  Forecast Ledger CLI is an open-source, local-first command-line tool and MCP
+  server for portable forecast records and evidence. The broader project is
+  described at https://chaoscondensate.com/.
+keywords:
+  - "forecasting"
+  - "forecast ledger"
+  - "command-line interface"
+  - "Model Context Protocol"
