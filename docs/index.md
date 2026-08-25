@@ -1,7 +1,7 @@
 # Forecast Ledger CLI documentation
 
 <!-- doc-metadata
-coverage: v0.1.0
+coverage: v0.1.1
 reviewed: 2026-08-25
 owner: documentation
 generated: false
@@ -11,7 +11,7 @@ next: getting-started/index.md
 -->
 
 This documentation covers the current Forecast Ledger CLI repository. Release
-`v0.1.0` is Preview: local validation and status work, while authoring,
+`v0.1.1` is Preview: local validation and status work, while authoring,
 cryptography, OpenTimestamps, publication packages, and MCP operations remain
 unavailable. See the [reviewed implementation baseline](development/documentation-baseline.md)
 before relying on a workflow.

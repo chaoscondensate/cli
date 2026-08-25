@@ -1,7 +1,7 @@
 # Verification claims and evidence terms
 
 <!-- doc-metadata
-coverage: v0.1.0
+coverage: v0.1.1
 reviewed: 2026-08-25
 owner: security
 generated: false
@@ -10,12 +10,12 @@ prerequisites: ../getting-started/index.md
 next: ../security/index.md
 -->
 
-Applies to: Forecast Ledger CLI `v0.1.0` (Preview)  
-Last substantive review: 2026-08-25  
+Applies to: Forecast Ledger CLI `v0.1.1` (Preview).
+Last substantive review: 2026-08-25.
 Owner: security and interface owners
 
 This page defines the strongest conclusion the documentation may draw from a
-result. Release `v0.1.0` implements local ledger validation and status only.
+result. Release `v0.1.1` implements local ledger validation and status only.
 Sealing, timestamps, layered verification, reveal, outcome evidence, and
 publication remain unavailable and must not be presented as completed
 workflows.

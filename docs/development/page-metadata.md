@@ -18,7 +18,7 @@ machine-checkable without requiring a documentation site generator.
 
 ```text
 <!-- doc-metadata
-coverage: v0.1.0
+coverage: v0.1.1
 reviewed: 2026-08-25
 owner: documentation
 generated: false
@@ -30,7 +30,7 @@ next: ../how-to/index.md
 
 | Field | Rule |
 | --- | --- |
-| `coverage` | Product version/range such as `v0.1.0`, or `development` for contributor-only material. |
+| `coverage` | Product version/range such as `v0.1.1`, or `development` for contributor-only material. |
 | `reviewed` | ISO `YYYY-MM-DD` date of the last substantive review, not a cosmetic edit. |
 | `owner` | One role from `project-maintainer`, `documentation`, `security`, `interface`, or `release`. |
 | `generated` | `true` only when the page is reproduced mechanically and carries a visible generated warning; otherwise `false`. |

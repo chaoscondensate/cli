@@ -1,7 +1,7 @@
 # Documentation baseline
 
 <!-- doc-metadata
-coverage: v0.1.0
+coverage: v0.1.1
 reviewed: 2026-08-25
 owner: project-maintainer
 generated: false
@@ -36,8 +36,7 @@ that the corresponding document or test has been implemented.
 
 ## Implementation inventory
 
-This inventory was checked against repository commit
-`f11ea889369179b33251e553603f6d9ae8782054` and release `v0.1.0`.
+This inventory was checked against the source prepared for release `v0.1.1`.
 
 ### Working CLI surface
 
@@ -100,22 +99,22 @@ GoReleaser builds six `CGO_ENABLED=0` archives:
 - Linux arm64 and x86-64 as `.tar.gz`; and
 - Windows arm64 and x86-64 as `.zip`.
 
-Release `v0.1.0` contains those six archives, one SHA-256 checksum manifest,
-and one SBOM for each archive. GitHub artifact attestations bind the published
-archive digests. CI runs unit tests and vet on current GitHub-hosted macOS,
-Ubuntu, and Windows runners and produces the full six-target snapshot on
-Ubuntu. A cross-build does not establish native filesystem correctness on
-every architecture.
+Release `v0.1.1` contains those six archives and eight native Linux packages:
+`deb`, `rpm`, `apk`, and Arch Linux packages for arm64 and x86-64. Each package
+installs the binary in `/usr/bin` and the Apache-2.0 license in
+`/usr/share/licenses/forecast-ledger`. The main checksum manifest covers the
+archives, Linux packages, and their fourteen SBOMs. GitHub artifact attestations
+bind those published digests. CI runs unit tests and vet on current
+GitHub-hosted macOS, Ubuntu, and Windows runners, checks the full artifact matrix
+on Ubuntu and Windows, and installs and removes the Debian package on Ubuntu. A
+cross-build does not establish native filesystem correctness on every
+architecture.
 
-The release configuration on `main` adds eight native Linux packages beginning
-with the next release: `deb`, `rpm`, `apk`, and Arch Linux packages for arm64
-and x86-64. Each installs the binary in `/usr/bin` and the Apache-2.0 license in
-`/usr/share/licenses/forecast-ledger`. These packages are covered by the main
-checksum manifest and package SBOMs. Windows x86-64 also receives a Chocolatey
-`nupkg`, built, published, smoke-tested, and separately attested on the Windows
-release runner; Windows ARM64 continues to use the native ZIP. GoReleaser
-creates the `nupkg` after the main checksum manifest, so that package is not a
-`checksums.txt` entry.
+Windows x86-64 also receives a Chocolatey `nupkg`, built, published,
+smoke-tested, and separately attested on the Windows release runner; Windows
+ARM64 uses the native ZIP. GoReleaser creates the `nupkg` after the main checksum
+manifest, so that package is not a `checksums.txt` entry. Release `v0.1.0`
+predates the native Linux and Chocolatey packages and contains archives only.
 
 These are GitHub Release assets, not APT, RPM, APK, Arch, public Chocolatey,
 Winget, or Scoop repositories. Package-manager update discovery is therefore
@@ -199,7 +198,7 @@ The maintained maturity labels have these meanings:
 | Deprecated | The behavior still works for a stated period but has a documented replacement and removal version. |
 | Unsupported | The behavior is outside the maintained contract and must not be presented as working. |
 
-Release `v0.1.0` is **Preview**. A stable SemVer tag identifies a reproducible
+Release `v0.1.1` is **Preview**. A stable SemVer tag identifies a reproducible
 release; it does not promote unfinished commands or unaudited components to the
 Stable product maturity label.
 
@@ -228,7 +227,7 @@ time, or substantive outcome-source correctness.
 ### Maturity, audit, and limitations
 
 - The approved public status currently visible in README is **active
-  pre-release development**. `v0.1.0` is published as a stable SemVer release,
+  pre-release development**. `v0.1.1` is published as a stable SemVer release,
   so maintained documentation must explain that version stability does not
   imply feature completeness.
 - No independent security or cryptographic audit is recorded. A pinned

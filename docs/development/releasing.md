@@ -96,8 +96,8 @@ Start with a release candidate:
 git switch main
 git pull --ff-only
 git status --short
-git tag -a v0.1.0-rc.1 -m "forecast-ledger v0.1.0-rc.1"
-git push origin v0.1.0-rc.1
+git tag -a v0.1.2-rc.1 -m "forecast-ledger v0.1.2-rc.1"
+git push origin v0.1.2-rc.1
 ```
 
 GoReleaser marks prerelease tags as prereleases and does not update the stable
@@ -105,8 +105,8 @@ Homebrew formula. After checking the candidate archives on macOS, Linux, and
 Windows, publish the stable tag:
 
 ```sh
-git tag -a v0.1.0 -m "forecast-ledger v0.1.0"
-git push origin v0.1.0
+git tag -a v0.1.2 -m "forecast-ledger v0.1.2"
+git push origin v0.1.2
 ```
 
 Do not reuse or move a release tag. Fix a failed or incorrect release in a new

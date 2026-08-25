@@ -17,7 +17,7 @@ The interoperable data contract is maintained in the
 [Forecast Ledger schema repository](https://github.com/chaoscondensate/schema).
 
 > [!IMPORTANT]
-> **Status: Preview and unaudited.** Release `v0.1.0` provides local validation,
+> **Status: Preview and unaudited.** Release `v0.1.1` provides local validation,
 > status, version metadata, document parsing, schema checks, and core storage
 > foundations. Authoring, sealing, OpenTimestamps, publication packages, and
 > the MCP tool surface are not yet available. The project has no recorded
@@ -51,9 +51,9 @@ The CLI is designed around a few strict rules:
 See the [complete installation guide](docs/getting-started/install.md) for
 checksum verification, upgrades, removal, and archive fallback instructions.
 
-Release `v0.1.0` provides Homebrew and platform archives. The release
-configuration on `main` adds the following native packages for the next
-release; check the selected release's asset list before using a package command.
+Release `v0.1.1` provides Homebrew, platform archives, native Linux packages,
+and a Windows Chocolatey package. Check the selected release's asset list before
+using a package command.
 
 ### Homebrew
 

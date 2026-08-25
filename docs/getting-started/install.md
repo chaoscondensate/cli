@@ -1,7 +1,7 @@
 # Install Forecast Ledger CLI
 
 <!-- doc-metadata
-coverage: next-release
+coverage: v0.1.1
 reviewed: 2026-08-25
 owner: release
 generated: false
@@ -14,9 +14,9 @@ Forecast Ledger CLI ships portable archives for macOS, Linux, and Windows on
 x86-64 and ARM64. It also ships native Linux packages and a Windows x86-64
 Chocolatey package.
 
-Release `v0.1.0` has only Homebrew and platform archives. Native Linux and
-Chocolatey packages are configured on `main` and begin with the next release.
-Always check the asset list on the selected
+Release `v0.1.1` provides Homebrew, platform archives, native Linux packages,
+and the Windows x86-64 Chocolatey package described here. Always check the asset
+list on the selected
 [GitHub Release](https://github.com/chaoscondensate/cli/releases).
 
 ## Choose an asset
