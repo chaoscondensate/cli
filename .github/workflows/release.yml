@@ -47,6 +47,20 @@ jobs:
             fi
           done
 
+      - name: Verify Homebrew tap access
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "HOMEBREW_TAP_TOKEN is required." >&2
+            exit 1
+          fi
+          if [[ "$(gh api repos/chaoscondensate/homebrew-tap --jq '.permissions.push')" != "true" ]]; then
+            echo "HOMEBREW_TAP_TOKEN cannot write to chaoscondensate/homebrew-tap." >&2
+            exit 1
+          fi
+
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:

@@ -1,0 +1,141 @@
+name: Recover stable release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Stable release tag to recover
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: recover-stable-release
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    name: Homebrew cask and attestation
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+
+      - name: Verify current stable release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RECOVERY_TAG: ${{ inputs.tag }}
+        run: |
+          if [[ ! "$RECOVERY_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Recovery only accepts stable SemVer tags." >&2
+            exit 1
+          fi
+          if [[ "$(git cat-file -t "refs/tags/$RECOVERY_TAG")" != "tag" ]]; then
+            echo "Recovery requires an annotated tag." >&2
+            exit 1
+          fi
+          latest_tag="$(gh api repos/chaoscondensate/cli/releases/latest --jq '.tag_name')"
+          if [[ "$RECOVERY_TAG" != "$latest_tag" ]]; then
+            echo "$RECOVERY_TAG is not the current latest stable release ($latest_tag)." >&2
+            exit 1
+          fi
+
+      - name: Verify Homebrew tap access
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "HOMEBREW_TAP_TOKEN is required." >&2
+            exit 1
+          fi
+          if [[ "$(gh api repos/chaoscondensate/homebrew-tap --jq '.permissions.push')" != "true" ]]; then
+            echo "HOMEBREW_TAP_TOKEN cannot write to chaoscondensate/homebrew-tap." >&2
+            exit 1
+          fi
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+
+      - name: Install Cosign for GoReleaser verification
+        uses: sigstore/cosign-installer@d7543c93d881b35a8faa02e8e3605f69b7a1ce62 # v3.10.0
+
+      - name: Generate release metadata without publishing
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
+        with:
+          distribution: goreleaser
+          version: v2.18.0
+          args: release --clean --skip=publish
+
+      - name: Download published checksums
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RECOVERY_TAG: ${{ inputs.tag }}
+        run: |
+          mkdir -p dist/published
+          gh release download "$RECOVERY_TAG" \
+            --repo chaoscondensate/cli \
+            --pattern checksums.txt \
+            --dir dist/published
+
+      - name: Verify cask archive digests
+        shell: bash
+        run: |
+          for archive in \
+            forecast-ledger_*_darwin_arm64.tar.gz \
+            forecast-ledger_*_darwin_x86_64.tar.gz; do
+            expected="$(awk -v name="$archive" '$2 == name { print $1 }' dist/published/checksums.txt)"
+            actual="$(sha256sum "dist/$archive" | awk '{ print $1 }')"
+            if [[ -z "$expected" || "$actual" != "$expected" ]]; then
+              echo "Digest mismatch for $archive." >&2
+              exit 1
+            fi
+          done
+
+      - name: Publish Homebrew cask
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          RECOVERY_TAG: ${{ inputs.tag }}
+        run: |
+          cask_path="Casks/forecast-ledger.rb"
+          cask_file="dist/homebrew/$cask_path"
+          if [[ ! -f "$cask_file" ]]; then
+            echo "GoReleaser did not generate $cask_file." >&2
+            exit 1
+          fi
+
+          content="$(base64 -w 0 "$cask_file")"
+          existing_sha="$(gh api "repos/chaoscondensate/homebrew-tap/contents/$cask_path" --jq '.sha' 2>/dev/null || true)"
+          arguments=(
+            --method PUT
+            "repos/chaoscondensate/homebrew-tap/contents/$cask_path"
+            -f "message=chore: update forecast-ledger to $RECOVERY_TAG"
+            -f branch=main
+            -f "content=$content"
+          )
+          if [[ -n "$existing_sha" ]]; then
+            arguments+=(-f "sha=$existing_sha")
+          fi
+          gh api "${arguments[@]}" --silent
+
+      - name: Attest published release artifacts
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-checksums: dist/published/checksums.txt

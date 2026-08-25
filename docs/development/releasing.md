@@ -84,6 +84,26 @@ git push origin v0.1.0
 Do not reuse or move a release tag. Fix a failed or incorrect release in a new
 patch or prerelease version.
 
+### Recovering a partial stable release
+
+If GoReleaser publishes the GitHub assets but cannot update the Homebrew tap,
+do not rerun the full release against the same tag. Correct
+`HOMEBREW_TAP_TOKEN`, then run the `Recover stable release` workflow with the
+current latest stable tag. The workflow:
+
+- accepts only an annotated stable SemVer tag that matches GitHub's latest
+  stable release;
+- verifies that the tap token has push access before rebuilding anything;
+- regenerates the cask without republishing release assets;
+- checks the generated macOS archive digests against the already-published
+  `checksums.txt`;
+- updates `Casks/forecast-ledger.rb`; and
+- creates the artifact attestation that the interrupted release could not
+  reach.
+
+The normal release workflow performs the same tap-access preflight before
+GoReleaser, so an invalid token fails before any GitHub Release is published.
+
 ## Post-release verification
 
 1. Confirm the GitHub Release has six archives, `checksums.txt`, and SBOM files.
