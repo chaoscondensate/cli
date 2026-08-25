@@ -1,0 +1,119 @@
+version: 2
+
+project_name: forecast-ledger
+
+before:
+  hooks:
+    - go mod verify
+    - go test ./...
+
+builds:
+  - id: forecast-ledger
+    main: ./cmd/forecast-ledger
+    binary: forecast-ledger
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -mod=readonly
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/chaoscondensate/cli/internal/buildinfo.version={{ .Version }}
+      - -X github.com/chaoscondensate/cli/internal/buildinfo.sourceRevision={{ .Commit }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: forecast-ledger
+    ids:
+      - forecast-ledger
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+sboms:
+  - id: archives
+    artifacts: archive
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: git
+  sort: asc
+  filters:
+    exclude:
+      - "^chore:"
+      - "^docs:"
+      - "^test:"
+      - "^Merge pull request"
+      - "^Merge branch"
+
+release:
+  github:
+    owner: chaoscondensate
+    name: cli
+  draft: false
+  prerelease: auto
+  footer: |
+    ---
+
+    Project context and updates: https://chaoscondensate.com/
+
+homebrew_casks:
+  - name: forecast-ledger
+    ids:
+      - forecast-ledger
+    binaries:
+      - forecast-ledger
+    repository:
+      owner: chaoscondensate
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Casks
+    commit_author:
+      name: forecast-ledger release bot
+      email: 41898282+github-actions[bot]@users.noreply.github.com
+    commit_msg_template: "chore: update forecast-ledger to {{ .Tag }}"
+    homepage: https://chaoscondensate.com/
+    description: Create and verify portable forecast evidence
+    url:
+      verified: github.com/chaoscondensate/cli/
+    skip_upload: auto
+    generate_completions_from_executable:
+      executable: forecast-ledger
+      args:
+        - completion
+      base_name: forecast-ledger
+      shell_parameter_format: arg
+      shells:
+        - bash
+        - zsh
+        - fish
+    caveats: |
+      Documentation and project context:
+        https://chaoscondensate.com/
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/forecast-ledger"]
+          end
