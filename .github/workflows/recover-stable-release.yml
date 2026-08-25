@@ -9,7 +9,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
   attestations: write
 
@@ -19,8 +19,8 @@ concurrency:
 
 jobs:
   recover:
-    name: Homebrew formula and attestation
-    runs-on: ubuntu-latest
+    name: Packages, Homebrew formula, and attestations
+    runs-on: windows-latest
     environment: release
     steps:
       - name: Check out tagged source
@@ -81,6 +81,52 @@ jobs:
           distribution: goreleaser
           version: v2.18.0
           args: release --clean --skip=publish
+
+      - name: Publish or download Chocolatey package
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RECOVERY_TAG: ${{ inputs.tag }}
+        run: |
+          $packages = @(Get-ChildItem -Path dist -Filter *.nupkg)
+          if ($packages.Count -ne 1) {
+            throw "Expected one Chocolatey package, found $($packages.Count)."
+          }
+          $package = $packages[0]
+          $release = gh api "repos/chaoscondensate/cli/releases/tags/$env:RECOVERY_TAG" | ConvertFrom-Json
+          $asset = @($release.assets | Where-Object name -eq $package.Name)
+          if ($asset.Count -eq 0) {
+            gh release upload $env:RECOVERY_TAG $package.FullName --repo chaoscondensate/cli
+            if ($LASTEXITCODE -ne 0) {
+              throw "Could not attach the Chocolatey package to the GitHub Release."
+            }
+          } elseif ($asset.Count -gt 1) {
+            throw "The GitHub Release contains more than one matching Chocolatey package."
+          }
+          New-Item -ItemType Directory -Force dist/published-chocolatey | Out-Null
+          gh release download $env:RECOVERY_TAG --repo chaoscondensate/cli --pattern $package.Name --dir dist/published-chocolatey
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not download the published Chocolatey package."
+          }
+          if (@(Get-ChildItem -Path dist/published-chocolatey -Filter *.nupkg).Count -ne 1) {
+            throw "Expected exactly one published Chocolatey package."
+          }
+
+      - name: Attest Chocolatey package
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: dist/published-chocolatey/*.nupkg
+
+      - name: Smoke-test Chocolatey package
+        shell: pwsh
+        env:
+          RECOVERY_TAG: ${{ inputs.tag }}
+        run: |
+          $source = (Resolve-Path dist/published-chocolatey).Path
+          $version = $env:RECOVERY_TAG.Substring(1)
+          choco install forecast-ledger --source $source --version $version --yes --no-progress
+          forecast-ledger version --json
+          choco uninstall forecast-ledger --yes --no-progress
 
       - name: Download published checksums
         shell: bash

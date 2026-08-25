@@ -30,11 +30,12 @@ and source revision metadata.
 The Linux packages and Chocolatey package are GitHub Release downloads, not
 published package repositories. The release runs on Windows, where GoReleaser
 can use the preinstalled Chocolatey CLI while still cross-building the macOS
-and Linux artifacts. All artifacts are therefore attached in one GoReleaser
-publication, which remains compatible with immutable releases, and the same
-job installs and removes the published Chocolatey package. GoReleaser creates
-the `nupkg` after `checksums.txt`, so the package receives a separate GitHub
-artifact attestation rather than a checksum-manifest entry.
+and Linux artifacts. GoReleaser retains the generated `nupkg` locally instead
+of treating it as a GitHub Release asset, so the workflow explicitly attaches
+that package before checking the release and installing and removing the
+package. GoReleaser creates the `nupkg` after `checksums.txt`, so the package
+receives a separate GitHub artifact attestation rather than a checksum-manifest
+entry.
 
 ## One-time repository setup
 
@@ -54,8 +55,10 @@ artifact attestation rather than a checksum-manifest entry.
 6. In repository Actions settings, keep the default `GITHUB_TOKEN` restricted.
    The release workflow grants only `contents`, `id-token`, and `attestations`
    permissions explicitly.
-7. Protect `main` with the `CI` workflow. Enable immutable releases and prevent
-   release-tag deletion or movement if the organization policy supports it.
+7. Protect `main` with the `CI` workflow and prevent release-tag deletion or
+   movement if the organization policy supports it. Do not enable immutable
+   releases while the workflow attaches the Chocolatey package after GoReleaser
+   publishes the GitHub Release.
 
 The tap requires a separate token because GitHub's workflow token cannot write
 to a different repository. Never reuse a broad classic PAT when a tap-only
@@ -114,21 +117,23 @@ patch or prerelease version.
 
 ### Recovering a partial stable release
 
-If GoReleaser publishes the GitHub assets but cannot update the Homebrew tap,
-do not rerun the full release against the same tag. Correct
-`HOMEBREW_TAP_TOKEN`, then run the `Recover stable release` workflow with the
-current latest stable tag. The workflow:
+If GoReleaser publishes the GitHub assets but cannot attach Chocolatey or update
+the Homebrew tap, do not rerun the full release against the same tag. Correct
+the workflow or `HOMEBREW_TAP_TOKEN`, then run the `Recover stable release`
+workflow with the current latest stable tag. The workflow:
 
 - accepts only an annotated stable SemVer tag that matches GitHub's latest
   stable release;
 - verifies that the tap token has push access before rebuilding anything;
+- rebuilds the Chocolatey package from the exact tag, uploads it when missing,
+  then downloads, attests, and tests the published package bytes;
 - regenerates the formula without republishing release assets;
 - binds every formula archive digest to the already-published `checksums.txt` and
   validates the generated Ruby syntax;
 - updates `Formula/forecast-ledger.rb`, removing the obsolete cask if present;
   and
-- creates the artifact attestation that the interrupted release could not
-  reach.
+- creates checksum-based artifact attestations that the interrupted release
+  could not reach.
 
 The normal release workflow performs the same tap-access preflight before
 GoReleaser, so an invalid token fails before any GitHub Release is published.
