@@ -95,8 +95,8 @@ current latest stable tag. The workflow:
   stable release;
 - verifies that the tap token has push access before rebuilding anything;
 - regenerates the cask without republishing release assets;
-- checks the generated macOS archive digests against the already-published
-  `checksums.txt`;
+- binds every cask archive digest to the already-published `checksums.txt` and
+  validates the generated Ruby syntax;
 - updates `Casks/forecast-ledger.rb`; and
 - creates the artifact attestation that the interrupted release could not
   reach.

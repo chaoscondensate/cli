@@ -94,20 +94,43 @@ jobs:
             --pattern checksums.txt \
             --dir dist/published
 
-      - name: Verify cask archive digests
+      - name: Bind cask to published archive digests
         shell: bash
+        env:
+          RECOVERY_TAG: ${{ inputs.tag }}
         run: |
-          for archive_path in \
-            dist/forecast-ledger_*_darwin_arm64.tar.gz \
-            dist/forecast-ledger_*_darwin_x86_64.tar.gz; do
-            archive="$(basename "$archive_path")"
+          cask_file="dist/homebrew/Casks/forecast-ledger.rb"
+          version="${RECOVERY_TAG#v}"
+          if [[ ! -f "$cask_file" ]]; then
+            echo "GoReleaser did not generate $cask_file." >&2
+            exit 1
+          fi
+          if ! grep -Fq "version \"$version\"" "$cask_file"; then
+            echo "Generated cask version does not match $RECOVERY_TAG." >&2
+            exit 1
+          fi
+
+          for target in \
+            darwin_arm64 \
+            darwin_x86_64 \
+            linux_arm64 \
+            linux_x86_64; do
+            archive="forecast-ledger_${version}_${target}.tar.gz"
             expected="$(awk -v name="$archive" '$2 == name { print $1 }' dist/published/checksums.txt)"
-            actual="$(sha256sum "$archive_path" | awk '{ print $1 }')"
-            if [[ -z "$expected" || "$actual" != "$expected" ]]; then
-              echo "Digest mismatch for $archive." >&2
+            if [[ ! "$expected" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "Published digest is missing or invalid for $archive." >&2
+              exit 1
+            fi
+            CASK_SHA="$expected" CASK_SUFFIX="${target}.tar.gz" perl -0pi -e '
+              my $suffix = quotemeta($ENV{"CASK_SUFFIX"});
+              s{sha256 "[0-9a-f]+"\n(\s+url "[^"]*$suffix")}{qq{sha256 "$ENV{CASK_SHA}"\n$1}}ge;
+            ' "$cask_file"
+            if ! grep -Fq "sha256 \"$expected\"" "$cask_file"; then
+              echo "Could not bind the published digest for $archive." >&2
               exit 1
             fi
           done
+          ruby -c "$cask_file"
 
       - name: Publish Homebrew cask
         shell: bash
