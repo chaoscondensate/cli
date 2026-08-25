@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -48,7 +49,9 @@ func TestUpdateLedgerValidatesTwiceAndPreservesPresentation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o640 {
+	// Windows only represents a file as writable or read-only; it cannot
+	// preserve the POSIX group and other permission bits used by this test.
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o640 {
 		t.Fatalf("mode = %o, want 640", info.Mode().Perm())
 	}
 	if _, err := os.Stat(JournalPath(path)); !errors.Is(err, os.ErrNotExist) {
