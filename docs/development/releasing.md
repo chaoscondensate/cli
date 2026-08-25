@@ -2,7 +2,7 @@
 
 Forecast Ledger releases use GoReleaser 2.18.0. A pushed annotated SemVer tag
 creates a GitHub Release, six cross-platform archives, SHA-256 checksums, archive
-SBOMs, a GitHub artifact attestation, and a Homebrew cask update.
+SBOMs, a GitHub artifact attestation, and a Homebrew formula update.
 
 The release targets are:
 
@@ -19,9 +19,9 @@ revision metadata.
 1. Confirm that the top-level Apache-2.0 `LICENSE` and public `README.md` are
    present and accurate. The release workflow refuses to publish without them.
 2. Create the public `chaoscondensate/homebrew-tap` repository and make an
-   initial README commit on `main`; an empty repository has no branch for
-   GoReleaser to update. GoReleaser will create and maintain
-   `Casks/forecast-ledger.rb`.
+   initial README commit on `main`; an empty repository has no branch for the
+   release workflow to update. The workflow creates and maintains
+   `Formula/forecast-ledger.rb`.
 3. Create a fine-grained GitHub personal access token or GitHub App credential
    with `Contents: Read and write` access to only
    `chaoscondensate/homebrew-tap`. It does not need access to this repository.
@@ -73,7 +73,7 @@ git push origin v0.1.0-rc.1
 ```
 
 GoReleaser marks prerelease tags as prereleases and does not update the stable
-Homebrew cask. After checking the candidate archives on macOS, Linux, and
+Homebrew formula. After checking the candidate archives on macOS, Linux, and
 Windows, publish the stable tag:
 
 ```sh
@@ -94,10 +94,11 @@ current latest stable tag. The workflow:
 - accepts only an annotated stable SemVer tag that matches GitHub's latest
   stable release;
 - verifies that the tap token has push access before rebuilding anything;
-- regenerates the cask without republishing release assets;
-- binds every cask archive digest to the already-published `checksums.txt` and
+- regenerates the formula without republishing release assets;
+- binds every formula archive digest to the already-published `checksums.txt` and
   validates the generated Ruby syntax;
-- updates `Casks/forecast-ledger.rb`; and
+- updates `Formula/forecast-ledger.rb`, removing the obsolete cask if present;
+  and
 - creates the artifact attestation that the interrupted release could not
   reach.
 
@@ -115,15 +116,15 @@ GoReleaser, so an invalid token fails before any GitHub Release is published.
    gh attestation verify --owner chaoscondensate <archive>
    ```
 
-4. Check that the tap contains `Casks/forecast-ledger.rb` for the new stable
+4. Check that the tap contains `Formula/forecast-ledger.rb` for the new stable
    version.
 5. On both Apple Silicon and Intel macOS, run:
 
    ```sh
    brew update
-   brew install --cask chaoscondensate/tap/forecast-ledger
+   brew install chaoscondensate/tap/forecast-ledger
    forecast-ledger version --json
-   brew uninstall --cask forecast-ledger
+   brew uninstall forecast-ledger
    ```
 
 6. Smoke-test the native Linux and Windows archives, including help, version,
@@ -134,13 +135,12 @@ GoReleaser, so an invalid token fails before any GitHub Release is published.
 ## Signing status
 
 The initial pipeline creates checksums, SBOMs, and GitHub artifact attestations,
-but it does not Apple-sign or notarize the macOS binaries. The Homebrew cask
-uses an unsigned-binary fallback during preflight: it removes the quarantine
-attribute and applies a local ad-hoc signature before Homebrew executes the
-binary to generate shell completions. This status must be stated in release
-notes.
+but it does not Apple-sign or notarize the macOS binaries. The Homebrew formula
+removes quarantine metadata and applies a local ad-hoc signature after placing
+the binary in the Cellar, before it generates shell completions. This status
+must be stated in release notes.
 
 Before calling the release channel stable, prefer Apple Developer ID signing
-and notarization, remove the cask's `xattr` and `codesign` preflight fallback,
+and notarization, remove the formula's `xattr` and `codesign` install fallback,
 and add a native verification step for the signed archives. Windows code
 signing is also not yet configured and must be documented as such.

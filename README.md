@@ -39,11 +39,10 @@ The CLI is designed around a few strict rules:
 
 ### Homebrew
 
-Homebrew packages will be available from the project tap after the first public
-release:
+Stable releases are available from the project tap:
 
 ```sh
-brew install --cask chaoscondensate/tap/forecast-ledger
+brew install chaoscondensate/tap/forecast-ledger
 ```
 
 ### Release archive

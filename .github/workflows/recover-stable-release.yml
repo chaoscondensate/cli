@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   recover:
-    name: Homebrew cask and attestation
+    name: Homebrew formula and attestation
     runs-on: ubuntu-latest
     environment: release
     steps:
@@ -28,6 +28,12 @@ jobs:
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 0
+
+      - name: Check out current release automation
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          path: .release-automation
 
       - name: Verify current stable release
         shell: bash
@@ -94,81 +100,29 @@ jobs:
             --pattern checksums.txt \
             --dir dist/published
 
-      - name: Bind cask to published archive digests
+      - name: Generate formula from published archive digests
         shell: bash
         env:
           RECOVERY_TAG: ${{ inputs.tag }}
         run: |
-          cask_file="dist/homebrew/Casks/forecast-ledger.rb"
-          version="${RECOVERY_TAG#v}"
-          if [[ ! -f "$cask_file" ]]; then
-            echo "GoReleaser did not generate $cask_file." >&2
-            exit 1
-          fi
-          if ! grep -Fq "version \"$version\"" "$cask_file"; then
-            echo "Generated cask version does not match $RECOVERY_TAG." >&2
-            exit 1
-          fi
+          .release-automation/scripts/render-homebrew-formula.sh \
+            "$RECOVERY_TAG" \
+            dist/published/checksums.txt \
+            dist/homebrew/Formula/forecast-ledger.rb
 
-          for target in \
-            darwin_arm64 \
-            darwin_x86_64 \
-            linux_arm64 \
-            linux_x86_64; do
-            archive="forecast-ledger_${version}_${target}.tar.gz"
-            expected="$(awk -v name="$archive" '$2 == name { print $1 }' dist/published/checksums.txt)"
-            if [[ ! "$expected" =~ ^[0-9a-f]{64}$ ]]; then
-              echo "Published digest is missing or invalid for $archive." >&2
-              exit 1
-            fi
-            CASK_SHA="$expected" CASK_SUFFIX="${target}.tar.gz" perl -0pi -e '
-              my $suffix = quotemeta($ENV{"CASK_SUFFIX"});
-              s{sha256 "[0-9a-f]+"\n(\s+url "[^"]*$suffix")}{qq{sha256 "$ENV{CASK_SHA}"\n$1}}ge;
-            ' "$cask_file"
-            if ! grep -Fq "sha256 \"$expected\"" "$cask_file"; then
-              echo "Could not bind the published digest for $archive." >&2
-              exit 1
-            fi
-          done
-          if grep -Fq "  postflight do" "$cask_file"; then
-            sed -i 's/^  postflight do$/  preflight do/' "$cask_file"
-          fi
-          if ! grep -Fq '/usr/bin/codesign' "$cask_file"; then
-            sed -i '/system_command "\/usr\/bin\/xattr"/a\      system_command "/usr/bin/codesign", args: ["--force", "--sign", "-", "#{staged_path}/forecast-ledger"]' "$cask_file"
-          fi
-          sed -i '/^[[:space:]]*shell_parameter_format: :arg,$/d' "$cask_file"
-          if ! grep -Fq "  preflight do" "$cask_file"; then
-            echo "Recovered cask does not remove quarantine before generated completions." >&2
-            exit 1
-          fi
-          if ! grep -Fq '/usr/bin/codesign' "$cask_file"; then
-            echo "Recovered cask does not ad-hoc sign the macOS binary before execution." >&2
-            exit 1
-          fi
-          if grep -Fq 'shell_parameter_format: :arg' "$cask_file"; then
-            echo "Recovered cask uses an incompatible completion argument format." >&2
-            exit 1
-          fi
-          ruby -c "$cask_file"
-
-      - name: Publish Homebrew cask
+      - name: Publish Homebrew formula
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           RECOVERY_TAG: ${{ inputs.tag }}
         run: |
-          cask_path="Casks/forecast-ledger.rb"
-          cask_file="dist/homebrew/$cask_path"
-          if [[ ! -f "$cask_file" ]]; then
-            echo "GoReleaser did not generate $cask_file." >&2
-            exit 1
-          fi
-
-          content="$(base64 -w 0 "$cask_file")"
-          existing_sha="$(gh api "repos/chaoscondensate/homebrew-tap/contents/$cask_path" --jq '.sha' 2>/dev/null || true)"
+          formula_path="Formula/forecast-ledger.rb"
+          formula_file="dist/homebrew/$formula_path"
+          content="$(base64 -w 0 "$formula_file")"
+          existing_sha="$(gh api "repos/chaoscondensate/homebrew-tap/contents/$formula_path" --jq '.sha' 2>/dev/null || true)"
           arguments=(
             --method PUT
-            "repos/chaoscondensate/homebrew-tap/contents/$cask_path"
+            "repos/chaoscondensate/homebrew-tap/contents/$formula_path"
             -f "message=chore: update forecast-ledger to $RECOVERY_TAG"
             -f branch=main
             -f "content=$content"
@@ -177,6 +131,17 @@ jobs:
             arguments+=(-f "sha=$existing_sha")
           fi
           gh api "${arguments[@]}" --silent
+
+          cask_path="Casks/forecast-ledger.rb"
+          cask_sha="$(gh api "repos/chaoscondensate/homebrew-tap/contents/$cask_path" --jq '.sha' 2>/dev/null || true)"
+          if [[ -n "$cask_sha" ]]; then
+            gh api --method DELETE \
+              "repos/chaoscondensate/homebrew-tap/contents/$cask_path" \
+              -f "message=chore: replace forecast-ledger cask with formula" \
+              -f branch=main \
+              -f "sha=$cask_sha" \
+              --silent
+          fi
 
       - name: Attest published release artifacts
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4

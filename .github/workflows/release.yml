@@ -83,6 +83,54 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
+      - name: Generate Homebrew formula
+        id: homebrew
+        shell: bash
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping the stable Homebrew formula for prerelease $GITHUB_REF_NAME."
+            exit 0
+          fi
+          scripts/render-homebrew-formula.sh \
+            "$GITHUB_REF_NAME" \
+            dist/checksums.txt \
+            dist/homebrew/Formula/forecast-ledger.rb
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Homebrew formula
+        if: steps.homebrew.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          formula_path="Formula/forecast-ledger.rb"
+          formula_file="dist/homebrew/$formula_path"
+          content="$(base64 -w 0 "$formula_file")"
+          existing_sha="$(gh api "repos/chaoscondensate/homebrew-tap/contents/$formula_path" --jq '.sha' 2>/dev/null || true)"
+          arguments=(
+            --method PUT
+            "repos/chaoscondensate/homebrew-tap/contents/$formula_path"
+            -f "message=chore: update forecast-ledger to $GITHUB_REF_NAME"
+            -f branch=main
+            -f "content=$content"
+          )
+          if [[ -n "$existing_sha" ]]; then
+            arguments+=(-f "sha=$existing_sha")
+          fi
+          gh api "${arguments[@]}" --silent
+
+          cask_path="Casks/forecast-ledger.rb"
+          cask_sha="$(gh api "repos/chaoscondensate/homebrew-tap/contents/$cask_path" --jq '.sha' 2>/dev/null || true)"
+          if [[ -n "$cask_sha" ]]; then
+            gh api --method DELETE \
+              "repos/chaoscondensate/homebrew-tap/contents/$cask_path" \
+              -f "message=chore: replace forecast-ledger cask with formula" \
+              -f branch=main \
+              -f "sha=$cask_sha" \
+              --silent
+          fi
+
       - name: Attest release artifacts
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
