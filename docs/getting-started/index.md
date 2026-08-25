@@ -7,13 +7,14 @@ owner: documentation
 generated: false
 security-critical: false
 prerequisites: ../index.md
-next: ../development/documentation-baseline.md
+next: install.md
 -->
 
 Use this section to install Forecast Ledger CLI and reach a supported first
 result.
 
-- [Install from the README](../../README.md#install).
+- [Install, upgrade, or remove the CLI](install.md).
+- [Review the short installation summary](../../README.md#install).
 - [Validate or inspect an existing ledger](../../README.md#quick-start).
 - [Review the implementation and compatibility baseline](../development/documentation-baseline.md).
 

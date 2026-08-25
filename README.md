@@ -48,6 +48,13 @@ The CLI is designed around a few strict rules:
 
 ## Install
 
+See the [complete installation guide](docs/getting-started/install.md) for
+checksum verification, upgrades, removal, and archive fallback instructions.
+
+Release `v0.1.0` provides Homebrew and platform archives. The release
+configuration on `main` adds the following native packages for the next
+release; check the selected release's asset list before using a package command.
+
 ### Homebrew
 
 Stable releases are available from the project tap:
@@ -55,6 +62,26 @@ Stable releases are available from the project tap:
 ```sh
 brew install chaoscondensate/tap/forecast-ledger
 ```
+
+### Linux packages
+
+Download the package for your architecture from
+[GitHub Releases](https://github.com/chaoscondensate/cli/releases):
+
+- Debian and Ubuntu: `.deb`
+- Fedora, RHEL, and openSUSE: `.rpm`
+- Alpine Linux: `.apk`
+- Arch Linux: `.pkg.tar.zst`
+
+Both x86-64 and ARM64 packages are built. These are downloadable release
+packages, not hosted APT, RPM, APK, or Arch repositories, so download the new
+package before upgrading.
+
+### Windows
+
+Windows x86-64 releases include a Chocolatey `.nupkg` alongside the `.zip`.
+Windows ARM64 uses the native `.zip` archive. The Chocolatey package is attached
+to GitHub Releases rather than published to the public Chocolatey repository.
 
 ### Release archive
 
@@ -151,11 +178,14 @@ go test ./...
 go vet ./...
 ```
 
-Create a complete local release snapshot with:
+Create a local archive and Linux-package snapshot with:
 
 ```sh
 make release-snapshot
 ```
+
+Chocolatey package generation requires the Windows-only `choco` executable and
+is checked separately by CI on Windows.
 
 See the [build guide](docs/development/build.md),
 [dependency review](docs/development/dependencies.md), and

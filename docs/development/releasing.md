@@ -11,8 +11,9 @@ next: index.md
 -->
 
 Forecast Ledger releases use GoReleaser 2.18.0. A pushed annotated SemVer tag
-creates a GitHub Release, six cross-platform archives, SHA-256 checksums, archive
-SBOMs, a GitHub artifact attestation, and a Homebrew formula update.
+creates a GitHub Release, six cross-platform archives, eight native Linux
+packages, one Windows Chocolatey package, SHA-256 checksums, SBOMs, GitHub
+artifact attestations, and a Homebrew formula update.
 
 The release targets are:
 
@@ -20,9 +21,20 @@ The release targets are:
 - Linux: amd64 and arm64
 - Windows: amd64 and arm64
 
-Unix archives use `tar.gz`; Windows archives use `zip`. All builds use
-`CGO_ENABLED=0`, `-trimpath`, read-only modules, and embedded version and source
-revision metadata.
+Unix archives use `tar.gz`; Windows archives use `zip`. Linux also receives
+`deb`, `rpm`, `apk`, and Arch Linux packages for both architectures. Windows
+x86-64 receives a Chocolatey `nupkg`; Windows ARM64 uses its native ZIP. All
+builds use `CGO_ENABLED=0`, `-trimpath`, read-only modules, and embedded version
+and source revision metadata.
+
+The Linux packages and Chocolatey package are GitHub Release downloads, not
+published package repositories. The release runs on Windows, where GoReleaser
+can use the preinstalled Chocolatey CLI while still cross-building the macOS
+and Linux artifacts. All artifacts are therefore attached in one GoReleaser
+publication, which remains compatible with immutable releases, and the same
+job installs and removes the published Chocolatey package. GoReleaser creates
+the `nupkg` after `checksums.txt`, so the package receives a separate GitHub
+artifact attestation rather than a checksum-manifest entry.
 
 ## One-time repository setup
 
@@ -59,16 +71,22 @@ go mod verify
 go test ./...
 go vet ./...
 goreleaser check
-goreleaser release --snapshot --clean --skip=publish
+goreleaser release --snapshot --clean --skip=publish,chocolatey
 ```
 
 Then inspect `dist/artifacts.json`, run each native binary available on the
 current host, and confirm that `forecast-ledger version --json` contains the
 expected version, commit, schema pin, Go version, and MCP protocol version.
+On Windows, also validate the Chocolatey package with:
 
-The CI workflow repeats tests on Ubuntu, macOS, and Windows and builds a full
-six-target snapshot without publishing. Treat a snapshot failure as a release
-blocker.
+```powershell
+goreleaser release --snapshot --clean --skip=publish
+```
+
+The CI workflow repeats tests on Ubuntu, macOS, and Windows, builds the archives
+and Linux packages on Ubuntu, and validates the complete artifact matrix again
+on Windows, including Chocolatey package generation. Treat either snapshot
+failure as a release blocker.
 
 ## Publishing
 
@@ -117,9 +135,12 @@ GoReleaser, so an invalid token fails before any GitHub Release is published.
 
 ## Post-release verification
 
-1. Confirm the GitHub Release has six archives, `checksums.txt`, and SBOM files.
-2. Download the archives and verify them with `sha256sum -c checksums.txt` or
-   `shasum -a 256 -c checksums.txt`.
+1. Confirm the GitHub Release has six archives, eight Linux packages, one
+   Chocolatey package, checksum files, and SBOM files.
+2. Download the selected archives, Linux packages, or Chocolatey package and
+   verify archives and Linux packages with `sha256sum -c checksums.txt` or
+   `shasum -a 256 -c checksums.txt`. Verify the Chocolatey package with its
+   separate GitHub artifact attestation.
 3. Verify provenance with:
 
    ```sh
@@ -137,9 +158,14 @@ GoReleaser, so an invalid token fails before any GitHub Release is published.
    brew uninstall forecast-ledger
    ```
 
-6. Smoke-test the native Linux and Windows archives, including help, version,
-   validation, and MCP startup without protocol output corruption.
-7. Update installation documentation and announce the release through
+6. Install and remove at least one `deb`, `rpm`, `apk`, and Arch package on its
+   native distribution. Confirm `/usr/bin/forecast-ledger` and the packaged
+   license are removed cleanly.
+7. Install, upgrade, and remove the Chocolatey package on Windows x86-64. Also
+   smoke-test the native Windows ARM64 ZIP.
+8. Smoke-test help, version, validation, and MCP startup without protocol output
+   corruption on native Linux and Windows hosts.
+9. Update installation documentation and announce the release through
    <https://chaoscondensate.com/> when appropriate.
 
 ## Signing status
@@ -153,6 +179,8 @@ must be stated in release notes.
 Before calling the release channel stable, prefer Apple Developer ID signing
 and notarization, remove the formula's `xattr` and `codesign` install fallback,
 and add a native verification step for the signed archives. Windows code
-signing is also not yet configured and must be documented as such.
+signing is also not yet configured and must be documented as such. The Linux
+packages and Chocolatey package are not package-signed; users must verify their
+published checksums or GitHub attestations as documented for each format.
 
 [Development documentation](index.md) · [Documentation index](../index.md)

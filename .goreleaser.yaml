@@ -44,6 +44,57 @@ archives:
       {{- if eq .Arch "amd64" }}x86_64
       {{- else }}{{ .Arch }}{{ end }}
 
+nfpms:
+  - id: linux-packages
+    ids:
+      - forecast-ledger
+    package_name: forecast-ledger
+    file_name_template: "{{ .ConventionalFileName }}"
+    vendor: Chaos Condensate
+    homepage: https://chaoscondensate.com/
+    maintainer: Andrey Korchak <andrey@chaoscondensate.com>
+    description: Create and independently check portable forecast evidence.
+    license: Apache-2.0
+    section: utils
+    priority: optional
+    bindir: /usr/bin
+    formats:
+      - deb
+      - rpm
+      - apk
+      - archlinux
+    contents:
+      - src: LICENSE
+        dst: /usr/share/licenses/forecast-ledger/LICENSE
+        file_info:
+          mode: 0644
+          mtime: "{{ .CommitDate }}"
+    mtime: "{{ .CommitDate }}"
+
+chocolateys:
+  - name: forecast-ledger
+    ids:
+      - forecast-ledger
+    package_source_url: https://github.com/chaoscondensate/cli
+    owners: Chaos Condensate contributors
+    title: Forecast Ledger CLI
+    authors: Andrey Korchak
+    project_url: https://github.com/chaoscondensate/cli
+    url_template: "https://github.com/chaoscondensate/cli/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    copyright: Copyright 2026 Chaos Condensate contributors
+    license_url: https://github.com/chaoscondensate/cli/blob/main/LICENSE
+    require_license_acceptance: false
+    project_source_url: https://github.com/chaoscondensate/cli
+    docs_url: https://github.com/chaoscondensate/cli#readme
+    bug_tracker_url: https://github.com/chaoscondensate/cli/issues
+    tags: forecasting forecast-ledger cli mcp
+    summary: Create and independently check portable forecast evidence.
+    description: |
+      Forecast Ledger CLI is a local-first command-line tool and MCP server
+      for portable forecast records and evidence.
+    release_notes: "https://github.com/chaoscondensate/cli/releases/tag/{{ .Tag }}"
+    skip_publish: true
+
 checksum:
   name_template: checksums.txt
   algorithm: sha256
@@ -51,6 +102,10 @@ checksum:
 sboms:
   - id: archives
     artifacts: archive
+  - id: linux-packages
+    artifacts: package
+    ids:
+      - linux-packages
 
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
@@ -70,6 +125,8 @@ release:
   github:
     owner: chaoscondensate
     name: cli
+  preflight:
+    fail_on_error: true
   draft: false
   prerelease: auto
   footer: |

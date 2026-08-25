@@ -133,7 +133,7 @@ embedded assets, or installation instructions change:
 
 ```console
 $ goreleaser check
-$ goreleaser release --snapshot --clean --skip=publish
+$ goreleaser release --snapshot --clean --skip=publish,chocolatey
 ```
 
 ## Review expectations

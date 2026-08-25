@@ -13,4 +13,4 @@ release-check:
 	goreleaser check
 
 release-snapshot:
-	goreleaser release --snapshot --clean --skip=publish
+	goreleaser release --snapshot --clean --skip=publish,chocolatey

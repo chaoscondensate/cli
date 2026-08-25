@@ -91,12 +91,90 @@ jobs:
         with:
           distribution: goreleaser
           version: v2.18.0
-          args: release --snapshot --clean --skip=publish
+          args: release --snapshot --clean --skip=publish,chocolatey
+
+      - name: Verify release package matrix
+        shell: bash
+        run: |
+          jq -e '[.[] | select(.type == "Archive")] | length == 6' dist/artifacts.json
+          jq -e '[.[] | select(.type == "Linux Package")] | length == 8' dist/artifacts.json
+          jq -e '[.[] | select(.type == "SBOM")] | length == 14' dist/artifacts.json
+
+      - name: Smoke-test Debian package
+        shell: bash
+        run: |
+          package="$(find dist -maxdepth 1 -name '*_amd64.deb' -print -quit)"
+          if [[ -z "$package" ]]; then
+            echo "The amd64 Debian package is missing." >&2
+            exit 1
+          fi
+          sudo apt-get install -y "$PWD/$package"
+          forecast-ledger version --json
+          test -f /usr/share/licenses/forecast-ledger/LICENSE
+          sudo apt-get remove -y forecast-ledger
+          test ! -e /usr/bin/forecast-ledger
 
       - name: Upload snapshot artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: forecast-ledger-snapshot
           path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  windows-package:
+    name: Chocolatey snapshot
+    needs:
+      - format
+      - test
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify Chocolatey CLI
+        shell: pwsh
+        run: choco --version
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+
+      - name: Build Chocolatey snapshot
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
+        with:
+          distribution: goreleaser
+          version: v2.18.0
+          args: release --snapshot --clean --skip=publish
+
+      - name: Verify Windows release snapshot
+        shell: pwsh
+        run: |
+          $artifacts = Get-Content dist/artifacts.json | ConvertFrom-Json
+          if (@($artifacts | Where-Object type -eq 'Archive').Count -ne 6) {
+            throw 'Expected six archives.'
+          }
+          if (@($artifacts | Where-Object type -eq 'Linux Package').Count -ne 8) {
+            throw 'Expected eight Linux packages.'
+          }
+          if (@($artifacts | Where-Object type -eq 'SBOM').Count -ne 14) {
+            throw 'Expected fourteen SBOMs.'
+          }
+          if (@(Get-ChildItem -Path dist -Filter *.nupkg).Count -ne 1) {
+            throw 'Expected one Chocolatey package.'
+          }
+
+      - name: Upload Chocolatey snapshot
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: forecast-ledger-chocolatey-snapshot
+          path: dist/*.nupkg
           if-no-files-found: error
           retention-days: 7

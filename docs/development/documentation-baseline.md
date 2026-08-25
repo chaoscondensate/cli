@@ -107,10 +107,25 @@ Ubuntu, and Windows runners and produces the full six-target snapshot on
 Ubuntu. A cross-build does not establish native filesystem correctness on
 every architecture.
 
+The release configuration on `main` adds eight native Linux packages beginning
+with the next release: `deb`, `rpm`, `apk`, and Arch Linux packages for arm64
+and x86-64. Each installs the binary in `/usr/bin` and the Apache-2.0 license in
+`/usr/share/licenses/forecast-ledger`. These packages are covered by the main
+checksum manifest and package SBOMs. Windows x86-64 also receives a Chocolatey
+`nupkg`, built, published, smoke-tested, and separately attested on the Windows
+release runner; Windows ARM64 continues to use the native ZIP. GoReleaser
+creates the `nupkg` after the main checksum manifest, so that package is not a
+`checksums.txt` entry.
+
+These are GitHub Release assets, not APT, RPM, APK, Arch, public Chocolatey,
+Winget, or Scoop repositories. Package-manager update discovery is therefore
+not available yet.
+
 Homebrew installs the stable release as
 `chaoscondensate/tap/forecast-ledger`. The macOS archives are not Developer ID
 signed or notarized; the formula removes quarantine metadata and applies a
-local ad-hoc signature in the Cellar. Windows archives are not code signed.
+local ad-hoc signature in the Cellar. Windows archives and the Chocolatey
+package are not code signed. Linux packages are not package-signed.
 
 ## Licensing and contribution policy
 

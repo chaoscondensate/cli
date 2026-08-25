@@ -17,7 +17,7 @@ concurrency:
 jobs:
   release:
     name: GoReleaser
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     environment: release
     steps:
       - name: Check out tagged source
@@ -95,6 +95,35 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
+      - name: Attest release artifacts
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-checksums: dist/checksums.txt
+
+      - name: Attest Chocolatey package
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: dist/*.nupkg
+
+      - name: Smoke-test Chocolatey package
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $packages = @(Get-ChildItem -Path dist -Filter *.nupkg)
+          if ($packages.Count -ne 1) {
+            throw "Expected one Chocolatey package, found $($packages.Count)."
+          }
+          $release = gh api "repos/chaoscondensate/cli/releases/tags/$env:GITHUB_REF_NAME" | ConvertFrom-Json
+          if ($release.assets.name -notcontains $packages[0].Name) {
+            throw "The Chocolatey package was not attached to the GitHub Release."
+          }
+          $source = (Resolve-Path dist).Path
+          $version = $env:GITHUB_REF_NAME.Substring(1)
+          choco install forecast-ledger --source $source --version $version --yes --no-progress
+          forecast-ledger version --json
+          choco uninstall forecast-ledger --yes --no-progress
+
       - name: Generate Homebrew formula
         id: homebrew
         shell: bash
@@ -142,8 +171,3 @@ jobs:
               -f "sha=$cask_sha" \
               --silent
           fi
-
-      - name: Attest release artifacts
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
-        with:
-          subject-checksums: dist/checksums.txt
