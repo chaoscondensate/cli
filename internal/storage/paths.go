@@ -7,9 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 
 	"github.com/chaoscondensate/cli/internal/app"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/unicode/norm"
 )
 
 var ErrUnsafePath = errors.New("path is not safe")
@@ -23,6 +26,9 @@ func ResolveLedgerPath(input string, mustExist bool) (string, error) {
 	}
 	if strings.IndexByte(input, 0) >= 0 {
 		return "", unsafePathError("ledger path contains a NUL byte")
+	}
+	if isWindowsDevicePath(input) || hasWindowsReservedComponent(input) {
+		return "", unsafePathError("Windows device paths and reserved device names are not allowed")
 	}
 	if runtime.GOOS != "windows" && looksLikeWindowsAbsolute(input) {
 		return "", unsafePathError("Windows drive and UNC paths are not valid on this platform")
@@ -62,8 +68,54 @@ func ResolveLedgerPath(input string, mustExist bool) (string, error) {
 	return filepath.Join(parent, filepath.Base(abs)), nil
 }
 
+// ResolveNewFilePath resolves an explicit destination whose parent already
+// exists. Every existing destination type is a conflict; ancestor links are
+// canonicalized and the final name is checked for portable case collisions.
+func ResolveNewFilePath(input, label string) (string, error) {
+	if strings.TrimSpace(label) == "" {
+		label = "output"
+	}
+	if strings.TrimSpace(input) == "" || strings.IndexByte(input, 0) >= 0 {
+		return "", app.NewError(app.CodeUsage, label+" path is required and must not contain NUL", ErrUnsafePath)
+	}
+	if isWindowsDevicePath(input) || hasWindowsReservedComponent(input) {
+		return "", unsafePathError("Windows device paths and reserved device names are not allowed")
+	}
+	if runtime.GOOS != "windows" && looksLikeWindowsAbsolute(input) {
+		return "", unsafePathError("Windows drive and UNC paths are not valid on this platform")
+	}
+	abs, err := filepath.Abs(input)
+	if err != nil {
+		return "", app.NewError(app.CodeUsage, label+" path is not valid", err)
+	}
+	abs = filepath.Clean(abs)
+	if info, statErr := os.Lstat(abs); statErr == nil {
+		return "", app.WithDetails(app.NewError(app.CodeConflict, label+" already exists", nil), map[string]any{"kind": info.Mode().Type().String()})
+	} else if !errors.Is(statErr, fs.ErrNotExist) {
+		return "", app.NewError(app.CodeIO, label+" path cannot be inspected", statErr)
+	}
+	parent, err := filepath.EvalSymlinks(filepath.Dir(abs))
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return "", app.NewError(app.CodeNotFound, label+" parent directory does not exist", err)
+		}
+		return "", app.NewError(app.CodeIO, label+" parent directory cannot be resolved", err)
+	}
+	info, err := os.Stat(parent)
+	if err != nil || !info.IsDir() {
+		return "", app.NewError(app.CodeUsage, label+" parent is not a directory", err)
+	}
+	if collision, err := caseFoldSibling(parent, filepath.Base(abs)); err != nil {
+		return "", err
+	} else if collision != "" {
+		return "", app.WithDetails(app.NewError(app.CodeConflict, label+" collides with an existing entry after case folding", nil), map[string]any{"existing_name": collision})
+	}
+	return filepath.Join(parent, filepath.Base(abs)), nil
+}
+
 type PathResolver struct {
-	root string
+	root     string
+	rootInfo fs.FileInfo
 }
 
 func NewPathResolver(root string) (*PathResolver, error) {
@@ -85,7 +137,7 @@ func NewPathResolver(root string) (*PathResolver, error) {
 	if !info.IsDir() {
 		return nil, unsafePathError("artifact root must be a directory")
 	}
-	return &PathResolver{root: filepath.Clean(canonical)}, nil
+	return &PathResolver{root: filepath.Clean(canonical), rootInfo: info}, nil
 }
 
 func (r *PathResolver) Root() string { return r.root }
@@ -93,8 +145,15 @@ func (r *PathResolver) Root() string { return r.root }
 // Resolve confines a schema relativePath under Root and rejects existing
 // symlinks, junctions, and other reparse points in every descendant component.
 func (r *PathResolver) Resolve(relative string, mustExist bool) (string, error) {
-	if r == nil || r.root == "" {
+	if r == nil || r.root == "" || r.rootInfo == nil {
 		return "", app.NewError(app.CodeInternal, "path resolver is not initialized", nil)
+	}
+	current, err := os.Stat(r.root)
+	if err != nil {
+		return "", app.NewError(app.CodeConflict, "configured root changed after startup", err)
+	}
+	if !current.IsDir() || !os.SameFile(r.rootInfo, current) {
+		return "", app.NewError(app.CodeConflict, "configured root identity changed after startup", nil)
 	}
 	if err := ValidateRelativePath(relative); err != nil {
 		return "", err
@@ -123,6 +182,32 @@ func ValidateRelativePath(path string) error {
 	if !fs.ValidPath(path) {
 		return unsafePathError("relative path contains an empty, dot, or parent segment")
 	}
+	if isWindowsDevicePath(path) || hasWindowsReservedComponent(path) {
+		return unsafePathError("Windows device paths and reserved device names are not allowed")
+	}
+	return nil
+}
+
+// DetectPortablePathCollisions rejects paths that would alias after Unicode
+// normalization and case folding on a supported case-insensitive filesystem.
+func DetectPortablePathCollisions(paths []string) error {
+	type originalPath struct{ value string }
+	seen := make(map[string]originalPath, len(paths))
+	folder := cases.Fold()
+	sorted := append([]string(nil), paths...)
+	sort.Strings(sorted)
+	for _, path := range sorted {
+		if err := ValidateRelativePath(path); err != nil {
+			return err
+		}
+		key := folder.String(norm.NFC.String(path))
+		if first, exists := seen[key]; exists && first.value != path {
+			return app.WithDetails(app.NewError(app.CodeConflict, "portable paths collide after case folding", nil), map[string]any{
+				"first": first.value, "second": path,
+			})
+		}
+		seen[key] = originalPath{value: path}
+	}
 	return nil
 }
 
@@ -143,6 +228,13 @@ func rejectDescendantLinks(root, candidate string, mustExist bool) error {
 	parts := strings.Split(relative, string(filepath.Separator))
 	for index, part := range parts {
 		current = filepath.Join(current, part)
+		collision, collisionErr := caseFoldSibling(filepath.Dir(current), part)
+		if collisionErr != nil {
+			return collisionErr
+		}
+		if collision != "" {
+			return app.WithDetails(app.NewError(app.CodeConflict, "path collides with an existing entry after case folding", nil), map[string]any{"existing_name": collision})
+		}
 		info, err := os.Lstat(current)
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
@@ -156,6 +248,9 @@ func rejectDescendantLinks(root, candidate string, mustExist bool) error {
 		if isLinkOrReparse(info) {
 			return unsafePathError("symlinks, junctions, and reparse points are not allowed inside the artifact root")
 		}
+		if info.Name() != part && strings.EqualFold(norm.NFC.String(info.Name()), norm.NFC.String(part)) {
+			return app.WithDetails(app.NewError(app.CodeConflict, "path collides with an existing entry after case folding", nil), map[string]any{"existing_name": info.Name()})
+		}
 		if index < len(parts)-1 && !info.IsDir() {
 			return unsafePathError("intermediate path component is not a directory")
 		}
@@ -163,9 +258,51 @@ func rejectDescendantLinks(root, candidate string, mustExist bool) error {
 	return nil
 }
 
+func caseFoldSibling(directory, requested string) (string, error) {
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return "", nil
+		}
+		return "", app.NewError(app.CodeIO, "path parent cannot be read for collision checks", err)
+	}
+	for _, entry := range entries {
+		if entry.Name() != requested && strings.EqualFold(norm.NFC.String(entry.Name()), norm.NFC.String(requested)) {
+			return entry.Name(), nil
+		}
+	}
+	return "", nil
+}
+
 func looksLikeWindowsAbsolute(path string) bool {
 	return len(path) >= 2 && ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] == ':' ||
 		strings.HasPrefix(path, `\\`) || strings.HasPrefix(path, `//`)
+}
+
+func isWindowsDevicePath(path string) bool {
+	normalized := strings.ToLower(strings.ReplaceAll(path, "/", `\`))
+	return strings.HasPrefix(normalized, `\\?\`) || strings.HasPrefix(normalized, `\\.\`) ||
+		strings.HasPrefix(normalized, `\??\`) || strings.Contains(normalized, `\globalroot\`)
+}
+
+func hasWindowsReservedComponent(path string) bool {
+	normalized := strings.ReplaceAll(path, `\`, "/")
+	for _, component := range strings.Split(normalized, "/") {
+		component = strings.TrimRight(component, " .")
+		base := component
+		if dot := strings.IndexByte(base, '.'); dot >= 0 {
+			base = base[:dot]
+		}
+		upper := strings.ToUpper(base)
+		switch upper {
+		case "CON", "PRN", "AUX", "NUL", "CLOCK$":
+			return true
+		}
+		if len(upper) == 4 && (strings.HasPrefix(upper, "COM") || strings.HasPrefix(upper, "LPT")) && upper[3] >= '1' && upper[3] <= '9' {
+			return true
+		}
+	}
+	return false
 }
 
 func unsafePathError(message string) error {

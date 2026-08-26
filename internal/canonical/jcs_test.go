@@ -30,3 +30,19 @@ func TestMarshalRejectsFloatsAndUnsafeIntegers(t *testing.T) {
 		}
 	}
 }
+
+func FuzzMarshalDeterminism(f *testing.F) {
+	f.Add("key", "value", int64(42))
+	f.Add("😀", "line\ntext", int64(-1))
+	f.Fuzz(func(t *testing.T, key, value string, number int64) {
+		input := map[string]any{key: value, "number": number}
+		first, firstErr := Marshal(input)
+		second, secondErr := Marshal(input)
+		if (firstErr == nil) != (secondErr == nil) {
+			t.Fatalf("same input produced different error outcomes: %v, %v", firstErr, secondErr)
+		}
+		if firstErr == nil && string(first) != string(second) {
+			t.Fatalf("same input produced different canonical bytes: %q, %q", first, second)
+		}
+	})
+}

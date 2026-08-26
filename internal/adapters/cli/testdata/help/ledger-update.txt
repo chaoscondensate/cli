@@ -1,0 +1,25 @@
+NAME:
+   forecast-ledger ledger update - Update ledger and current forecaster metadata
+
+USAGE:
+   forecast-ledger ledger update [options]
+
+DESCRIPTION:
+   Example:
+     forecast-ledger ledger update --file ledger.yaml --input metadata-patch.yaml
+
+OPTIONS:
+   --file string, -f string   Ledger file path
+   --input string, -i string  Closed JSON or YAML input file; use - for stdin
+   --dry-run                  Validate and show the planned change without writing
+   --help, -h                 show help
+
+GLOBAL OPTIONS:
+   --json              Write stable JSON output
+   --plain             Write plain text without decoration
+   --quiet, -q         Suppress successful output
+   --verbose, -v       Write additional diagnostics to stderr
+   --no-color          Disable color and interactive decoration
+   --no-input          Never prompt; fail when input is missing
+   --yes, -y           Approve a change that requires confirmation
+   --timeout duration  Limit network or wait operations (default: 30s)

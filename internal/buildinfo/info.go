@@ -5,6 +5,7 @@ import (
 	"runtime"
 
 	ledgerschema "github.com/chaoscondensate/cli/internal/schema"
+	"github.com/chaoscondensate/cli/internal/timestamp/ots"
 )
 
 const (
@@ -26,12 +27,13 @@ type Schema struct {
 
 // Info is the stable machine-readable version result.
 type Info struct {
-	Binary         string `json:"binary"`
-	Version        string `json:"version"`
-	SourceRevision string `json:"source_revision"`
-	GoVersion      string `json:"go_version"`
-	Schema         Schema `json:"schema"`
-	MCPProtocol    string `json:"mcp_protocol"`
+	Binary           string            `json:"binary"`
+	Version          string            `json:"version"`
+	SourceRevision   string            `json:"source_revision"`
+	GoVersion        string            `json:"go_version"`
+	Schema           Schema            `json:"schema"`
+	MCPProtocol      string            `json:"mcp_protocol"`
+	TimestampProfile ots.PublicProfile `json:"timestamp_profile"`
 }
 
 // Current returns metadata for the running binary.
@@ -46,6 +48,7 @@ func Current() Info {
 			Commit:  ledgerschema.Commit,
 			SHA256:  ledgerschema.SchemaSHA256,
 		},
-		MCPProtocol: MCPProtocolVersion,
+		MCPProtocol:      MCPProtocolVersion,
+		TimestampProfile: ots.Profile(),
 	}
 }

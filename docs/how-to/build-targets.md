@@ -1,0 +1,60 @@
+# Build and check forecast targets
+
+<!-- doc-metadata
+coverage: unreleased-main
+reviewed: 2026-08-26
+owner: interface
+generated: false
+security-critical: true
+prerequisites: manage-public-forecasts.md
+next: ../reference/index.md
+-->
+
+A forecast target is the deterministic byte sequence that later timestamp
+evidence binds. Building a target does not timestamp it and does not change the
+ledger's integrity state.
+
+Build one selected target:
+
+```sh
+forecast-ledger target build \
+  --file ledger.yaml \
+  --question q-launch \
+  --forecast f-launch-002
+```
+
+The command writes canonical RFC 8785 JSON to
+`proofs/targets/<forecast-id>.json`, relative to the ledger. It exclusively
+creates an absent file, accepts an existing byte-identical file as unchanged,
+and refuses different bytes. Use `--all` instead of both selectors to build
+every forecast target. The all mode checks every destination before creating
+the first artifact.
+
+`--dry-run` reconstructs the bytes, checks paths and collisions, and reports
+deferred writes without creating directories or files. Target commands require
+a real ledger file; `--file -` is not supported because artifacts are resolved
+relative to the ledger directory.
+
+Check retained target bytes without mutation:
+
+```sh
+forecast-ledger target check \
+  --file ledger.yaml \
+  --question q-launch \
+  --forecast f-launch-002
+```
+
+Check reconstructs the exact bytes from the ledger and compares the file and
+SHA-256 digest. If integrity metadata already names a target, scope,
+canonicalization, relative path, algorithm, and digest must also match.
+
+The `forecast-envelope/v1` target contains the ledger ID, selected question
+meaning and timing fields, and the selected public forecast or original sealed
+commitment. It excludes forecaster identity, question status and resolution,
+platforms, tags, notes, integrity state, key hint, revealed key, and unrelated
+records. A revealed forecast continues to use its original sealed target.
+
+A target proves no authorship or time by itself. It is only deterministic input
+for later evidence operations.
+
+[How-to index](index.md) · [Documentation index](../index.md)

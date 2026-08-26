@@ -15,6 +15,7 @@ import (
 	"github.com/chaoscondensate/cli/internal/app"
 	"github.com/chaoscondensate/cli/internal/document"
 	"github.com/chaoscondensate/cli/internal/ledger"
+	ledgerschema "github.com/chaoscondensate/cli/internal/schema"
 	"github.com/chaoscondensate/cli/internal/storage"
 	"github.com/chaoscondensate/cli/internal/validation"
 )
@@ -40,6 +41,17 @@ type LedgerStatus struct {
 }
 
 func LoadAndValidateLedger(ctx context.Context, filename string, stdin io.Reader) (*LoadedLedger, error) {
+	return loadAndValidateLedger(ctx, filename, stdin, "")
+}
+
+// LoadAndValidateLedgerWithArtifactRoot is used for portable packages whose
+// byte-exact ledger lives under ledger/ while its stable proofs/ paths are
+// rooted at the package directory.
+func LoadAndValidateLedgerWithArtifactRoot(ctx context.Context, filename, artifactRoot string) (*LoadedLedger, error) {
+	return loadAndValidateLedger(ctx, filename, nil, artifactRoot)
+}
+
+func loadAndValidateLedger(ctx context.Context, filename string, stdin io.Reader, artifactRoot string) (*LoadedLedger, error) {
 	if ctx != nil && ctx.Err() != nil {
 		return nil, app.NewError(app.CodeInterrupted, "operation was interrupted", ctx.Err())
 	}
@@ -63,7 +75,15 @@ func LoadAndValidateLedger(ctx context.Context, filename string, stdin io.Reader
 		}
 		defer file.Close()
 		path = resolved
-		artifacts = os.DirFS(filepath.Dir(resolved))
+		if artifactRoot == "" {
+			artifacts = os.DirFS(filepath.Dir(resolved))
+		} else {
+			resolver, resolverErr := storage.NewPathResolver(artifactRoot)
+			if resolverErr != nil {
+				return nil, resolverErr
+			}
+			artifacts = os.DirFS(resolver.Root())
+		}
 		var format document.Format
 		switch strings.ToLower(filepath.Ext(resolved)) {
 		case ".json":
@@ -82,6 +102,9 @@ func LoadAndValidateLedger(ctx context.Context, filename string, stdin io.Reader
 			return nil, app.WithDetails(applicationErr, map[string]any{"issues": []document.Diagnostic{parseErr.Diagnostic}})
 		}
 		return nil, applicationErr
+	}
+	if err := RequireSupportedSchemaVersion(parsed); err != nil {
+		return nil, err
 	}
 	structural, err := validation.DefaultStructuralValidator()
 	if err != nil {
@@ -106,6 +129,39 @@ func LoadAndValidateLedger(ctx context.Context, filename string, stdin io.Reader
 		return nil, app.WithDetails(app.NewError(app.CodeInvalidData, "ledger has semantic validation errors", nil), map[string]any{"issues": semanticIssues})
 	}
 	return &LoadedLedger{Path: path, Document: parsed, Model: model}, nil
+}
+
+// RequireSupportedSchemaVersion is the first check after bounded parsing for
+// every existing-ledger operation. It intentionally runs before full schema,
+// domain, artifact, crypto, or network work.
+func RequireSupportedSchemaVersion(parsed *document.Document) error {
+	if parsed == nil || parsed.Root == nil || parsed.Root.Kind != document.ValueObject {
+		return unsupportedSchemaVersionError("")
+	}
+	for _, member := range parsed.Root.Object {
+		if member.Key != "schema_version" {
+			continue
+		}
+		if member.Value == nil || member.Value.Kind != document.ValueString {
+			return unsupportedSchemaVersionError("")
+		}
+		if member.Value.String != ledgerschema.Version {
+			return unsupportedSchemaVersionError(member.Value.String)
+		}
+		return nil
+	}
+	return unsupportedSchemaVersionError("")
+}
+
+func unsupportedSchemaVersionError(found string) error {
+	details := map[string]any{"supported_schema_version": ledgerschema.Version}
+	if found != "" && len(found) <= 128 {
+		details["declared_schema_version"] = found
+	}
+	return app.WithDetails(
+		app.NewError(app.CodeUnsupportedSchemaVersion, "ledger schema version is not supported; only 1.0.0 is accepted", nil),
+		details,
+	)
 }
 
 func StatusForLedger(loaded *LoadedLedger) (LedgerStatus, error) {

@@ -1,0 +1,6 @@
+schema: spec-driven
+created: 2026-08-25
+state: superseded
+superseded_by: complete-forecast-ledger-command-surface
+sync: forbidden
+archive: forbidden

@@ -43,6 +43,45 @@ jobs:
       - name: Run vet
         run: go vet ./...
 
+      - name: Run race detector
+        if: runner.os != 'Windows'
+        run: go test -race ./internal/storage ./internal/service ./internal/timestamp/ots ./internal/adapters/mcp
+
+  native-smoke:
+    name: Native command smoke (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build and smoke-test the native binary
+        shell: bash
+        run: |
+          binary="$RUNNER_TEMP/forecast-ledger"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            binary="${binary}.exe"
+          fi
+          go build -mod=readonly -trimpath -o "$binary" ./cmd/forecast-ledger
+          "$binary" version --json
+          "$binary" --help
+          for group in ledger platform question forecast target timestamp publish mcp; do
+            "$binary" "$group" --help
+          done
+          "$binary" verify --help
+
   format:
     name: Formatting
     runs-on: ubuntu-latest
@@ -64,6 +103,33 @@ jobs:
             printf 'These files need gofmt:\n%s\n' "$unformatted"
             exit 1
           fi
+
+      - name: Check generated operation contracts
+        shell: bash
+        run: |
+          go generate ./internal/service
+          git diff --exit-code -- docs/reference/generated
+
+      - name: Check maintained documentation and links
+        run: go test ./internal/doccheck
+
+      - name: Check documented command examples and help
+        run: go test ./internal/adapters/cli -run 'Test(HelpSuggestionsCompletionAndVersionJSON|EveryVisibleLeafHasARealAction|.*Help.*Golden)'
+
+      - name: Check secret redaction canaries
+        run: go test ./internal/service ./internal/adapters/cli ./internal/adapters/mcp -run '(Secret|Redact|Protected|PublicationBuild|SealedDoesNotLeak)'
+
+      - name: Check plain English terms
+        shell: bash
+        run: |
+          if rg -n -i '\b(utilize|utilizes|utilized|synergize|leveraging|aforementioned|hereinafter)\b' README.md docs AGENTS.md; then
+            echo 'Use short, plain English in public documentation.' >&2
+            exit 1
+          fi
+
+      - name: Check generated tree is clean
+        shell: bash
+        run: git diff --exit-code
 
   snapshot:
     name: GoReleaser snapshot
@@ -110,6 +176,11 @@ jobs:
           fi
           sudo apt-get install -y "$PWD/$package"
           forecast-ledger version --json
+          forecast-ledger --help
+          for group in ledger platform question forecast target timestamp publish mcp; do
+            forecast-ledger "$group" --help
+          done
+          forecast-ledger verify --help
           test -f /usr/share/licenses/forecast-ledger/LICENSE
           sudo apt-get remove -y forecast-ledger
           test ! -e /usr/bin/forecast-ledger

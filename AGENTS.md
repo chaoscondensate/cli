@@ -94,9 +94,12 @@ stderr. `--json` emits one stable JSON value without decoration. Non-TTY output,
 `NO_COLOR`, `TERM=dumb`, and `--no-color` contain no color or animation.
 
 MCP v1 uses stdio only and protocol stdout contains no human logs. The server is
-read-only by default. Write, network, and reveal are separate grants. Ledger,
-package-output, and secret roots are explicit and separately confined. Expected
-domain failures are recoverable tool errors, not protocol termination.
+read-write and online by default within explicit, named, non-overlapping ledger,
+package-output, and secret roots. Optional `--read-only` and `--offline` modes
+limit the whole server; there are no general write or network grants. Reveal is
+the sole separate default-off capability and requires `--allow-reveal`, a secret
+root, write-capable mode, and request confirmation. Expected domain failures are
+recoverable tool errors, not protocol termination.
 
 ## Documentation is part of the change
 

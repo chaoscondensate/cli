@@ -8,17 +8,20 @@ import (
 type ErrorCode string
 
 const (
-	CodeUsage        ErrorCode = "usage"
-	CodeInvalidData  ErrorCode = "invalid_data"
-	CodeNotFound     ErrorCode = "not_found"
-	CodeConflict     ErrorCode = "conflict"
-	CodeVerification ErrorCode = "verification"
-	CodeIO           ErrorCode = "io"
-	CodeNetwork      ErrorCode = "network"
-	CodePending      ErrorCode = "pending"
-	CodeUnavailable  ErrorCode = "unavailable"
-	CodeInternal     ErrorCode = "internal"
-	CodeInterrupted  ErrorCode = "interrupted"
+	CodeUsage                    ErrorCode = "usage"
+	CodeInvalidData              ErrorCode = "invalid_data"
+	CodeUnsupportedSchemaVersion ErrorCode = "unsupported_schema_version"
+	CodeNotFound                 ErrorCode = "not_found"
+	CodeConflict                 ErrorCode = "conflict"
+	CodeVerification             ErrorCode = "verification"
+	CodeIO                       ErrorCode = "io"
+	CodeNetwork                  ErrorCode = "network"
+	CodeNetworkDisabled          ErrorCode = "network_disabled"
+	CodePending                  ErrorCode = "pending"
+	CodeIncomplete               ErrorCode = "incomplete"
+	CodeUnavailable              ErrorCode = "unavailable"
+	CodeInternal                 ErrorCode = "internal"
+	CodeInterrupted              ErrorCode = "interrupted"
 )
 
 type Error struct {
@@ -70,7 +73,7 @@ func ExitCodeOf(err error) int {
 	switch ErrorCodeOf(err) {
 	case CodeUsage:
 		return 2
-	case CodeInvalidData:
+	case CodeInvalidData, CodeUnsupportedSchemaVersion:
 		return 3
 	case CodeNotFound:
 		return 4
@@ -80,9 +83,9 @@ func ExitCodeOf(err error) int {
 		return 6
 	case CodeIO:
 		return 7
-	case CodeNetwork:
+	case CodeNetwork, CodeNetworkDisabled:
 		return 8
-	case CodePending:
+	case CodePending, CodeIncomplete:
 		return 9
 	case CodeUnavailable:
 		return 10
@@ -95,8 +98,8 @@ func ExitCodeOf(err error) int {
 
 func validErrorCode(code ErrorCode) bool {
 	switch code {
-	case CodeUsage, CodeInvalidData, CodeNotFound, CodeConflict, CodeVerification,
-		CodeIO, CodeNetwork, CodePending, CodeUnavailable, CodeInternal, CodeInterrupted:
+	case CodeUsage, CodeInvalidData, CodeUnsupportedSchemaVersion, CodeNotFound, CodeConflict, CodeVerification,
+		CodeIO, CodeNetwork, CodeNetworkDisabled, CodePending, CodeIncomplete, CodeUnavailable, CodeInternal, CodeInterrupted:
 		return true
 	default:
 		return false
@@ -109,6 +112,8 @@ func defaultErrorMessage(code ErrorCode) string {
 		return "command input is not valid"
 	case CodeInvalidData:
 		return "ledger data is not valid"
+	case CodeUnsupportedSchemaVersion:
+		return "ledger schema version is not supported"
 	case CodeNotFound:
 		return "requested item was not found"
 	case CodeConflict:
@@ -119,8 +124,12 @@ func defaultErrorMessage(code ErrorCode) string {
 		return "file operation failed"
 	case CodeNetwork:
 		return "network operation failed"
+	case CodeNetworkDisabled:
+		return "network access is disabled"
 	case CodePending:
 		return "operation is still pending"
+	case CodeIncomplete:
+		return "required verification is incomplete"
 	case CodeUnavailable:
 		return "operation is not available in this release"
 	case CodeInterrupted:

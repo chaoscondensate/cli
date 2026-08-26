@@ -1,0 +1,28 @@
+{
+  "$defs": {
+    "publication-build": {
+      "additionalProperties": false,
+      "properties": {
+        "dry_run": {
+          "type": "boolean"
+        },
+        "file": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "output": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "file",
+        "output"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/publication-build/v1",
+  "$ref": "#/$defs/publication-build",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

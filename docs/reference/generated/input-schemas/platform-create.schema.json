@@ -1,0 +1,56 @@
+{
+  "$defs": {
+    "platform": {
+      "additionalProperties": false,
+      "properties": {
+        "account": {
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "profile_url": {
+              "format": "uri",
+              "type": "string"
+            },
+            "user_id": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "username": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "kind": {
+          "enum": [
+            "scoring_platform",
+            "prediction_market",
+            "self_hosted",
+            "internal",
+            "informal"
+          ]
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "url": {
+          "format": "uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "platform-create": {
+      "$ref": "#/$defs/platform"
+    }
+  },
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/platform-create/v1",
+  "$ref": "#/$defs/platform-create",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

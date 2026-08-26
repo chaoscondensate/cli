@@ -19,6 +19,10 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return 0
 	}
 	code := app.ExitCodeOf(err)
+	var presented interface{ AlreadyPresented() bool }
+	if errors.As(err, &presented) && presented.AlreadyPresented() {
+		return code
+	}
 	if code == 1 {
 		var exitCoder urfavecli.ExitCoder
 		if errors.As(err, &exitCoder) {
@@ -34,3 +38,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 	return code
 }
+
+type presentedApplicationError struct{ error }
+
+func (presentedApplicationError) AlreadyPresented() bool { return true }

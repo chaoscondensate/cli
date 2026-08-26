@@ -117,3 +117,6 @@ do not assert that the documentation itself is complete.
 - [ ] 12.4 Configure pinned reproducible release builds with `-trimpath`, version metadata, Unix tarballs, Windows zip files, and all six declared OS/architecture targets
 - [ ] 12.5 Generate SHA-256 checksums, SBOMs, provenance/attestations, dependency metadata, and documented signature/notarization status for each release
 - [ ] 12.6 Run clean-tree release gates for validation parity, crypto vectors, OTS conformance/review, MCP protocol, native smoke tests, reproducible builds, and checksum verification before the first stable release
+> Superseded by `complete-forecast-ledger-command-surface`. These historical
+> checkboxes are evidence pointers only and must not be applied, synced, or
+> archived as a separate change. See `SUPERSEDED.md`.

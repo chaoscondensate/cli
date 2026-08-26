@@ -1,0 +1,20 @@
+{
+  "$defs": {
+    "key-hint-update": {
+      "additionalProperties": false,
+      "properties": {
+        "key_hint": {
+          "pattern": "^[a-z][a-z0-9+.-]*:[A-Za-z0-9._~+-]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key_hint"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/key-hint-update/v1",
+  "$ref": "#/$defs/key-hint-update",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

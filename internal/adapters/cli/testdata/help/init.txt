@@ -1,0 +1,31 @@
+NAME:
+   forecast-ledger init - Create a new ledger
+
+USAGE:
+   forecast-ledger init [options]
+
+DESCRIPTION:
+   Example:
+     forecast-ledger init --file ledger.yaml --ledger-id my-forecasts --timezone Europe/London --forecaster-id me --forecaster-name 'My Name' --input initial-question.yaml
+
+OPTIONS:
+   --file string, -f string   Ledger file path
+   --ledger-id string         Stable ledger ID
+   --timezone string          IANA timezone name
+   --forecaster-id string     Stable forecaster ID
+   --forecaster-name string   Forecaster display name
+   --forecaster-kind string   Forecaster kind: individual or team (default: "individual")
+   --input string, -i string  Closed JSON or YAML input file; use - for stdin
+   --key-file string          New protected key file; required only for a sealed first forecast
+   --dry-run                  Validate and show the planned change without writing
+   --help, -h                 show help
+
+GLOBAL OPTIONS:
+   --json              Write stable JSON output
+   --plain             Write plain text without decoration
+   --quiet, -q         Suppress successful output
+   --verbose, -v       Write additional diagnostics to stderr
+   --no-color          Disable color and interactive decoration
+   --no-input          Never prompt; fail when input is missing
+   --yes, -y           Approve a change that requires confirmation
+   --timeout duration  Limit network or wait operations (default: 30s)

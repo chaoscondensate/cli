@@ -1,0 +1,22 @@
+{
+  "created_at": "2026-01-01T00:00:00Z",
+  "question": {
+    "id": "q-one",
+    "title": "Will it happen?",
+    "type": "binary",
+    "resolution_criteria": "Resolve from the named source.",
+    "forecast_window": {
+      "closes_at": "2026-12-31T00:00:00Z"
+    },
+    "expected_resolution_at": "2027-01-01T00:00:00Z",
+    "initial_forecast": {
+      "id": "f-one",
+      "visibility": "public",
+      "forecasted_at": "2026-01-01T00:00:00Z",
+      "value": {
+        "kind": "binary",
+        "probability_bp": 5000
+      }
+    }
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "$defs": {
+    "platform-patch": {
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "account": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/platformAccountPatchInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "scoring_platform",
+                "prediction_market",
+                "self_hosted",
+                "internal",
+                "informal"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "url": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "platformAccountPatchInput": {
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "profile_url": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "username": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/platform-patch/v1",
+  "$ref": "#/$defs/platform-patch",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

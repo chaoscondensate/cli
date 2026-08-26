@@ -1,0 +1,1 @@
+{"ok":true,"code":"ledger.initialized","message":"Ledger was created","data":{"effects":[{"action":"create","kind":"ledger","owned":true,"path":"ledger.json","rollback":"created_public","status":"completed"}],"forecast_id":"f-one","ledger_id":"research","question_id":"q-one","recovery":{"state":"none"},"schema_version":"1.0.0","visibility":"public"}}

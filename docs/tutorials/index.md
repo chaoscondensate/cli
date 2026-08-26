@@ -1,8 +1,8 @@
 # Tutorials
 
 <!-- doc-metadata
-coverage: v0.1.1
-reviewed: 2026-08-25
+coverage: unreleased-main
+reviewed: 2026-08-26
 owner: documentation
 generated: false
 security-critical: false
@@ -11,12 +11,13 @@ next: ../development/documentation-baseline.md
 -->
 
 Tutorials teach complete workflows using a checked candidate binary. The
-current Preview release implements validation and status, but not the authoring,
-sealing, timestamp, publication, or MCP services needed by the planned
-end-to-end tutorials.
+current source has the required services, but the maintained end-to-end
+tutorial transcript is still pending. Use the focused, checked how-to guides
+for authoring, timestamps, verification, publication, and MCP.
 
-Use the [README quick start](../../README.md#quick-start) for the supported
-read-only workflow. The [implementation baseline](../development/documentation-baseline.md)
+Use [Create a ledger](../getting-started/create-ledger.md) or the
+[README quick start](../../README.md#quick-start). The
+[implementation baseline](../development/documentation-baseline.md)
 lists every working and unavailable command.
 
 No command transcript in an OpenSpec artifact or source comment is a supported

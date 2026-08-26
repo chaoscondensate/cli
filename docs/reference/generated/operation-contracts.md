@@ -1,0 +1,54 @@
+# Generated operation contracts
+
+<!-- doc-metadata
+coverage: operation-contracts-v1
+reviewed: 2026-08-26
+owner: interface
+generated: true
+security-critical: true
+prerequisites: index.md
+next: ../index.md
+source: go generate ./internal/service
+-->
+
+> Generated; do not edit by hand. Run `go generate ./internal/service`.
+
+These declarations are shared inputs for CLI reference and MCP discovery. A declaration does not make a hidden command available.
+
+| Operation | CLI | MCP tool | Selection | Structured input | Dry-run | Confirmation | Network |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `forecast.add` | `forecast-ledger forecast add` | `forecast_add` | `forecast` | [forecast-create](input-schemas/forecast-create.schema.json) (inline) | true | false | `none` |
+| `forecast.key_hint.update` | `forecast-ledger forecast key-hint update` | `forecast_key_hint_update` | `forecast` | [key-hint-update](input-schemas/key-hint-update.schema.json) (inline) | true | false | `none` |
+| `forecast.list` | `forecast-ledger forecast list` | `forecast_list` | `question` | — | false | false | `none` |
+| `forecast.reveal` | `forecast-ledger forecast reveal` | `forecast_reveal` | `forecast` | — | true | true | `none` |
+| `forecast.seal` | `forecast-ledger forecast seal` | `forecast_seal` | `forecast` | [forecast-seal](input-schemas/forecast-seal.schema.json) (protected_file) | true | false | `none` |
+| `forecast.show` | `forecast-ledger forecast show` | `forecast_show` | `forecast` | — | false | false | `none` |
+| `ledger.init` | `forecast-ledger init` | `ledger_init` | `ledger` | [init](input-schemas/init.schema.json) (inline_or_protected_file) | true | false | `none` |
+| `ledger.status` | `forecast-ledger status` | `ledger_status` | `ledger` | — | false | false | `none` |
+| `ledger.update` | `forecast-ledger ledger update` | `ledger_update` | `ledger` | [root-metadata-patch](input-schemas/root-metadata-patch.schema.json) (inline) | true | false | `none` |
+| `ledger.validate` | `forecast-ledger validate` | `ledger_validate` | `ledger` | — | false | false | `none` |
+| `platform.add` | `forecast-ledger platform add` | `platform_add` | `platform` | [platform-create](input-schemas/platform-create.schema.json) (inline) | true | false | `none` |
+| `platform.list` | `forecast-ledger platform list` | `platform_list` | `ledger` | — | false | false | `none` |
+| `platform.remove` | `forecast-ledger platform remove` | `platform_remove` | `platform` | — | true | true | `none` |
+| `platform.show` | `forecast-ledger platform show` | `platform_show` | `platform` | — | false | false | `none` |
+| `platform.update` | `forecast-ledger platform update` | `platform_update` | `platform` | [platform-patch](input-schemas/platform-patch.schema.json) (inline) | true | false | `none` |
+| `publication.build` | `forecast-ledger publish build` | `publication_build` | `ledger` | — | true | false | `none` |
+| `publication.verify` | `forecast-ledger publish verify` | `publication_verify` | `ledger` | — | false | false | `optional` |
+| `question.add` | `forecast-ledger question add` | `question_add` | `question` | [question-add](input-schemas/question-add.schema.json) (inline_or_protected_file) | true | false | `none` |
+| `question.annul` | `forecast-ledger question annul` | `question_annul` | `question` | [annul](input-schemas/annul.schema.json) (inline) | true | true | `none` |
+| `question.dispute` | `forecast-ledger question dispute` | `question_dispute` | `question` | [dispute](input-schemas/dispute.schema.json) (inline) | true | true | `none` |
+| `question.list` | `forecast-ledger question list` | `question_list` | `ledger` | — | false | false | `none` |
+| `question.resolve` | `forecast-ledger question resolve` | `question_resolve` | `question` | [resolution](input-schemas/resolution.schema.json) (inline) | true | true | `none` |
+| `question.show` | `forecast-ledger question show` | `question_show` | `question` | — | false | false | `none` |
+| `question.update` | `forecast-ledger question update` | `question_update` | `question` | [question-patch](input-schemas/question-patch.schema.json) (inline) | true | false | `none` |
+| `target.build` | `forecast-ledger target build` | `target_build` | `target` | — | true | false | `none` |
+| `target.check` | `forecast-ledger target check` | `target_check` | `target` | — | false | false | `none` |
+| `timestamp.stamp` | `forecast-ledger timestamp stamp` | `timestamp_stamp` | `forecast` | — | true | false | `required` |
+| `timestamp.status` | `forecast-ledger timestamp status` | `timestamp_status` | `forecast` | — | false | false | `none` |
+| `timestamp.upgrade` | `forecast-ledger timestamp upgrade` | `timestamp_upgrade` | `forecast` | — | true | false | `required` |
+| `timestamp.verify` | `forecast-ledger timestamp verify` | `timestamp_verify` | `forecast` | — | true | false | `optional` |
+| `verification.run` | `forecast-ledger verify` | `verification_run` | `ledger` | — | false | false | `optional` |
+
+The common [operation result schema](result.schema.json) defines warning, side-effect, and recovery fields. The [MCP tool catalog](mcp-tool-schemas.json) contains closed request schemas.
+
+[Reference index](../index.md)

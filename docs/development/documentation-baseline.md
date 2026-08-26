@@ -45,40 +45,39 @@ The following commands have connected application services:
 
 | Command | Behavior | Network |
 | --- | --- | --- |
+| `forecast-ledger init --file <new-path> ... --input <path|->` | Exclusively creates a schema-valid JSON/YAML ledger with one typed question and one public or sealed forecast. A sealed forecast requires a separate new `--key-file`. | None |
+| `forecast-ledger ledger update --file <path> --input <path|->` | Minimally patches allowed root and current forecaster metadata. | None |
+| `forecast-ledger platform add|update|list|show|remove ...` | Creates, patches, lists, inspects, or removes unreferenced platform records. List/show accept `--file -`; removal requires approval. | None |
+| `forecast-ledger question add|update|list|show|resolve|annul|dispute ...` | Creates a typed question with its first public or sealed forecast, applies safe patches, reads redacted summaries, and records approved lifecycle claims. List/show accept `--file -`. | None |
+| `forecast-ledger forecast add|list|show|seal|reveal ...`, `forecast key-hint update ...` | Appends public or sealed forecasts, authenticates approved reveal, repairs safe logical hints, or reads redacted history. List/show accept `--file -`. | None |
+| `forecast-ledger target build|check ...` | Builds or checks exact `forecast-envelope/v1` RFC 8785 target bytes at deterministic ledger-relative paths. | None |
+| `forecast-ledger timestamp stamp|upgrade|status|verify ...` | Creates, upgrades, inspects, and verifies experimental pure-Go OpenTimestamps receipts. Built-in stamp is 2-of-4; Bitcoin verification requires two public observers to agree. CLI-only custom calendars and Bitcoin Core are advanced overrides. | Built-in profile, explicit custom mode, Core, or offline as applicable |
+| `forecast-ledger verify --file <path> ...` | Reports document, content-binding, existence-timing, reveal, and outcome-evidence layers with stable states, reasons, evidence, and limitations. | Built-in Bitcoin observers unless `--offline`; outcome URLs only with `--check-sources` |
+| `forecast-ledger publish build|verify ...` | Builds a deterministic allowlisted package with canonical manifest and verifies it offline by default. It does not use Git or a hosted publisher. | None by default; verify uses built-in Bitcoin observers only with `--online` |
+| `forecast-ledger mcp serve --ledger-root <name=path> ...` | Starts a protocol-clean stdio server with closed CLI-parity tools and redacted addressed resources. Default is read-write/online within roots; read-only/offline are whole-server modes and reveal is separately default-off. | Built-in profile unless server is offline |
 | `forecast-ledger validate --file <path>` | Parses and validates an embedded-schema JSON or YAML ledger. Eligible for `--file -`. | None |
 | `forecast-ledger status --file <path>` | Validates a ledger and summarizes questions, forecasts, and receipt states. Eligible for `--file -`. | None |
 | `forecast-ledger version [--json]` | Reports binary, source, Go, schema, and MCP protocol metadata. | None |
 | `forecast-ledger completion <shell>` | Generates Bash, Zsh, Fish, or PowerShell completion text through urfave. | None |
 
 The root exposes stable presentation flags `--json`, `--plain`, `--quiet`,
-`--verbose`, `--no-color`, `--no-input`, and `--timeout`. JSON, plain, and quiet modes are
+`--verbose`, `--no-color`, `--no-input`, `--yes`, and `--timeout`. JSON, plain, and quiet modes are
 mutually exclusive. Stable application error codes are `usage`,
-`invalid_data`, `not_found`, `conflict`, `verification`, `io`, `network`,
-`pending`, `unavailable`, `internal`, and `interrupted`; their CLI exits are implemented in
+`invalid_data`, `unsupported_schema_version`, `not_found`, `conflict`,
+`verification`, `io`, `network`, `network_disabled`, `pending`, `incomplete`,
+`unavailable`, `internal`, and `interrupted`; their CLI exits are implemented in
 `internal/app/errors.go`.
 
-### Declared but unavailable CLI surface
+### Availability and maturity
 
-The following planned leaves stay registered for structural development tests
-but are hidden from normal help. Explicit invocation returns exit `10`, the JSON
-machine code `unavailable` when requested, and the message “command is not
-available in this preview release”; it makes no mutation:
-
-- `init`;
-- `platform add`, `update`, `list`, `show`, and `remove`;
-- `question add`, `update`, `list`, `show`, `resolve`, `annul`, and `dispute`;
-- `forecast add`, `list`, `show`, `seal`, and `reveal`;
-- `target build` and `check`;
-- `timestamp stamp`, `upgrade`, `status`, and `verify`;
-- `verify`;
-- `publish build` and `verify`; and
-- `mcp serve`.
-
-The registered declarations already enforce leaf-local `--file/-f`, selector shape,
-read-only stdin eligibility, `--dry-run` presence on mutations, and explicit
-MCP roots and grants. These declarations are not evidence that the operations
-work. The MCP adapter currently registers no tools or resources and starts no
-stdio server.
+Every visible leaf in the current source has a real action and an availability
+test; the old preview unavailable handler has been removed. This does not make
+every subsystem stable. The OpenTimestamps backend is explicitly experimental
+until official-client differential coverage, real-calendar liveness, complete
+native-platform recovery, budget and malformed-input matrices, and an
+independent review are recorded. Installed releases may expose less than
+unreleased `main`; candidate-binary help and `version --json` are authoritative
+for an installed artifact.
 
 ### Contract and protocol pins
 
@@ -88,6 +87,7 @@ stdio server.
 | Schema commit | `e409463d702888fefd253b32f21b9b2f864aabed` |
 | Embedded schema SHA-256 | `e63bdd01f0241aa4d94d5ccc45e84bcea70a6a7fd46ab77cff4802b3f8b8fc65` |
 | MCP protocol target | `2026-07-28` |
+| Timestamp profile | `opentimestamps-public-v1` (experimental; four calendars, threshold two, two Bitcoin observers, 32 heights, 128 requests, four concurrent) |
 | Go toolchain | `1.27.0` |
 
 Validation uses embedded contract bytes and does not resolve remote schema

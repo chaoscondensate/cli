@@ -208,11 +208,15 @@ func redact(value reflect.Value, key string) any {
 			if !field.IsExported() {
 				continue
 			}
-			name := strings.Split(field.Tag.Get("json"), ",")[0]
+			tagParts := strings.Split(field.Tag.Get("json"), ",")
+			name := tagParts[0]
 			if name == "" {
 				name = field.Name
 			}
 			if name == "-" {
+				continue
+			}
+			if containsTagOption(tagParts[1:], "omitempty") && value.Field(index).IsZero() {
 				continue
 			}
 			result[name] = redact(value.Field(index), name)
@@ -238,6 +242,15 @@ func redact(value reflect.Value, key string) any {
 	default:
 		return value.Interface()
 	}
+}
+
+func containsTagOption(options []string, expected string) bool {
+	for _, option := range options {
+		if option == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func isSecretKey(key string) bool {

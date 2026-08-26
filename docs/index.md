@@ -1,8 +1,8 @@
 # Forecast Ledger CLI documentation
 
 <!-- doc-metadata
-coverage: v0.1.1
-reviewed: 2026-08-25
+coverage: unreleased-main
+reviewed: 2026-08-26
 owner: documentation
 generated: false
 security-critical: false
@@ -11,9 +11,11 @@ next: getting-started/index.md
 -->
 
 This documentation covers the current Forecast Ledger CLI repository. Release
-`v0.1.1` is Preview: local validation and status work, while authoring,
-cryptography, OpenTimestamps, publication packages, and MCP operations remain
-unavailable. See the [reviewed implementation baseline](development/documentation-baseline.md)
+`v0.1.1` is Preview. The current unreleased source implements authoring,
+cryptographic targets and sealed forecasts, experimental OpenTimestamps,
+layered verification, standalone publication packages, and the MCP stdio
+adapter. See the
+[reviewed implementation baseline](development/documentation-baseline.md)
 before relying on a workflow.
 
 ## Start here
@@ -37,15 +39,14 @@ Project help and reporting routes are listed in the root
 
 ## Current safe first workflow
 
-After installing a released binary, validate an existing Forecast Ledger file
-without a network request:
+From the current source, start with [Create a ledger](getting-started/create-ledger.md).
+To inspect an existing Forecast Ledger file without a network request:
 
 ```sh
 forecast-ledger validate --file ledger.yaml
 ```
 
-Every ledger operation requires an explicit file. Do not use planned authoring,
-sealing, timestamp, publication, or MCP help entries as evidence that those
-operations are implemented.
+Every ledger operation requires an explicit file. OpenTimestamps is still
+experimental and its connected command surface is not a security-audit claim.
 
 [Repository README](../README.md) · [Project repository](https://github.com/chaoscondensate/cli)

@@ -1,0 +1,143 @@
+{
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/result/v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "code": {
+      "type": "string"
+    },
+    "data": {
+      "type": "object"
+    },
+    "effects": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "read",
+              "create",
+              "replace",
+              "remove",
+              "contact"
+            ]
+          },
+          "kind": {
+            "enum": [
+              "ledger",
+              "target",
+              "receipt",
+              "key",
+              "package",
+              "network"
+            ]
+          },
+          "owned": {
+            "type": "boolean"
+          },
+          "path": {
+            "type": "string"
+          },
+          "rollback": {
+            "enum": [
+              "none",
+              "created_public",
+              "retain_secret"
+            ]
+          },
+          "root": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "planned",
+              "deferred",
+              "completed",
+              "unchanged"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "action",
+          "status"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "message": {
+      "type": "string"
+    },
+    "operation": {
+      "type": "string"
+    },
+    "recovery": {
+      "additionalProperties": false,
+      "properties": {
+        "actions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "message": {
+          "type": "string"
+        },
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "state": {
+          "enum": [
+            "none",
+            "complete",
+            "pending",
+            "retained",
+            "required"
+          ]
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "type": "object"
+    },
+    "warnings": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "operation",
+    "code",
+    "message",
+    "data",
+    "recovery"
+  ],
+  "title": "Forecast Ledger operation result",
+  "type": "object"
+}

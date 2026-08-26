@@ -21,4 +21,5 @@ GLOBAL OPTIONS:
    --verbose, -v       Write additional diagnostics to stderr
    --no-color          Disable color and interactive decoration
    --no-input          Never prompt; fail when input is missing
+   --yes, -y           Approve a change that requires confirmation
    --timeout duration  Limit network or wait operations (default: 30s)

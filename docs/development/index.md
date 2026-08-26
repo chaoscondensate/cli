@@ -15,6 +15,7 @@ next: build.md
 - [Review product names](name-review.md)
 - [Create and verify releases](releasing.md)
 - [Review the documentation baseline](documentation-baseline.md)
+- [Track the OpenTimestamps release review](ots-review.md)
 - [Write and review documentation](documentation-style.md)
 - [Apply page metadata and ownership](page-metadata.md)
 - [Create accessible visual assets](visual-style.md)

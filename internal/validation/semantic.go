@@ -348,16 +348,9 @@ func (v *semanticValidator) validateResolution(question *ledger.Question, pointe
 			v.add("semantic.resolution_option", pointer+"/resolution/outcome", "resolution outcome must reference a question option")
 		}
 	}
-	for forecastIndex, forecast := range question.Forecasts {
-		if forecast.Integrity.Verified == nil {
-			continue
-		}
-		for timestampIndex, timestamp := range forecast.Integrity.Verified.Timestamps {
-			if timestamp.Type == "opentimestamps" && timestamp.State == ledger.OTSConfirmed && timestamp.AnchoredBefore != nil && !parseTimestamp(*timestamp.AnchoredBefore).Before(knownAt) {
-				v.add("semantic.late_timestamp", fmt.Sprintf("%s/forecasts/%d/integrity/timestamps/%d", pointer, forecastIndex, timestampIndex), "timestamp does not predate the known outcome")
-			}
-		}
-	}
+	// A confirmed timestamp at or after outcome_known_at can still be a valid
+	// cryptographic proof. Verification reports it as valid-but-too-late rather
+	// than making the complete ledger structurally or semantically invalid.
 }
 
 func (v *semanticValidator) uniqueSlugs(values []ledger.Slug, pointer, code string) {

@@ -1,0 +1,3353 @@
+{
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-mcp/tool-catalog/v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "profile": "forecast-ledger-mcp-tools/v1",
+  "tools": {
+    "forecast_add": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "forecast": {
+            "description": "Stable forecast ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "input": {
+            "$defs": {
+              "binaryValue": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "binary"
+                  },
+                  "probability_bp": {
+                    "description": "Probability of YES in basis points.",
+                    "maximum": 10000,
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "probability_bp"
+                ],
+                "type": "object"
+              },
+              "choiceProbability": {
+                "additionalProperties": false,
+                "properties": {
+                  "option_id": {
+                    "$ref": "#/$defs/slug"
+                  },
+                  "probability_bp": {
+                    "maximum": 10000,
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "option_id",
+                  "probability_bp"
+                ],
+                "type": "object"
+              },
+              "date": {
+                "format": "date",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "type": "string"
+              },
+              "dateInterval": {
+                "additionalProperties": false,
+                "properties": {
+                  "credibility_bp": {
+                    "maximum": 10000,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "lower": {
+                    "$ref": "#/$defs/date"
+                  },
+                  "upper": {
+                    "$ref": "#/$defs/date"
+                  }
+                },
+                "required": [
+                  "lower",
+                  "upper",
+                  "credibility_bp"
+                ],
+                "type": "object"
+              },
+              "dateQuantile": {
+                "additionalProperties": false,
+                "properties": {
+                  "probability_bp": {
+                    "maximum": 9999,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/date"
+                  }
+                },
+                "required": [
+                  "probability_bp",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "dateValue": {
+                "additionalProperties": false,
+                "anyOf": [
+                  {
+                    "required": [
+                      "point"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interval"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "quantiles"
+                    ]
+                  }
+                ],
+                "properties": {
+                  "interval": {
+                    "$ref": "#/$defs/dateInterval"
+                  },
+                  "kind": {
+                    "const": "date"
+                  },
+                  "point": {
+                    "$ref": "#/$defs/date"
+                  },
+                  "quantiles": {
+                    "items": {
+                      "$ref": "#/$defs/dateQuantile"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              },
+              "decimal": {
+                "description": "An exact decimal encoded as a string. Leading zeros and non-finite values are forbidden.",
+                "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+                "type": "string"
+              },
+              "forecast-create": {
+                "$ref": "#/$defs/publicForecastInput"
+              },
+              "forecastValue": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/binaryValue"
+                  },
+                  {
+                    "$ref": "#/$defs/multipleChoiceValue"
+                  },
+                  {
+                    "$ref": "#/$defs/numericValue"
+                  },
+                  {
+                    "$ref": "#/$defs/dateValue"
+                  }
+                ]
+              },
+              "multipleChoiceValue": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "multiple_choice"
+                  },
+                  "probabilities": {
+                    "items": {
+                      "$ref": "#/$defs/choiceProbability"
+                    },
+                    "minItems": 2,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "probabilities"
+                ],
+                "type": "object"
+              },
+              "numericInterval": {
+                "additionalProperties": false,
+                "properties": {
+                  "credibility_bp": {
+                    "maximum": 10000,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "lower": {
+                    "$ref": "#/$defs/decimal"
+                  },
+                  "upper": {
+                    "$ref": "#/$defs/decimal"
+                  }
+                },
+                "required": [
+                  "lower",
+                  "upper",
+                  "credibility_bp"
+                ],
+                "type": "object"
+              },
+              "numericQuantile": {
+                "additionalProperties": false,
+                "properties": {
+                  "probability_bp": {
+                    "maximum": 9999,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/decimal"
+                  }
+                },
+                "required": [
+                  "probability_bp",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "numericValue": {
+                "additionalProperties": false,
+                "anyOf": [
+                  {
+                    "required": [
+                      "point"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interval"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "quantiles"
+                    ]
+                  }
+                ],
+                "properties": {
+                  "interval": {
+                    "$ref": "#/$defs/numericInterval"
+                  },
+                  "kind": {
+                    "const": "numeric"
+                  },
+                  "point": {
+                    "$ref": "#/$defs/decimal"
+                  },
+                  "quantiles": {
+                    "items": {
+                      "$ref": "#/$defs/numericQuantile"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              },
+              "publicForecastInput": {
+                "additionalProperties": false,
+                "properties": {
+                  "comment": {
+                    "minLength": 0,
+                    "type": "string"
+                  },
+                  "forecasted_at": {
+                    "$ref": "#/$defs/timestamp"
+                  },
+                  "key_factors": {
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "public_note": {
+                    "minLength": 0,
+                    "type": "string"
+                  },
+                  "rationale": {
+                    "minLength": 0,
+                    "type": "string"
+                  },
+                  "recorded_at": {
+                    "$ref": "#/$defs/timestamp"
+                  },
+                  "supersedes_forecast_id": {
+                    "$ref": "#/$defs/slug"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/forecastValue"
+                  }
+                },
+                "required": [
+                  "forecasted_at",
+                  "value"
+                ],
+                "type": "object"
+              },
+              "slug": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+                "type": "string"
+              },
+              "timestamp": {
+                "description": "An RFC 3339 timestamp with seconds and an explicit UTC offset or Z.",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
+                "type": "string"
+              }
+            },
+            "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/forecast-create/v1",
+            "$ref": "#/$defs/forecast-create",
+            "$schema": "https://json-schema.org/draft/2020-12/schema"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "forecast",
+          "input",
+          "question"
+        ],
+        "type": "object"
+      },
+      "operation": "forecast.add",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "forecast_key_hint_update": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "forecast": {
+            "description": "Stable forecast ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "input": {
+            "$defs": {
+              "key-hint-update": {
+                "additionalProperties": false,
+                "properties": {
+                  "key_hint": {
+                    "pattern": "^[a-z][a-z0-9+.-]*:[A-Za-z0-9._~+-]+$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key_hint"
+                ],
+                "type": "object"
+              }
+            },
+            "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/key-hint-update/v1",
+            "$ref": "#/$defs/key-hint-update",
+            "$schema": "https://json-schema.org/draft/2020-12/schema"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "forecast",
+          "input",
+          "question"
+        ],
+        "type": "object"
+      },
+      "operation": "forecast.key_hint.update",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "forecast_list": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "question"
+        ],
+        "type": "object"
+      },
+      "operation": "forecast.list",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "forecast_reveal": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "const": true,
+            "description": "Explicit caller confirmation"
+          },
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "forecast": {
+            "description": "Stable forecast ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "key_file": {
+            "description": "Protected key reference",
+            "type": "string"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "revealed_at": {
+            "description": "Optional exact RFC 3339 reveal time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm",
+          "file",
+          "forecast",
+          "key_file",
+          "question"
+        ],
+        "type": "object"
+      },
+      "operation": "forecast.reveal",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "forecast_seal": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "forecast": {
+            "description": "Stable forecast ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "input_file": {
+            "description": "Protected file reference relative to an authorized secret root",
+            "minLength": 1,
+            "type": "string"
+          },
+          "key_file": {
+            "description": "New protected key reference",
+            "type": "string"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "forecast",
+          "input_file",
+          "key_file",
+          "question"
+        ],
+        "type": "object"
+      },
+      "operation": "forecast.seal",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "forecast_show": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "forecast": {
+            "description": "Stable forecast ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "forecast",
+          "question"
+        ],
+        "type": "object"
+      },
+      "operation": "forecast.show",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "ledger_init": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "oneOf": [
+              {
+                "not": {
+                  "required": [
+                    "input_file"
+                  ]
+                },
+                "required": [
+                  "input"
+                ]
+              },
+              {
+                "not": {
+                  "required": [
+                    "input"
+                  ]
+                },
+                "required": [
+                  "input_file"
+                ]
+              }
+            ]
+          }
+        ],
+        "properties": {
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "forecaster_id": {
+            "description": "Stable forecaster ID",
+            "type": "string"
+          },
+          "forecaster_kind": {
+            "description": "Forecaster kind",
+            "enum": [
+              "individual",
+              "team"
+            ],
+            "type": "string"
+          },
+          "forecaster_name": {
+            "description": "Forecaster display name",
+            "type": "string"
+          },
+          "input": {
+            "allOf": [
+              {
+                "$defs": {
+                  "binaryValue": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "binary"
+                      },
+                      "probability_bp": {
+                        "description": "Probability of YES in basis points.",
+                        "maximum": 10000,
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "probability_bp"
+                    ],
+                    "type": "object"
+                  },
+                  "choiceProbability": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "option_id": {
+                        "$ref": "#/$defs/slug"
+                      },
+                      "probability_bp": {
+                        "maximum": 10000,
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "option_id",
+                      "probability_bp"
+                    ],
+                    "type": "object"
+                  },
+                  "contact": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "email": {
+                        "format": "email",
+                        "type": "string"
+                      },
+                      "website": {
+                        "format": "uri",
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "date": {
+                    "format": "date",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                    "type": "string"
+                  },
+                  "dateInterval": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "credibility_bp": {
+                        "maximum": 10000,
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "lower": {
+                        "$ref": "#/$defs/date"
+                      },
+                      "upper": {
+                        "$ref": "#/$defs/date"
+                      }
+                    },
+                    "required": [
+                      "lower",
+                      "upper",
+                      "credibility_bp"
+                    ],
+                    "type": "object"
+                  },
+                  "dateQuantile": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "probability_bp": {
+                        "maximum": 9999,
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "value": {
+                        "$ref": "#/$defs/date"
+                      }
+                    },
+                    "required": [
+                      "probability_bp",
+                      "value"
+                    ],
+                    "type": "object"
+                  },
+                  "dateValue": {
+                    "additionalProperties": false,
+                    "anyOf": [
+                      {
+                        "required": [
+                          "point"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "interval"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "quantiles"
+                        ]
+                      }
+                    ],
+                    "properties": {
+                      "interval": {
+                        "$ref": "#/$defs/dateInterval"
+                      },
+                      "kind": {
+                        "const": "date"
+                      },
+                      "point": {
+                        "$ref": "#/$defs/date"
+                      },
+                      "quantiles": {
+                        "items": {
+                          "$ref": "#/$defs/dateQuantile"
+                        },
+                        "minItems": 1,
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ],
+                    "type": "object"
+                  },
+                  "decimal": {
+                    "description": "An exact decimal encoded as a string. Leading zeros and non-finite values are forbidden.",
+                    "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+                    "type": "string"
+                  },
+                  "forecastValue": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/$defs/binaryValue"
+                      },
+                      {
+                        "$ref": "#/$defs/multipleChoiceValue"
+                      },
+                      {
+                        "$ref": "#/$defs/numericValue"
+                      },
+                      {
+                        "$ref": "#/$defs/dateValue"
+                      }
+                    ]
+                  },
+                  "forecastWindow": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "closes_at": {
+                        "$ref": "#/$defs/timestamp"
+                      },
+                      "opens_at": {
+                        "$ref": "#/$defs/timestamp"
+                      }
+                    },
+                    "required": [
+                      "closes_at"
+                    ],
+                    "type": "object"
+                  },
+                  "init": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "contact": {
+                        "$ref": "#/$defs/contact"
+                      },
+                      "created_at": {
+                        "$ref": "#/$defs/timestamp"
+                      },
+                      "description": {
+                        "minLength": 0,
+                        "type": "string"
+                      },
+                      "members": {
+                        "items": {
+                          "$ref": "#/$defs/member"
+                        },
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "platforms": {
+                        "additionalProperties": {
+                          "$ref": "#/$defs/platform"
+                        },
+                        "propertyNames": {
+                          "$ref": "#/$defs/slug"
+                        },
+                        "type": "object"
+                      },
+                      "profiles": {
+                        "items": {
+                          "$ref": "#/$defs/profile"
+                        },
+                        "type": "array"
+                      },
+                      "question": {
+                        "$ref": "#/$defs/initialQuestionInput"
+                      },
+                      "title": {
+                        "minLength": 0,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "question"
+                    ],
+                    "type": "object"
+                  },
+                  "initialForecastInput": {
+                    "additionalProperties": false,
+                    "allOf": [
+                      {
+                        "if": {
+                          "properties": {
+                            "visibility": {
+                              "const": "sealed"
+                            }
+                          },
+                          "required": [
+                            "visibility"
+                          ]
+                        },
+                        "then": {
+                          "required": [
+                            "rationale",
+                            "key_factors",
+                            "comment"
+                          ]
+                        }
+                      }
+                    ],
+                    "properties": {
+                      "comment": {
+                        "minLength": 0,
+                        "type": "string"
+                      },
+                      "forecasted_at": {
+                        "$ref": "#/$defs/timestamp"
+                      },
+                      "id": {
+                        "$ref": "#/$defs/slug"
+                      },
+                      "key_factors": {
+                        "items": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "public_note": {
+                        "minLength": 0,
+                        "type": "string"
+                      },
+                      "rationale": {
+                        "minLength": 0,
+                        "type": "string"
+                      },
+                      "recorded_at": {
+                        "$ref": "#/$defs/timestamp"
+                      },
+                      "supersedes_forecast_id": {
+                        "$ref": "#/$defs/slug"
+                      },
+                      "value": {
+                        "$ref": "#/$defs/forecastValue"
+                      },
+                      "visibility": {
+                        "enum": [
+                          "public",
+                          "sealed"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "visibility",
+                      "forecasted_at",
+                      "value"
+                    ],
+                    "type": "object"
+                  },
+                  "initialQuestionInput": {
+                    "additionalProperties": false,
+                    "allOf": [
+                      {
+                        "if": {
+                          "properties": {
+                            "type": {
+                              "const": "multiple_choice"
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ]
+                        },
+                        "then": {
+                          "not": {
+                            "required": [
+                              "unit"
+                            ]
+                          },
+                          "required": [
+                            "options"
+                          ]
+                        }
+                      },
+                      {
+                        "if": {
+                          "properties": {
+                            "type": {
+                              "const": "numeric"
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ]
+                        },
+                        "then": {
+                          "not": {
+                            "required": [
+                              "options"
+                            ]
+                          },
+                          "required": [
+                            "unit"
+                          ]
+                        }
+                      },
+                      {
+                        "if": {
+                          "properties": {
+                            "type": {
+                              "enum": [
+                                "binary",
+                                "date"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ]
+                        },
+                        "then": {
+                          "not": {
+                            "anyOf": [
+                              {
+                                "required": [
+                                  "options"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "unit"
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ],
+                    "properties": {
+                      "created_at": {
+                        "$ref": "#/$defs/timestamp"
+                      },
+                      "expected_resolution_at": {
+                        "$ref": "#/$defs/timestamp"
+                      },
+                      "forecast_window": {
+                        "$ref": "#/$defs/forecastWindow"
+                      },
+                      "id": {
+                        "$ref": "#/$defs/slug"
+                      },
+                      "initial_forecast": {
+                        "$ref": "#/$defs/initialForecastInput"
+                      },
+                      "notes": {
+                        "minLength": 0,
+                        "type": "string"
+                      },
+                      "options": {
+                        "items": {
+                          "$ref": "#/$defs/option"
+                        },
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "platform_refs": {
+                        "items": {
+                          "$ref": "#/$defs/platformRef"
+                        },
+                        "type": "array"
+                      },
+                      "resolution_criteria": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "tags": {
+                        "items": {
+                          "$ref": "#/$defs/slug"
+                        },
+                        "type": "array"
+                      },
+                      "title": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "type": {
+                        "enum": [
+                          "binary",
+                          "multiple_choice",
+                          "numeric",
+                          "date"
+                        ]
+                      },
+                      "unit": {
+                        "$ref": "#/$defs/unit"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "title",
+                      "type",
+                      "resolution_criteria",
+                      "forecast_window",
+                      "expected_resolution_at",
+                      "initial_forecast"
+                    ],
+                    "type": "object"
+                  },
+                  "member": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "$ref": "#/$defs/slug"
+                      },
+                      "name": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "profiles": {
+                        "items": {
+                          "$ref": "#/$defs/profile"
+                        },
+                        "type": "array"
+                      },
+                      "role": {
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name"
+                    ],
+                    "type": "object"
+                  },
+                  "multipleChoiceValue": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "multiple_choice"
+                      },
+                      "probabilities": {
+                        "items": {
+                          "$ref": "#/$defs/choiceProbability"
+                        },
+                        "minItems": 2,
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "probabilities"
+                    ],
+                    "type": "object"
+                  },
+                  "numericInterval": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "credibility_bp": {
+                        "maximum": 10000,
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "lower": {
+                        "$ref": "#/$defs/decimal"
+                      },
+                      "upper": {
+                        "$ref": "#/$defs/decimal"
+                      }
+                    },
+                    "required": [
+                      "lower",
+                      "upper",
+                      "credibility_bp"
+                    ],
+                    "type": "object"
+                  },
+                  "numericQuantile": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "probability_bp": {
+                        "maximum": 9999,
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "value": {
+                        "$ref": "#/$defs/decimal"
+                      }
+                    },
+                    "required": [
+                      "probability_bp",
+                      "value"
+                    ],
+                    "type": "object"
+                  },
+                  "numericValue": {
+                    "additionalProperties": false,
+                    "anyOf": [
+                      {
+                        "required": [
+                          "point"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "interval"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "quantiles"
+                        ]
+                      }
+                    ],
+                    "properties": {
+                      "interval": {
+                        "$ref": "#/$defs/numericInterval"
+                      },
+                      "kind": {
+                        "const": "numeric"
+                      },
+                      "point": {
+                        "$ref": "#/$defs/decimal"
+                      },
+                      "quantiles": {
+                        "items": {
+                          "$ref": "#/$defs/numericQuantile"
+                        },
+                        "minItems": 1,
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ],
+                    "type": "object"
+                  },
+                  "option": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "$ref": "#/$defs/slug"
+                      },
+                      "label": {
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "type": "object"
+                  },
+                  "platform": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "account": {
+                        "additionalProperties": false,
+                        "minProperties": 1,
+                        "properties": {
+                          "profile_url": {
+                            "format": "uri",
+                            "type": "string"
+                          },
+                          "user_id": {
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "username": {
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "kind": {
+                        "enum": [
+                          "scoring_platform",
+                          "prediction_market",
+                          "self_hosted",
+                          "internal",
+                          "informal"
+                        ]
+                      },
+                      "name": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "url": {
+                        "format": "uri",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "kind"
+                    ],
+                    "type": "object"
+                  },
+                  "platformRef": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "platform": {
+                        "$ref": "#/$defs/slug"
+                      },
+                      "question_id": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "url": {
+                        "format": "uri",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "platform"
+                    ],
+                    "type": "object"
+                  },
+                  "profile": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "service": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "url": {
+                        "format": "uri",
+                        "type": "string"
+                      },
+                      "username": {
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "service",
+                      "url"
+                    ],
+                    "type": "object"
+                  },
+                  "slug": {
+                    "maxLength": 128,
+                    "minLength": 1,
+                    "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+                    "type": "string"
+                  },
+                  "timestamp": {
+                    "description": "An RFC 3339 timestamp with seconds and an explicit UTC offset or Z.",
+                    "format": "date-time",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
+                    "type": "string"
+                  },
+                  "unit": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "name": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "symbol": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "ucum_code": {
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/init/v1",
+                "$ref": "#/$defs/init",
+                "$schema": "https://json-schema.org/draft/2020-12/schema"
+              },
+              {
+                "properties": {
+                  "question": {
+                    "properties": {
+                      "initial_forecast": {
+                        "properties": {
+                          "visibility": {
+                            "const": "public"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "input_file": {
+            "description": "Protected file reference relative to an authorized secret root",
+            "minLength": 1,
+            "type": "string"
+          },
+          "key_file": {
+            "description": "New protected key reference for a sealed first forecast",
+            "type": "string"
+          },
+          "ledger_id": {
+            "description": "Stable ledger ID",
+            "type": "string"
+          },
+          "timezone": {
+            "description": "IANA timezone name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "forecaster_id",
+          "forecaster_name",
+          "ledger_id",
+          "timezone"
+        ],
+        "type": "object"
+      },
+      "operation": "ledger.init",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "ledger_status": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "type": "object"
+      },
+      "operation": "ledger.status",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "ledger_update": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "input": {
+            "$defs": {
+              "contact": {
+                "additionalProperties": false,
+                "properties": {
+                  "email": {
+                    "format": "email",
+                    "type": "string"
+                  },
+                  "website": {
+                    "format": "uri",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "forecasterPatchInput": {
+                "additionalProperties": false,
+                "minProperties": 1,
+                "properties": {
+                  "contact": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/$defs/contact"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "kind": {
+                    "enum": [
+                      "individual",
+                      "team"
+                    ]
+                  },
+                  "members": {
+                    "anyOf": [
+                      {
+                        "items": {
+                          "$ref": "#/$defs/member"
+                        },
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "name": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "profiles": {
+                    "anyOf": [
+                      {
+                        "items": {
+                          "$ref": "#/$defs/profile"
+                        },
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "type": "object"
+              },
+              "member": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "$ref": "#/$defs/slug"
+                  },
+                  "name": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "profiles": {
+                    "items": {
+                      "$ref": "#/$defs/profile"
+                    },
+                    "type": "array"
+                  },
+                  "role": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "type": "object"
+              },
+              "profile": {
+                "additionalProperties": false,
+                "properties": {
+                  "service": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "url": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "username": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "service",
+                  "url"
+                ],
+                "type": "object"
+              },
+              "root-metadata-patch": {
+                "additionalProperties": false,
+                "minProperties": 1,
+                "properties": {
+                  "default_timezone": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "description": {
+                    "anyOf": [
+                      {
+                        "minLength": 0,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "forecaster": {
+                    "$ref": "#/$defs/forecasterPatchInput"
+                  },
+                  "title": {
+                    "anyOf": [
+                      {
+                        "minLength": 0,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "type": "object"
+              },
+              "slug": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+                "type": "string"
+              }
+            },
+            "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/root-metadata-patch/v1",
+            "$ref": "#/$defs/root-metadata-patch",
+            "$schema": "https://json-schema.org/draft/2020-12/schema"
+          }
+        },
+        "required": [
+          "file",
+          "input"
+        ],
+        "type": "object"
+      },
+      "operation": "ledger.update",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "ledger_validate": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "type": "object"
+      },
+      "operation": "ledger.validate",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "platform_add": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "input": {
+            "$defs": {
+              "platform": {
+                "additionalProperties": false,
+                "properties": {
+                  "account": {
+                    "additionalProperties": false,
+                    "minProperties": 1,
+                    "properties": {
+                      "profile_url": {
+                        "format": "uri",
+                        "type": "string"
+                      },
+                      "user_id": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "username": {
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "kind": {
+                    "enum": [
+                      "scoring_platform",
+                      "prediction_market",
+                      "self_hosted",
+                      "internal",
+                      "informal"
+                    ]
+                  },
+                  "name": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "url": {
+                    "format": "uri",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "kind"
+                ],
+                "type": "object"
+              },
+              "platform-create": {
+                "$ref": "#/$defs/platform"
+              }
+            },
+            "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/platform-create/v1",
+            "$ref": "#/$defs/platform-create",
+            "$schema": "https://json-schema.org/draft/2020-12/schema"
+          },
+          "platform": {
+            "description": "Stable platform ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "input",
+          "platform"
+        ],
+        "type": "object"
+      },
+      "operation": "platform.add",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "platform_list": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "type": "object"
+      },
+      "operation": "platform.list",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "platform_remove": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "const": true,
+            "description": "Explicit caller confirmation"
+          },
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "platform": {
+            "description": "Stable platform ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm",
+          "file",
+          "platform"
+        ],
+        "type": "object"
+      },
+      "operation": "platform.remove",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "platform_show": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "platform": {
+            "description": "Stable platform ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "platform"
+        ],
+        "type": "object"
+      },
+      "operation": "platform.show",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "platform_update": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "input": {
+            "$defs": {
+              "platform-patch": {
+                "additionalProperties": false,
+                "minProperties": 1,
+                "properties": {
+                  "account": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/$defs/platformAccountPatchInput"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "kind": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "scoring_platform",
+                          "prediction_market",
+                          "self_hosted",
+                          "internal",
+                          "informal"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "name": {
+                    "anyOf": [
+                      {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "url": {
+                    "anyOf": [
+                      {
+                        "format": "uri",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "type": "object"
+              },
+              "platformAccountPatchInput": {
+                "additionalProperties": false,
+                "minProperties": 1,
+                "properties": {
+                  "profile_url": {
+                    "anyOf": [
+                      {
+                        "format": "uri",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "user_id": {
+                    "anyOf": [
+                      {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "username": {
+                    "anyOf": [
+                      {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/platform-patch/v1",
+            "$ref": "#/$defs/platform-patch",
+            "$schema": "https://json-schema.org/draft/2020-12/schema"
+          },
+          "platform": {
+            "description": "Stable platform ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "input",
+          "platform"
+        ],
+        "type": "object"
+      },
+      "operation": "platform.update",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "publication_build": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "output": {
+            "description": "New package path inside an output root",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "output"
+        ],
+        "type": "object"
+      },
+      "operation": "publication.build",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "publication_verify": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "manifest": {
+            "description": "Manifest path inside the package root",
+            "type": "string"
+          },
+          "online": {
+            "description": "Enable built-in public Bitcoin observation",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "file",
+          "manifest"
+        ],
+        "type": "object"
+      },
+      "operation": "publication.verify",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "question_add": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "oneOf": [
+              {
+                "not": {
+                  "required": [
+                    "input_file"
+                  ]
+                },
+                "required": [
+                  "input"
+                ]
+              },
+              {
+                "not": {
+                  "required": [
+                    "input"
+                  ]
+                },
+                "required": [
+                  "input_file"
+                ]
+              }
+            ]
+          }
+        ],
+        "properties": {
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "input": {
+            "allOf": [
+              {
+                "$defs": {
+                  "binaryValue": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "binary"
+                      },
+                      "probability_bp": {
+                        "description": "Probability of YES in basis points.",
+                        "maximum": 10000,
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "probability_bp"
+                    ],
+                    "type": "object"
+                  },
+                  "choiceProbability": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "option_id": {
+                        "$ref": "#/$defs/slug"
+                      },
+                      "probability_bp": {
+                        "maximum": 10000,
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "option_id",
+                      "probability_bp"
+                    ],
+                    "type": "object"
+                  },
+                  "date": {
+                    "format": "date",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                    "type": "string"
+                  },
+                  "dateInterval": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "credibility_bp": {
+                        "maximum": 10000,
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "lower": {
+                        "$ref": "#/$defs/date"
+                      },
+                      "upper": {
+                        "$ref": "#/$defs/date"
+                      }
+                    },
+                    "required": [
+                      "lower",
+                      "upper",
+                      "credibility_bp"
+                    ],
+                    "type": "object"
+                  },
+                  "dateQuantile": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "probability_bp": {
+                        "maximum": 9999,
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "value": {
+                        "$ref": "#/$defs/date"
+                      }
+                    },
+                    "required": [
+                      "probability_bp",
+                      "value"
+                    ],
+                    "type": "object"
+                  },
+                  "dateValue": {
+                    "additionalProperties": false,
+                    "anyOf": [
+                      {
+                        "required": [
+                          "point"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "interval"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "quantiles"
+                        ]
+                      }
+                    ],
+                    "properties": {
+                      "interval": {
+                        "$ref": "#/$defs/dateInterval"
+                      },
+                      "kind": {
+                        "const": "date"
+                      },
+                      "point": {
+                        "$ref": "#/$defs/date"
+                      },
+                      "quantiles": {
+                        "items": {
+                          "$ref": "#/$defs/dateQuantile"
+                        },
+                        "minItems": 1,
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ],
+                    "type": "object"
+                  },
+                  "decimal": {
+                    "description": "An exact decimal encoded as a string. Leading zeros and non-finite values are forbidden.",
+                    "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+                    "type": "string"
+                  },
+                  "forecastValue": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/$defs/binaryValue"
+                      },
+                      {
+                        "$ref": "#/$defs/multipleChoiceValue"
+                      },
+                      {
+                        "$ref": "#/$defs/numericValue"
+                      },
+                      {
+                        "$ref": "#/$defs/dateValue"
+                      }
+                    ]
+                  },
+                  "forecastWindow": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "closes_at": {
+                        "$ref": "#/$defs/timestamp"
+                      },
+                      "opens_at": {
+                        "$ref": "#/$defs/timestamp"
+                      }
+                    },
+                    "required": [
+                      "closes_at"
+                    ],
+                    "type": "object"
+                  },
+                  "initialForecastInput": {
+                    "additionalProperties": false,
+                    "allOf": [
+                      {
+                        "if": {
+                          "properties": {
+                            "visibility": {
+                              "const": "sealed"
+                            }
+                          },
+                          "required": [
+                            "visibility"
+                          ]
+                        },
+                        "then": {
+                          "required": [
+                            "rationale",
+                            "key_factors",
+                            "comment"
+                          ]
+                        }
+                      }
+                    ],
+                    "properties": {
+                      "comment": {
+                        "minLength": 0,
+                        "type": "string"
+                      },
+                      "forecasted_at": {
+                        "$ref": "#/$defs/timestamp"
+                      },
+                      "id": {
+                        "$ref": "#/$defs/slug"
+                      },
+                      "key_factors": {
+                        "items": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "public_note": {
+                        "minLength": 0,
+                        "type": "string"
+                      },
+                      "rationale": {
+                        "minLength": 0,
+                        "type": "string"
+                      },
+                      "recorded_at": {
+                        "$ref": "#/$defs/timestamp"
+                      },
+                      "supersedes_forecast_id": {
+                        "$ref": "#/$defs/slug"
+                      },
+                      "value": {
+                        "$ref": "#/$defs/forecastValue"
+                      },
+                      "visibility": {
+                        "enum": [
+                          "public",
+                          "sealed"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "visibility",
+                      "forecasted_at",
+                      "value"
+                    ],
+                    "type": "object"
+                  },
+                  "multipleChoiceValue": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "multiple_choice"
+                      },
+                      "probabilities": {
+                        "items": {
+                          "$ref": "#/$defs/choiceProbability"
+                        },
+                        "minItems": 2,
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "probabilities"
+                    ],
+                    "type": "object"
+                  },
+                  "numericInterval": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "credibility_bp": {
+                        "maximum": 10000,
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "lower": {
+                        "$ref": "#/$defs/decimal"
+                      },
+                      "upper": {
+                        "$ref": "#/$defs/decimal"
+                      }
+                    },
+                    "required": [
+                      "lower",
+                      "upper",
+                      "credibility_bp"
+                    ],
+                    "type": "object"
+                  },
+                  "numericQuantile": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "probability_bp": {
+                        "maximum": 9999,
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "value": {
+                        "$ref": "#/$defs/decimal"
+                      }
+                    },
+                    "required": [
+                      "probability_bp",
+                      "value"
+                    ],
+                    "type": "object"
+                  },
+                  "numericValue": {
+                    "additionalProperties": false,
+                    "anyOf": [
+                      {
+                        "required": [
+                          "point"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "interval"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "quantiles"
+                        ]
+                      }
+                    ],
+                    "properties": {
+                      "interval": {
+                        "$ref": "#/$defs/numericInterval"
+                      },
+                      "kind": {
+                        "const": "numeric"
+                      },
+                      "point": {
+                        "$ref": "#/$defs/decimal"
+                      },
+                      "quantiles": {
+                        "items": {
+                          "$ref": "#/$defs/numericQuantile"
+                        },
+                        "minItems": 1,
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ],
+                    "type": "object"
+                  },
+                  "option": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "$ref": "#/$defs/slug"
+                      },
+                      "label": {
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "type": "object"
+                  },
+                  "platformRef": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "platform": {
+                        "$ref": "#/$defs/slug"
+                      },
+                      "question_id": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "url": {
+                        "format": "uri",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "platform"
+                    ],
+                    "type": "object"
+                  },
+                  "question-add": {
+                    "$ref": "#/$defs/questionAddInput"
+                  },
+                  "questionAddInput": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "created_at": {
+                        "$ref": "#/$defs/timestamp"
+                      },
+                      "expected_resolution_at": {
+                        "$ref": "#/$defs/timestamp"
+                      },
+                      "forecast_window": {
+                        "$ref": "#/$defs/forecastWindow"
+                      },
+                      "initial_forecast": {
+                        "$ref": "#/$defs/initialForecastInput"
+                      },
+                      "notes": {
+                        "minLength": 0,
+                        "type": "string"
+                      },
+                      "options": {
+                        "items": {
+                          "$ref": "#/$defs/option"
+                        },
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "platform_refs": {
+                        "items": {
+                          "$ref": "#/$defs/platformRef"
+                        },
+                        "type": "array"
+                      },
+                      "resolution_criteria": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "tags": {
+                        "items": {
+                          "$ref": "#/$defs/slug"
+                        },
+                        "type": "array"
+                      },
+                      "title": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "unit": {
+                        "$ref": "#/$defs/unit"
+                      }
+                    },
+                    "required": [
+                      "title",
+                      "resolution_criteria",
+                      "forecast_window",
+                      "expected_resolution_at",
+                      "initial_forecast"
+                    ],
+                    "type": "object"
+                  },
+                  "slug": {
+                    "maxLength": 128,
+                    "minLength": 1,
+                    "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+                    "type": "string"
+                  },
+                  "timestamp": {
+                    "description": "An RFC 3339 timestamp with seconds and an explicit UTC offset or Z.",
+                    "format": "date-time",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
+                    "type": "string"
+                  },
+                  "unit": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "name": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "symbol": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "ucum_code": {
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/question-add/v1",
+                "$ref": "#/$defs/question-add",
+                "$schema": "https://json-schema.org/draft/2020-12/schema"
+              },
+              {
+                "properties": {
+                  "initial_forecast": {
+                    "properties": {
+                      "visibility": {
+                        "const": "public"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "input_file": {
+            "description": "Protected file reference relative to an authorized secret root",
+            "minLength": 1,
+            "type": "string"
+          },
+          "key_file": {
+            "description": "New protected key reference for a sealed first forecast",
+            "type": "string"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "type": {
+            "description": "Question type",
+            "enum": [
+              "binary",
+              "multiple_choice",
+              "numeric",
+              "date"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "question",
+          "type"
+        ],
+        "type": "object"
+      },
+      "operation": "question.add",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "question_annul": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "const": true,
+            "description": "Explicit caller confirmation"
+          },
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "input": {
+            "$defs": {
+              "annul": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "recorded_at": {
+                    "$ref": "#/$defs/timestamp"
+                  },
+                  "sources": {
+                    "items": {
+                      "$ref": "#/$defs/evidenceSourceInput"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "reason"
+                ],
+                "type": "object"
+              },
+              "evidenceSourceInput": {
+                "additionalProperties": false,
+                "properties": {
+                  "content_sha256": {
+                    "$ref": "#/$defs/hex32"
+                  },
+                  "published_at": {
+                    "$ref": "#/$defs/timestamp"
+                  },
+                  "publisher": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "retrieved_at": {
+                    "$ref": "#/$defs/timestamp"
+                  },
+                  "title": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "url": {
+                    "format": "uri",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "title",
+                  "url",
+                  "retrieved_at"
+                ],
+                "type": "object"
+              },
+              "hex32": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "timestamp": {
+                "description": "An RFC 3339 timestamp with seconds and an explicit UTC offset or Z.",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
+                "type": "string"
+              }
+            },
+            "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/annul/v1",
+            "$ref": "#/$defs/annul",
+            "$schema": "https://json-schema.org/draft/2020-12/schema"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm",
+          "file",
+          "input",
+          "question"
+        ],
+        "type": "object"
+      },
+      "operation": "question.annul",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "question_dispute": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "const": true,
+            "description": "Explicit caller confirmation"
+          },
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "input": {
+            "$defs": {
+              "dispute": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "recorded_at": {
+                    "$ref": "#/$defs/timestamp"
+                  },
+                  "sources": {
+                    "items": {
+                      "$ref": "#/$defs/evidenceSourceInput"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "reason"
+                ],
+                "type": "object"
+              },
+              "evidenceSourceInput": {
+                "additionalProperties": false,
+                "properties": {
+                  "content_sha256": {
+                    "$ref": "#/$defs/hex32"
+                  },
+                  "published_at": {
+                    "$ref": "#/$defs/timestamp"
+                  },
+                  "publisher": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "retrieved_at": {
+                    "$ref": "#/$defs/timestamp"
+                  },
+                  "title": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "url": {
+                    "format": "uri",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "title",
+                  "url",
+                  "retrieved_at"
+                ],
+                "type": "object"
+              },
+              "hex32": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "timestamp": {
+                "description": "An RFC 3339 timestamp with seconds and an explicit UTC offset or Z.",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
+                "type": "string"
+              }
+            },
+            "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/dispute/v1",
+            "$ref": "#/$defs/dispute",
+            "$schema": "https://json-schema.org/draft/2020-12/schema"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm",
+          "file",
+          "input",
+          "question"
+        ],
+        "type": "object"
+      },
+      "operation": "question.dispute",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "question_list": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "type": "object"
+      },
+      "operation": "question.list",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "question_resolve": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "const": true,
+            "description": "Explicit caller confirmation"
+          },
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "input": {
+            "$defs": {
+              "evidenceSourceInput": {
+                "additionalProperties": false,
+                "properties": {
+                  "content_sha256": {
+                    "$ref": "#/$defs/hex32"
+                  },
+                  "published_at": {
+                    "$ref": "#/$defs/timestamp"
+                  },
+                  "publisher": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "retrieved_at": {
+                    "$ref": "#/$defs/timestamp"
+                  },
+                  "title": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "url": {
+                    "format": "uri",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "title",
+                  "url",
+                  "retrieved_at"
+                ],
+                "type": "object"
+              },
+              "hex32": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "resolution": {
+                "additionalProperties": false,
+                "properties": {
+                  "notes": {
+                    "minLength": 0,
+                    "type": "string"
+                  },
+                  "outcome": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "outcome_known_at": {
+                    "$ref": "#/$defs/timestamp"
+                  },
+                  "recorded_at": {
+                    "$ref": "#/$defs/timestamp"
+                  },
+                  "sources": {
+                    "items": {
+                      "$ref": "#/$defs/evidenceSourceInput"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "outcome",
+                  "outcome_known_at",
+                  "sources"
+                ],
+                "type": "object"
+              },
+              "timestamp": {
+                "description": "An RFC 3339 timestamp with seconds and an explicit UTC offset or Z.",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
+                "type": "string"
+              }
+            },
+            "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/resolution/v1",
+            "$ref": "#/$defs/resolution",
+            "$schema": "https://json-schema.org/draft/2020-12/schema"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm",
+          "file",
+          "input",
+          "question"
+        ],
+        "type": "object"
+      },
+      "operation": "question.resolve",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "question_show": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "question"
+        ],
+        "type": "object"
+      },
+      "operation": "question.show",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "question_update": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "input": {
+            "$defs": {
+              "forecastWindowPatchInput": {
+                "additionalProperties": false,
+                "properties": {
+                  "closes_at": {
+                    "$ref": "#/$defs/timestamp"
+                  }
+                },
+                "required": [
+                  "closes_at"
+                ],
+                "type": "object"
+              },
+              "platformRef": {
+                "additionalProperties": false,
+                "properties": {
+                  "platform": {
+                    "$ref": "#/$defs/slug"
+                  },
+                  "question_id": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "url": {
+                    "format": "uri",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "platform"
+                ],
+                "type": "object"
+              },
+              "question-patch": {
+                "additionalProperties": false,
+                "minProperties": 1,
+                "properties": {
+                  "expected_resolution_at": {
+                    "$ref": "#/$defs/timestamp"
+                  },
+                  "forecast_window": {
+                    "$ref": "#/$defs/forecastWindowPatchInput"
+                  },
+                  "notes": {
+                    "anyOf": [
+                      {
+                        "minLength": 0,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "platform_refs": {
+                    "anyOf": [
+                      {
+                        "items": {
+                          "$ref": "#/$defs/platformRef"
+                        },
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "resolution_criteria": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "open",
+                      "closed",
+                      "awaiting_resolution"
+                    ]
+                  },
+                  "tags": {
+                    "anyOf": [
+                      {
+                        "items": {
+                          "$ref": "#/$defs/slug"
+                        },
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "title": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "slug": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+                "type": "string"
+              },
+              "timestamp": {
+                "description": "An RFC 3339 timestamp with seconds and an explicit UTC offset or Z.",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
+                "type": "string"
+              }
+            },
+            "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/question-patch/v1",
+            "$ref": "#/$defs/question-patch",
+            "$schema": "https://json-schema.org/draft/2020-12/schema"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "input",
+          "question"
+        ],
+        "type": "object"
+      },
+      "operation": "question.update",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "target_build": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "all": {
+            "type": "boolean"
+          },
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "forecast": {
+            "description": "Stable forecast ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "type": "object"
+      },
+      "operation": "target.build",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "target_check": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "all": {
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "forecast": {
+            "description": "Stable forecast ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "type": "object"
+      },
+      "operation": "target.check",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "timestamp_stamp": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "forecast": {
+            "description": "Stable forecast ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "forecast",
+          "question"
+        ],
+        "type": "object"
+      },
+      "operation": "timestamp.stamp",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "timestamp_status": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "forecast": {
+            "description": "Stable forecast ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "forecast",
+          "question"
+        ],
+        "type": "object"
+      },
+      "operation": "timestamp.status",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "timestamp_upgrade": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "forecast": {
+            "description": "Stable forecast ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "forecast",
+          "question"
+        ],
+        "type": "object"
+      },
+      "operation": "timestamp.upgrade",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "timestamp_verify": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "description": "Validate and return a plan without persistent or network effects",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "forecast": {
+            "description": "Stable forecast ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "question": {
+            "description": "Stable question ID",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+            "type": "string"
+          },
+          "verified_at": {
+            "description": "Optional exact RFC 3339 verification time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "forecast",
+          "question"
+        ],
+        "type": "object"
+      },
+      "operation": "timestamp.verify",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    },
+    "verification_run": {
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "check_sources": {
+            "description": "Check outcome source reachability",
+            "type": "boolean"
+          },
+          "file": {
+            "description": "Ledger reference as root-name:relative/path",
+            "minLength": 1,
+            "type": "string"
+          },
+          "forecast": {
+            "description": "Optional forecast ID; requires question",
+            "type": "string"
+          },
+          "question": {
+            "description": "Optional question ID",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "type": "object"
+      },
+      "operation": "verification.run",
+      "result_schema": {
+        "$ref": "result.schema.json"
+      }
+    }
+  }
+}

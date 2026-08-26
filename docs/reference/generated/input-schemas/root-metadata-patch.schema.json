@@ -1,0 +1,166 @@
+{
+  "$defs": {
+    "contact": {
+      "additionalProperties": false,
+      "properties": {
+        "email": {
+          "format": "email",
+          "type": "string"
+        },
+        "website": {
+          "format": "uri",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "forecasterPatchInput": {
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "contact": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/contact"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "enum": [
+            "individual",
+            "team"
+          ]
+        },
+        "members": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/member"
+              },
+              "minItems": 2,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "profiles": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/profile"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "member": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/slug"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "profiles": {
+          "items": {
+            "$ref": "#/$defs/profile"
+          },
+          "type": "array"
+        },
+        "role": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "type": "object"
+    },
+    "profile": {
+      "additionalProperties": false,
+      "properties": {
+        "service": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "url": {
+          "format": "uri",
+          "type": "string"
+        },
+        "username": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "service",
+        "url"
+      ],
+      "type": "object"
+    },
+    "root-metadata-patch": {
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "default_timezone": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "minLength": 0,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "forecaster": {
+          "$ref": "#/$defs/forecasterPatchInput"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "minLength": 0,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "slug": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "type": "string"
+    }
+  },
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/root-metadata-patch/v1",
+  "$ref": "#/$defs/root-metadata-patch",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

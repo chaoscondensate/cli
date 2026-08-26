@@ -16,10 +16,24 @@ func TestValidateRelativePathPortableRules(t *testing.T) {
 			t.Errorf("valid path %q rejected: %v", valid, err)
 		}
 	}
-	for _, invalid := range []string{"", ".", "../escape", "a/../b", "/absolute", `C:\target`, `C:/target`, `\\server\share`, "//server/share", `a\b`, "file:stream", "a//b", "a/./b"} {
+	for _, invalid := range []string{"", ".", "../escape", "a/../b", "/absolute", `C:\target`, `C:/target`, `\\server\share`, "//server/share", `a\b`, "file:stream", "a//b", "a/./b", "NUL", "con.txt", "proofs/COM1.json", `\\?\C:\device`} {
 		err := ValidateRelativePath(invalid)
 		if err == nil || !errors.Is(err, ErrUnsafePath) {
 			t.Errorf("unsafe path %q: got %v", invalid, err)
+		}
+	}
+}
+
+func TestDetectPortablePathCollisions(t *testing.T) {
+	if err := DetectPortablePathCollisions([]string{"proofs/targets/a.json", "proofs/receipts/a.ots"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, paths := range [][]string{
+		{"proofs/Target.json", "proofs/target.json"},
+		{"proofs/é.json", "proofs/e\u0301.json"},
+	} {
+		if err := DetectPortablePathCollisions(paths); app.ErrorCodeOf(err) != app.CodeConflict {
+			t.Fatalf("collision %q error = %v", paths, err)
 		}
 	}
 }
@@ -51,6 +65,12 @@ func TestPathResolverConfinesAndRejectsSymlinks(t *testing.T) {
 	if _, err := resolver.Resolve("missing/new.json", false); app.ErrorCodeOf(err) != app.CodeNotFound {
 		t.Fatalf("missing parent: got %v", err)
 	}
+	if err := os.Mkdir(filepath.Join(root, "CaseOnly"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := resolver.Resolve("caseonly/new.json", false); app.ErrorCodeOf(err) != app.CodeConflict {
+		t.Fatalf("case-folding collision accepted: %v", err)
+	}
 
 	if runtime.GOOS != "windows" {
 		outside := t.TempDir()
@@ -60,6 +80,28 @@ func TestPathResolverConfinesAndRejectsSymlinks(t *testing.T) {
 		if _, err := resolver.Resolve("linked/escape.json", false); err == nil || !errors.Is(err, ErrUnsafePath) {
 			t.Fatalf("symlink path accepted: %v", err)
 		}
+	}
+}
+
+func TestPathResolverRejectsReplacedRootIdentity(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "allowed")
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	resolver, err := NewPathResolver(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved := filepath.Join(parent, "moved")
+	if err := os.Rename(root, moved); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := resolver.Resolve("ledger.json", false); app.ErrorCodeOf(err) != app.CodeConflict {
+		t.Fatalf("replaced root identity error = %v", err)
 	}
 }
 
@@ -89,4 +131,16 @@ func TestResolveLedgerPathRequiresExplicitRegularFile(t *testing.T) {
 	if _, err := ResolveLedgerPath(root, true); err == nil || !errors.Is(err, ErrUnsafePath) {
 		t.Fatalf("directory accepted as ledger: %v", err)
 	}
+	if _, err := ResolveLedgerPath(filepath.Join(root, "NUL.json"), false); err == nil || !errors.Is(err, ErrUnsafePath) {
+		t.Fatalf("reserved Windows device name accepted: %v", err)
+	}
+}
+
+func FuzzValidateRelativePath(f *testing.F) {
+	f.Add("proofs/targets/f-one.json")
+	f.Add("../escape")
+	f.Add(`C:\\Windows\\system32`)
+	f.Fuzz(func(t *testing.T, path string) {
+		_ = ValidateRelativePath(path)
+	})
 }

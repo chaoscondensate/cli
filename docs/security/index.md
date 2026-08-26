@@ -1,8 +1,8 @@
 # Security documentation
 
 <!-- doc-metadata
-coverage: v0.1.1
-reviewed: 2026-08-25
+coverage: unreleased-main
+reviewed: 2026-08-26
 owner: security
 generated: false
 security-critical: true
@@ -17,7 +17,25 @@ material, review:
 - the [evidence, maturity, and audit baseline](../development/documentation-baseline.md);
 - the [dependency security review](../development/dependencies.md); and
 - the [README evidence boundaries](../../README.md#evidence-boundaries); and
+- the [OpenTimestamps trust and privacy limits](../how-to/timestamp-forecasts.md);
+- the [package allowlist and manifest checks](../how-to/publish-evidence.md);
+- the [MCP root, mode, and reveal boundaries](../how-to/run-mcp.md); and
 - the repository [security policy](../../SECURITY.md).
+
+Keep private operation input, protected key files, and Bitcoin Core credentials
+under a separate secret root. Do not place a secret root inside a ledger or
+package root. A sealed ledger protects its forecast bundle only while the key
+and private input remain separate. Reveal is irreversible publication of the
+private fields and requires explicit approval.
+
+The built-in timestamp profile sends blinded commitments to third-party
+calendars and later sends block heights to two public Bitcoin APIs. Blinding
+does not hide request timing; height queries reveal an approximate time period.
+The two APIs must agree, but are still trusted for canonical-chain selection.
+
+Publication copies only the exact ledger and referenced targets/receipts. Always
+inspect the new package before sharing it, because an exact ledger may contain
+fields intentionally disclosed by an earlier reveal.
 
 Do not put keys, credentials, private ledgers, or unrevealed forecast material
 in public issues. Suspected vulnerabilities belong in

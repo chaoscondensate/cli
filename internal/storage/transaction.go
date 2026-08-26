@@ -21,9 +21,19 @@ import (
 type TransactionStage string
 
 const (
-	StageTempSynced    TransactionStage = "temp_synced"
-	StageJournalSynced TransactionStage = "journal_synced"
-	StageReplaced      TransactionStage = "replaced"
+	StageTempCreated     TransactionStage = "temp_created"
+	StageTempPermissions TransactionStage = "temp_permissions"
+	StageTempWritten     TransactionStage = "temp_written"
+	StageTempSynced      TransactionStage = "temp_synced"
+	StageJournalCreated  TransactionStage = "journal_created"
+	StageJournalWritten  TransactionStage = "journal_written"
+	StageJournalSynced   TransactionStage = "journal_synced"
+	StageBeforeReplace   TransactionStage = "before_replace"
+	StageReplaced        TransactionStage = "replaced"
+	StageDirectorySynced TransactionStage = "directory_synced"
+	StageBeforeCleanup   TransactionStage = "before_cleanup"
+	StageJournalRemoved  TransactionStage = "journal_removed"
+	StageCleanupSynced   TransactionStage = "cleanup_synced"
 )
 
 type ValidateDocumentFunc func(*document.Document) error
@@ -112,7 +122,7 @@ func UpdateLedger(ctx context.Context, ledgerPath string, options TransactionOpt
 	if err != nil {
 		return app.NewError(app.CodeIO, "ledger permissions cannot be read", err)
 	}
-	tempPath, err := writeSiblingTemp(resolved, updated, info.Mode().Perm())
+	tempPath, err := writeSiblingTemp(resolved, updated, info.Mode().Perm(), options)
 	if err != nil {
 		return err
 	}
@@ -123,10 +133,6 @@ func UpdateLedger(ctx context.Context, ledgerPath string, options TransactionOpt
 			_ = os.Remove(tempPath)
 		}
 	}()
-	if err := injectFault(options, StageTempSynced); err != nil {
-		return err
-	}
-
 	journal := recoveryJournal{
 		Version:        1,
 		LedgerBase:     filepath.Base(resolved),
@@ -135,7 +141,7 @@ func UpdateLedger(ctx context.Context, ledgerPath string, options TransactionOpt
 		ExpectedSHA256: sha256Hex(updated),
 		CreatedAt:      time.Now().UTC().Format(time.RFC3339Nano),
 	}
-	if err := writeJournalExclusive(JournalPath(resolved), journal); err != nil {
+	if err := writeJournalExclusive(JournalPath(resolved), journal, options); err != nil {
 		return err
 	}
 	journalWritten = true
@@ -143,20 +149,35 @@ func UpdateLedger(ctx context.Context, ledgerPath string, options TransactionOpt
 	if err := injectFault(options, StageJournalSynced); err != nil {
 		return err
 	}
+	if err := injectFault(options, StageBeforeReplace); err != nil {
+		return err
+	}
 	if err := safeReplace(tempPath, resolved); err != nil {
 		return app.NewError(app.CodeIO, "ledger replacement failed; recovery journal was retained", err)
+	}
+	if err := injectFault(options, StageReplaced); err != nil {
+		return err
 	}
 	if err := syncParentDirectory(filepath.Dir(resolved)); err != nil {
 		return app.NewError(app.CodeIO, "ledger directory flush failed; recovery journal was retained", err)
 	}
-	if err := injectFault(options, StageReplaced); err != nil {
+	if err := injectFault(options, StageDirectorySynced); err != nil {
+		return err
+	}
+	if err := injectFault(options, StageBeforeCleanup); err != nil {
 		return err
 	}
 	if err := os.Remove(JournalPath(resolved)); err != nil {
 		return app.NewError(app.CodeIO, "ledger was replaced but recovery journal could not be removed", err)
 	}
+	if err := injectFault(options, StageJournalRemoved); err != nil {
+		return err
+	}
 	if err := syncParentDirectory(filepath.Dir(resolved)); err != nil {
 		return app.NewError(app.CodeIO, "recovery journal removal could not be flushed", err)
+	}
+	if err := injectFault(options, StageCleanupSynced); err != nil {
+		return err
 	}
 	return nil
 }
@@ -227,7 +248,7 @@ func RecoverLedger(ctx context.Context, ledgerPath string, lockWait time.Duratio
 	return removeJournalAndSync(journalPath, filepath.Dir(resolved))
 }
 
-func writeSiblingTemp(ledgerPath string, data []byte, mode fs.FileMode) (string, error) {
+func writeSiblingTemp(ledgerPath string, data []byte, mode fs.FileMode, options TransactionOptions) (string, error) {
 	temp, err := os.CreateTemp(filepath.Dir(ledgerPath), "."+filepath.Base(ledgerPath)+".forecast-ledger-*.tmp")
 	if err != nil {
 		return "", app.NewError(app.CodeIO, "temporary ledger file cannot be created", err)
@@ -240,14 +261,26 @@ func writeSiblingTemp(ledgerPath string, data []byte, mode fs.FileMode) (string,
 			_ = os.Remove(path)
 		}
 	}()
+	if err := injectFault(options, StageTempCreated); err != nil {
+		return "", err
+	}
 	if err := temp.Chmod(mode); err != nil {
 		return "", app.NewError(app.CodeIO, "temporary ledger permissions cannot be set", err)
+	}
+	if err := injectFault(options, StageTempPermissions); err != nil {
+		return "", err
 	}
 	if _, err := temp.Write(data); err != nil {
 		return "", app.NewError(app.CodeIO, "temporary ledger cannot be written", err)
 	}
+	if err := injectFault(options, StageTempWritten); err != nil {
+		return "", err
+	}
 	if err := temp.Sync(); err != nil {
 		return "", app.NewError(app.CodeIO, "temporary ledger cannot be flushed", err)
+	}
+	if err := injectFault(options, StageTempSynced); err != nil {
+		return "", err
 	}
 	if err := temp.Close(); err != nil {
 		return "", app.NewError(app.CodeIO, "temporary ledger cannot be closed", err)
@@ -256,7 +289,7 @@ func writeSiblingTemp(ledgerPath string, data []byte, mode fs.FileMode) (string,
 	return path, nil
 }
 
-func writeJournalExclusive(path string, journal recoveryJournal) error {
+func writeJournalExclusive(path string, journal recoveryJournal, options TransactionOptions) error {
 	encoded, err := json.Marshal(journal)
 	if err != nil {
 		return app.NewError(app.CodeInternal, "recovery journal cannot be encoded", err)
@@ -275,8 +308,14 @@ func writeJournalExclusive(path string, journal recoveryJournal) error {
 			_ = os.Remove(path)
 		}
 	}()
+	if err := injectFault(options, StageJournalCreated); err != nil {
+		return err
+	}
 	if _, err := file.Write(append(encoded, '\n')); err != nil {
 		return app.NewError(app.CodeIO, "recovery journal cannot be written", err)
+	}
+	if err := injectFault(options, StageJournalWritten); err != nil {
+		return err
 	}
 	if err := file.Sync(); err != nil {
 		return app.NewError(app.CodeIO, "recovery journal cannot be flushed", err)

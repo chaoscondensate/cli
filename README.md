@@ -15,14 +15,18 @@ account.
 The broader project is described at [chaoscondensate.com](https://chaoscondensate.com/).
 The interoperable data contract is maintained in the
 [Forecast Ledger schema repository](https://github.com/chaoscondensate/schema).
+User-visible changes are tracked in the [changelog](CHANGELOG.md).
 
 > [!IMPORTANT]
 > **Status: Preview and unaudited.** Release `v0.1.1` provides local validation,
-> status, version metadata, document parsing, schema checks, and core storage
-> foundations. Authoring, sealing, OpenTimestamps, publication packages, and
-> the MCP tool surface are not yet available. The project has no recorded
-> independent security or cryptographic audit. Do not treat the current build
-> as a finished evidence system.
+> status, and version metadata. The current unreleased source implements the
+> complete CLI and MCP command surface: authoring, sealed forecasts, canonical
+> targets, experimental OpenTimestamps receipts, layered verification, and
+> portable publication packages. OpenTimestamps support remains experimental
+> until the tracked differential, liveness, native-platform, and independent
+> review gates are complete. The project has no recorded independent
+> security or cryptographic audit. Do not treat the current build as a finished
+> evidence system.
 
 Release archives target macOS, Linux, and Windows on amd64 and arm64. The CLI
 can check whether a ledger follows the pinned data contract and report the
@@ -105,8 +109,142 @@ make build
 
 ## Quick start
 
-Every ledger command requires an explicit file. Validate a local JSON or YAML
-ledger without network access:
+Every ledger command requires an explicit file. To create a ledger from the
+current unreleased source, prepare the required initial question document and
+run:
+
+```sh
+forecast-ledger init \
+  --file ledger.yaml \
+  --ledger-id my-forecasts \
+  --timezone Europe/London \
+  --forecaster-id me \
+  --forecaster-name "My Name" \
+  --input initial-question.yaml
+```
+
+Forecast Ledger v1 requires exactly one initial question with one initial
+forecast; the command never creates an invalid empty ledger. See
+[Create a ledger](docs/getting-started/create-ledger.md) for the input shape,
+dry-run, team, and sealed-key workflow.
+
+Root display and current forecaster metadata can later be changed with a closed
+patch, without rewriting question or forecast history:
+
+```sh
+forecast-ledger ledger update --file ledger.yaml --input metadata-patch.yaml
+```
+
+Platform records can be managed locally with `platform add`, `update`, `list`,
+`show`, and approved `remove`; see [Manage platform records](docs/how-to/manage-platforms.md).
+
+Typed questions can be added with one required first forecast, updated within
+the v1 evidence rules, listed, shown, resolved, annulled, or disputed; see
+[Manage questions and resolutions](docs/how-to/manage-questions.md).
+
+Append a public forecast revision without modifying the earlier record:
+
+```sh
+forecast-ledger forecast add \
+  --file ledger.yaml \
+  --question q-launch \
+  --forecast f-launch-002 \
+  --input forecast.yaml
+```
+
+See [Manage public forecasts](docs/how-to/manage-public-forecasts.md) for typed
+values, global IDs, supersession, dry-run, list/show, and stdin behavior.
+
+Keep a forecast private until an authenticated reveal:
+
+```sh
+forecast-ledger forecast seal \
+  --file ledger.yaml \
+  --question q-launch \
+  --forecast f-launch-002 \
+  --input private-forecast.yaml \
+  --key-file f-launch-002.key
+forecast-ledger forecast reveal \
+  --file ledger.yaml \
+  --question q-launch \
+  --forecast f-launch-002 \
+  --key-file f-launch-002.key \
+  --yes
+```
+
+Read [Seal and reveal forecasts](docs/how-to/seal-and-reveal-forecasts.md)
+before handling private material or protected keys.
+
+Build or check the exact canonical bytes used by later evidence:
+
+```sh
+forecast-ledger target build \
+  --file ledger.yaml \
+  --question q-launch \
+  --forecast f-launch-002
+forecast-ledger target check \
+  --file ledger.yaml \
+  --question q-launch \
+  --forecast f-launch-002
+```
+
+See [Build and check forecast targets](docs/how-to/build-targets.md) for the
+projection, deterministic paths, `--all`, collision behavior, and evidence
+limits.
+
+Create an experimental OpenTimestamps receipt and later verify its Bitcoin
+evidence:
+
+```sh
+forecast-ledger timestamp stamp --file ledger.yaml --question q-launch --forecast f-launch-002
+forecast-ledger timestamp status --file ledger.yaml --question q-launch --forecast f-launch-002
+forecast-ledger timestamp upgrade --file ledger.yaml --question q-launch --forecast f-launch-002
+forecast-ledger timestamp verify --file ledger.yaml --question q-launch --forecast f-launch-002
+```
+
+The default `opentimestamps-public-v1` profile submits a nonce-blinded
+commitment to four fixed calendars and needs two valid responses. Public Bitcoin
+verification requires both fixed observers to agree. These calls disclose
+request timing and, during verification, the block heights of interest. Read
+[Timestamp forecasts](docs/how-to/timestamp-forecasts.md) before using them.
+
+Run all evidence layers locally, or opt into network checks:
+
+```sh
+forecast-ledger verify --file ledger.yaml --offline
+forecast-ledger verify --file ledger.yaml
+```
+
+Verification reports content binding, existence timing, reveal authentication,
+and outcome evidence separately. See [Verify evidence](docs/how-to/verify-evidence.md).
+
+Build a standalone package without Git or a hosted service, then verify its
+manifest and evidence offline:
+
+```sh
+forecast-ledger publish build --file ledger.yaml --output evidence-package
+forecast-ledger publish verify \
+  --file evidence-package/ledger/ledger.yaml \
+  --manifest evidence-package/manifest.json
+```
+
+Use `--online` on `publish verify` only when you want fresh Bitcoin-source
+checks. See [Build and verify publication packages](docs/how-to/publish-evidence.md).
+
+Run the local MCP stdio adapter with explicit named roots:
+
+```sh
+forecast-ledger mcp serve \
+  --ledger-root main=/data/forecast-ledgers \
+  --output-root packages=/data/forecast-packages \
+  --secret-root keys=/data/forecast-secrets
+```
+
+The default MCP server is read-write and online within those roots. Use
+`--read-only` or `--offline` to limit the whole server. Reveal remains absent
+unless `--allow-reveal` is explicitly set. See [Run the MCP server](docs/how-to/run-mcp.md).
+
+Validate a local JSON or YAML ledger without network access:
 
 ```sh
 forecast-ledger validate --file ledger.yaml
@@ -137,23 +275,22 @@ forecast-ledger version --json
 ```
 
 Run `forecast-ledger --help` for the commands available in the installed
-release. Current development builds hide planned commands from normal help until
-their application service is connected; an explicit invocation fails with exit
-`10` and the machine code `unavailable` without modifying a ledger. Earlier
-Preview releases may still list those planned commands in help.
+release. The current source has no visible placeholder leaf: every advertised
+command has a connected application action. Installed Preview releases may have
+a smaller surface, so check that binary's help and `version --json` output.
 
-## Planned workflows
+## Available workflow groups
 
-The first complete release is intended to support:
+The current source supports:
 
-- JSON and YAML ledger initialization and source-preserving authoring;
+- source-preserving platform, question, and forecast authoring after JSON/YAML initialization;
 - platforms, typed questions, public forecasts, and append-only revisions;
 - binary, multiple-choice, numeric, and date forecast values;
 - sealed forecasts using the published `forecast-seal/v1` profile;
 - reveal verification without discarding the original commitment evidence;
 - canonical target generation and OpenTimestamps receipts;
 - layered local verification and portable evidence packages;
-- a permission-gated MCP stdio server backed by the same application services.
+- a root-confined MCP stdio server backed by the same application services.
 
 Progress and accepted behavior are tracked in the repository's
 [`openspec`](openspec/) directory.
@@ -168,8 +305,8 @@ filesystem, hosting, Git, or archive timestamps are not substitutes for
 cryptographic evidence.
 
 Keep protected key files out of repositories, backups intended for publication,
-shell arguments, logs, and evidence packages. The security model and supported
-OpenTimestamps subset will be documented before the first stable release.
+shell arguments, logs, and evidence packages. The constrained OpenTimestamps
+profile is experimental and rejects unsupported proof nodes instead of guessing.
 
 ## Development
 

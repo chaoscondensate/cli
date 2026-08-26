@@ -1,8 +1,8 @@
 # Reference
 
 <!-- doc-metadata
-coverage: v0.1.1
-reviewed: 2026-08-25
+coverage: unreleased-main
+reviewed: 2026-08-26
 owner: interface
 generated: false
 security-critical: false
@@ -15,11 +15,29 @@ current reviewed sources are:
 
 - [implementation, release, and contract baseline](../development/documentation-baseline.md);
 - [dependency versions and licenses](../development/dependencies.md); and
+- [complete CLI command and exit reference](cli.md);
 - candidate-binary help from `forecast-ledger --help` and
-  `forecast-ledger <command> --help`.
+  `forecast-ledger <command> --help`;
+- [MCP runtime and tool behavior](mcp.md); and
+- [generated operation, tool, input, and result contracts](generated/index.md).
 
-Generated CLI and MCP pages are not published yet. MCP currently has no tool or
-resource surface. Exact reference will be committed only when it can be
-regenerated from the candidate binary and shared server declarations.
+The working initialization interface is described in
+[Create a ledger](../getting-started/create-ledger.md) and pinned by
+candidate-binary help and JSON goldens.
+
+Public forecast input and behavior are described in
+[Manage public forecasts](../how-to/manage-public-forecasts.md).
+Question input, update constraints, and current-resolution behavior are
+described in [Manage questions and resolutions](../how-to/manage-questions.md).
+The exact target workflow and projection boundaries are described in
+[Build and check forecast targets](../how-to/build-targets.md).
+The cryptographic lifecycle and its security boundaries are described in
+[Seal and reveal forecasts](../how-to/seal-and-reveal-forecasts.md).
+Timestamp, layered verification, publication, and MCP behavior are described in
+their linked how-to guides. OpenTimestamps remains experimental.
+
+The [generated interface reference](generated/index.md) records shared service
+declarations and closed input schemas. Runtime discovery remains authoritative
+when a root or startup mode conditionally removes a tool.
 
 [Documentation index](../index.md)

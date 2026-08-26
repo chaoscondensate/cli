@@ -12,6 +12,10 @@ import (
 
 func TestRuntimeConfirmationRules(t *testing.T) {
 	var stderr bytes.Buffer
+	approved := Runtime{Yes: true, NoInput: true}
+	if confirmed, err := approved.Confirm(context.Background(), "Continue?"); err != nil || !confirmed {
+		t.Fatalf("explicit approval confirmation=%v err=%v", confirmed, err)
+	}
 	runtime := Runtime{NoInput: true, stdin: strings.NewReader("yes\n"), stderr: &stderr, inputTTY: true, errorTTY: true}
 	if _, err := runtime.Confirm(context.Background(), "Continue?"); app.ErrorCodeOf(err) != app.CodeUsage {
 		t.Fatalf("--no-input confirmation: %v", err)

@@ -94,7 +94,7 @@ func TestSemanticValidationChecksArtifactDigest(t *testing.T) {
 	}
 }
 
-func TestSemanticValidationChecksRevealedMirrorAndLateTimestamp(t *testing.T) {
+func TestSemanticValidationChecksRevealedMirrorWithoutRejectingLateTimestamp(t *testing.T) {
 	model := loadValidLedger(t, "team-ledger.yaml")
 	forecast := &model.Questions[0].Forecasts[0]
 	tampered := "changed after reveal"
@@ -118,8 +118,8 @@ func TestSemanticValidationChecksRevealedMirrorAndLateTimestamp(t *testing.T) {
 	if !hasSemanticCode(issues, "semantic.revealed_mirror") {
 		t.Fatalf("tampered reveal mirror not reported: %#v", issues)
 	}
-	if !hasSemanticCode(issues, "semantic.late_timestamp") {
-		t.Fatalf("late timestamp not reported: %#v", issues)
+	if hasSemanticCode(issues, "semantic.late_timestamp") {
+		t.Fatalf("cryptographically valid late timestamp made the ledger invalid: %#v", issues)
 	}
 }
 

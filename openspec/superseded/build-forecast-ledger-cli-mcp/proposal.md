@@ -36,3 +36,6 @@ None. This is the first behavior change in the repository.
 - Produces local ledger, target, receipt, key-file, manifest, and evidence-package files. Network access is explicit and limited to OpenTimestamps calendars and the selected Bitcoin verification source; placing a package on any hosting or distribution service is outside the CLI.
 - Treats Forecast Ledger v1.0.0, its reference validator, cryptographic code, and test vector as interoperability sources; the CLI must not weaken their constraints.
 - Does not add scoring/ranking storage, platform imports, digital authorship signatures, HTTP MCP transport, hosted publication APIs, source-control automation, or RFC 3161 support in v1.
+> Superseded by `complete-forecast-ledger-command-surface`. This retained
+> planning record must not be synced or archived into main specs. See
+> `SUPERSEDED.md` for the completed-foundation mapping.

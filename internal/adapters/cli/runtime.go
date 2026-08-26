@@ -15,6 +15,7 @@ import (
 
 type Runtime struct {
 	NoInput  bool
+	Yes      bool
 	DryRun   bool
 	Timeout  time.Duration
 	stdin    io.Reader
@@ -26,7 +27,7 @@ type Runtime struct {
 func RuntimeFromCommand(command *urfavecli.Command) Runtime {
 	root := command.Root()
 	return Runtime{
-		NoInput: root.Bool("no-input"), DryRun: command.Bool("dry-run"), Timeout: root.Duration("timeout"),
+		NoInput: root.Bool("no-input"), Yes: root.Bool("yes"), DryRun: command.Bool("dry-run"), Timeout: root.Duration("timeout"),
 		stdin: root.Reader, stderr: root.ErrWriter, inputTTY: isTerminalReader(root.Reader), errorTTY: terminalWriter(root.ErrWriter),
 	}
 }
@@ -44,11 +45,14 @@ func (r Runtime) Confirm(ctx context.Context, prompt string) (bool, error) {
 	if err := contextApplicationError(ctx); err != nil {
 		return false, err
 	}
+	if r.Yes {
+		return true, nil
+	}
 	if r.NoInput {
-		return false, app.NewError(app.CodeUsage, "confirmation is required but --no-input is set", nil)
+		return false, app.NewError(app.CodeUsage, "confirmation is required; use --yes when --no-input is set", nil)
 	}
 	if !r.inputTTY || !r.errorTTY {
-		return false, app.NewError(app.CodeUsage, "confirmation requires an interactive terminal; use --no-input with complete arguments", nil)
+		return false, app.NewError(app.CodeUsage, "confirmation requires an interactive terminal; use --yes to approve non-interactively", nil)
 	}
 	if _, err := fmt.Fprintf(r.stderr, "%s [y/N] ", prompt); err != nil {
 		return false, app.NewError(app.CodeIO, "confirmation prompt cannot be written", err)

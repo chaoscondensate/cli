@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/chaoscondensate/cli/internal/app"
 	"github.com/chaoscondensate/cli/internal/document"
@@ -201,6 +203,130 @@ func TestRecoveryCanRestoreTemporarilyMissingTarget(t *testing.T) {
 	data, err := os.ReadFile(path)
 	if err != nil || string(data) != "{\"value\":2}\n" {
 		t.Fatalf("recovered data=%q err=%v", data, err)
+	}
+}
+
+func TestConcurrentWriterReturnsImmediateConflict(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ledger.json")
+	if err := os.WriteFile(path, []byte("{\"value\":1}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var firstErr error
+	var wait sync.WaitGroup
+	wait.Add(1)
+	go func() {
+		defer wait.Done()
+		firstErr = UpdateLedger(context.Background(), path, TransactionOptions{
+			Mutate: func(parsed *document.Document) ([]byte, error) {
+				close(entered)
+				<-release
+				return document.ReplaceScalars(parsed, []document.ScalarEdit{{Pointer: "/value", Value: int64(2)}})
+			},
+		})
+	}()
+	<-entered
+
+	started := time.Now()
+	secondErr := UpdateLedger(context.Background(), path, TransactionOptions{
+		Mutate: func(parsed *document.Document) ([]byte, error) {
+			return document.ReplaceScalars(parsed, []document.ScalarEdit{{Pointer: "/value", Value: int64(3)}})
+		},
+	})
+	if app.ErrorCodeOf(secondErr) != app.CodeConflict {
+		t.Fatalf("second writer error = %v", secondErr)
+	}
+	if elapsed := time.Since(started); elapsed > 500*time.Millisecond {
+		t.Fatalf("second writer waited %s instead of returning immediate conflict", elapsed)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != "{\"value\":1}\n" {
+		t.Fatalf("ledger changed while first writer was paused: data=%q err=%v", data, err)
+	}
+	close(release)
+	wait.Wait()
+	if firstErr != nil {
+		t.Fatal(firstErr)
+	}
+	data, err = os.ReadFile(path)
+	if err != nil || string(data) != "{\"value\":2}\n" {
+		t.Fatalf("first writer did not commit coherently: data=%q err=%v", data, err)
+	}
+}
+
+func TestFaultInjectionCoversEveryDurabilityAndCleanupBoundary(t *testing.T) {
+	preJournal := []TransactionStage{
+		StageTempCreated, StageTempPermissions, StageTempWritten, StageTempSynced,
+		StageJournalCreated, StageJournalWritten,
+	}
+	recoverable := []TransactionStage{
+		StageJournalSynced, StageBeforeReplace, StageReplaced, StageDirectorySynced, StageBeforeCleanup,
+	}
+	committed := []TransactionStage{StageJournalRemoved, StageCleanupSynced}
+	for _, group := range []struct {
+		name   string
+		stages []TransactionStage
+		state  string
+	}{
+		{name: "pre-journal", stages: preJournal, state: "original"},
+		{name: "recoverable", stages: recoverable, state: "recoverable"},
+		{name: "committed", stages: committed, state: "committed"},
+	} {
+		for _, stage := range group.stages {
+			t.Run(group.name+"/"+string(stage), func(t *testing.T) {
+				path := filepath.Join(t.TempDir(), "ledger.json")
+				if err := os.WriteFile(path, []byte("{\"value\":1}\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				err := UpdateLedger(context.Background(), path, TransactionOptions{
+					Mutate: func(parsed *document.Document) ([]byte, error) {
+						return document.ReplaceScalars(parsed, []document.ScalarEdit{{Pointer: "/value", Value: int64(2)}})
+					},
+					Fault: func(current TransactionStage) error {
+						if current == stage {
+							return errors.New("stop at " + string(stage))
+						}
+						return nil
+					},
+				})
+				if app.ErrorCodeOf(err) != app.CodeIO {
+					t.Fatalf("injected stage error = %v", err)
+				}
+				data, readErr := os.ReadFile(path)
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+				switch group.state {
+				case "original":
+					if string(data) != "{\"value\":1}\n" {
+						t.Fatalf("pre-journal failure changed ledger: %s", data)
+					}
+					if _, statErr := os.Stat(JournalPath(path)); !errors.Is(statErr, os.ErrNotExist) {
+						t.Fatalf("pre-journal failure retained journal: %v", statErr)
+					}
+					assertNoTransactionTemps(t, filepath.Dir(path))
+				case "recoverable":
+					if _, statErr := os.Stat(JournalPath(path)); statErr != nil {
+						t.Fatalf("recoverable failure has no journal: %v", statErr)
+					}
+					if err := RecoverLedger(context.Background(), path, 0, nil); err != nil {
+						t.Fatal(err)
+					}
+					recovered, _ := os.ReadFile(path)
+					if string(recovered) != "{\"value\":2}\n" {
+						t.Fatalf("recovery result = %s", recovered)
+					}
+				case "committed":
+					if string(data) != "{\"value\":2}\n" {
+						t.Fatalf("post-cleanup failure lost commit: %s", data)
+					}
+					if _, statErr := os.Stat(JournalPath(path)); !errors.Is(statErr, os.ErrNotExist) {
+						t.Fatalf("post-cleanup failure retained journal: %v", statErr)
+					}
+				}
+			})
+		}
 	}
 }
 

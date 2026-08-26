@@ -1,0 +1,152 @@
+package publication
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"io"
+	"sort"
+
+	"github.com/chaoscondensate/cli/internal/canonical"
+	"github.com/chaoscondensate/cli/internal/document"
+	"github.com/chaoscondensate/cli/internal/storage"
+)
+
+const (
+	ManifestProfile  = "forecast-ledger-publication/v1"
+	RoleLedger       = "ledger"
+	RoleTarget       = "forecast_target"
+	RoleReceipt      = "opentimestamps_receipt"
+	MaxManifestBytes = 8 << 20
+)
+
+type SchemaPin struct {
+	Version string `json:"version"`
+	Commit  string `json:"commit"`
+	SHA256  string `json:"sha256"`
+}
+
+type Digest struct {
+	Algorithm string `json:"algorithm"`
+	Value     string `json:"value"`
+}
+
+type Entry struct {
+	Role   string `json:"role"`
+	Path   string `json:"path"`
+	Size   int64  `json:"size"`
+	Digest Digest `json:"digest"`
+}
+
+type Manifest struct {
+	Profile      string    `json:"profile"`
+	LedgerSchema SchemaPin `json:"ledger_schema"`
+	LedgerPath   string    `json:"ledger_path"`
+	Entries      []Entry   `json:"entries"`
+}
+
+func Encode(manifest Manifest) ([]byte, error) {
+	if err := Validate(manifest); err != nil {
+		return nil, err
+	}
+	encoded, err := json.Marshal(manifest)
+	if err != nil {
+		return nil, err
+	}
+	parsed, err := document.ParseJSON(bytes.NewReader(encoded), document.DefaultLimits)
+	if err != nil {
+		return nil, err
+	}
+	result, err := canonical.Marshal(parsed.Root.Any())
+	if err != nil {
+		return nil, err
+	}
+	return append(result, '\n'), nil
+}
+
+func Decode(data []byte) (Manifest, error) {
+	if len(data) == 0 || len(data) > MaxManifestBytes {
+		return Manifest{}, errors.New("publication manifest is empty or too large")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	var manifest Manifest
+	if err := decoder.Decode(&manifest); err != nil {
+		return Manifest{}, err
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return Manifest{}, errors.New("publication manifest contains more than one JSON value")
+	}
+	if err := Validate(manifest); err != nil {
+		return Manifest{}, err
+	}
+	canonicalBytes, err := Encode(manifest)
+	if err != nil || !bytes.Equal(canonicalBytes, data) {
+		return Manifest{}, errors.New("publication manifest is not canonical")
+	}
+	return manifest, nil
+}
+
+func Validate(manifest Manifest) error {
+	if manifest.Profile != ManifestProfile || manifest.LedgerPath == "" || len(manifest.Entries) == 0 {
+		return errors.New("publication manifest profile or ledger path is invalid")
+	}
+	paths := make([]string, len(manifest.Entries))
+	ledgerCount := 0
+	previous := ""
+	for index, entry := range manifest.Entries {
+		if err := storage.ValidateRelativePath(entry.Path); err != nil {
+			return err
+		}
+		if index > 0 && entry.Path <= previous {
+			return errors.New("publication manifest entries must be strictly sorted by path")
+		}
+		previous = entry.Path
+		paths[index] = entry.Path
+		if entry.Size < 0 || entry.Digest.Algorithm != "sha-256" || !lowerSHA256(entry.Digest.Value) {
+			return errors.New("publication manifest entry digest or size is invalid")
+		}
+		switch entry.Role {
+		case RoleLedger:
+			ledgerCount++
+			if entry.Path != manifest.LedgerPath {
+				return errors.New("ledger entry path does not match ledger_path")
+			}
+		case RoleTarget:
+			if len(entry.Path) < len("proofs/targets/") || entry.Path[:len("proofs/targets/")] != "proofs/targets/" {
+				return errors.New("forecast target has an invalid package path")
+			}
+		case RoleReceipt:
+			if len(entry.Path) < len("proofs/receipts/") || entry.Path[:len("proofs/receipts/")] != "proofs/receipts/" {
+				return errors.New("OpenTimestamps receipt has an invalid package path")
+			}
+		default:
+			return errors.New("publication manifest entry role is not supported")
+		}
+	}
+	if ledgerCount != 1 {
+		return errors.New("publication manifest must contain exactly one ledger entry")
+	}
+	if err := storage.DetectPortablePathCollisions(paths); err != nil {
+		return err
+	}
+	return nil
+}
+
+func SortEntries(entries []Entry) {
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
+}
+
+func lowerSHA256(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, character := range value {
+		if character < '0' || character > '9' {
+			if character < 'a' || character > 'f' {
+				return false
+			}
+		}
+	}
+	return true
+}
