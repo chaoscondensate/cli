@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: development
-reviewed: 2026-08-25
+reviewed: 2026-08-26
 owner: interface
 generated: false
 security-critical: false
@@ -38,9 +38,11 @@ Run the package tests with:
 go test ./...
 ```
 
-To run the differential validator check, install the pinned schema repository's
-Python development requirements and set `FORECAST_LEDGER_UPSTREAM_ROOT` to a
-checkout at commit `e409463d702888fefd253b32f21b9b2f864aabed` before running
-`go test ./internal/validation`.
+To run the optional upstream Python fixture harness, install the pinned schema
+repository's Python development requirements and set
+`FORECAST_LEDGER_UPSTREAM_ROOT` to a checkout at commit
+`e409463d702888fefd253b32f21b9b2f864aabed` before running
+`go test ./internal/validation`. This checks the reference harness itself; it
+does not replace the still-required case-by-case Go/Python parity CI gate.
 
 [Development documentation](index.md) · [Documentation index](../index.md)

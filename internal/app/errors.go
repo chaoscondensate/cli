@@ -1,5 +1,3 @@
-// Package app defines transport-neutral application contracts shared by CLI
-// and MCP adapters.
 package app
 
 import (
@@ -18,6 +16,7 @@ const (
 	CodeIO           ErrorCode = "io"
 	CodeNetwork      ErrorCode = "network"
 	CodePending      ErrorCode = "pending"
+	CodeUnavailable  ErrorCode = "unavailable"
 	CodeInternal     ErrorCode = "internal"
 	CodeInterrupted  ErrorCode = "interrupted"
 )
@@ -85,6 +84,8 @@ func ExitCodeOf(err error) int {
 		return 8
 	case CodePending:
 		return 9
+	case CodeUnavailable:
+		return 10
 	case CodeInterrupted:
 		return 130
 	default:
@@ -95,7 +96,7 @@ func ExitCodeOf(err error) int {
 func validErrorCode(code ErrorCode) bool {
 	switch code {
 	case CodeUsage, CodeInvalidData, CodeNotFound, CodeConflict, CodeVerification,
-		CodeIO, CodeNetwork, CodePending, CodeInternal, CodeInterrupted:
+		CodeIO, CodeNetwork, CodePending, CodeUnavailable, CodeInternal, CodeInterrupted:
 		return true
 	default:
 		return false
@@ -120,6 +121,8 @@ func defaultErrorMessage(code ErrorCode) string {
 		return "network operation failed"
 	case CodePending:
 		return "operation is still pending"
+	case CodeUnavailable:
+		return "operation is not available in this release"
 	case CodeInterrupted:
 		return "operation was interrupted"
 	default:

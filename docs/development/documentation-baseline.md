@@ -1,8 +1,8 @@
 # Documentation baseline
 
 <!-- doc-metadata
-coverage: v0.1.1
-reviewed: 2026-08-25
+coverage: unreleased-main
+reviewed: 2026-08-26
 owner: project-maintainer
 generated: false
 security-critical: true
@@ -10,7 +10,7 @@ prerequisites: ../../AGENTS.md
 next: documentation-traceability.md
 -->
 
-Reviewed: 2026-08-25
+Reviewed: 2026-08-26
 
 This page records the implementation and policy inputs used by the maintained
 product documentation. It describes the repository at the reviewed commit; it
@@ -36,7 +36,8 @@ that the corresponding document or test has been implemented.
 
 ## Implementation inventory
 
-This inventory was checked against the source prepared for release `v0.1.1`.
+This inventory was checked against the current unreleased `main` source after
+release `v0.1.1`.
 
 ### Working CLI surface
 
@@ -50,16 +51,18 @@ The following commands have connected application services:
 | `forecast-ledger completion <shell>` | Generates Bash, Zsh, Fish, or PowerShell completion text through urfave. | None |
 
 The root exposes stable presentation flags `--json`, `--plain`, `--quiet`,
-`--verbose`, `--no-input`, and `--timeout`. JSON, plain, and quiet modes are
+`--verbose`, `--no-color`, `--no-input`, and `--timeout`. JSON, plain, and quiet modes are
 mutually exclusive. Stable application error codes are `usage`,
 `invalid_data`, `not_found`, `conflict`, `verification`, `io`, `network`,
-`pending`, `internal`, and `interrupted`; their CLI exits are implemented in
+`pending`, `unavailable`, `internal`, and `interrupted`; their CLI exits are implemented in
 `internal/app/errors.go`.
 
 ### Declared but unavailable CLI surface
 
-Help declares the following leaves, but each currently returns
-`internal: command service is not implemented yet` and makes no mutation:
+The following planned leaves stay registered for structural development tests
+but are hidden from normal help. Explicit invocation returns exit `10`, the JSON
+machine code `unavailable` when requested, and the message “command is not
+available in this preview release”; it makes no mutation:
 
 - `init`;
 - `platform add`, `update`, `list`, `show`, and `remove`;
@@ -71,7 +74,7 @@ Help declares the following leaves, but each currently returns
 - `publish build` and `verify`; and
 - `mcp serve`.
 
-The help declarations already enforce leaf-local `--file/-f`, selector shape,
+The registered declarations already enforce leaf-local `--file/-f`, selector shape,
 read-only stdin eligibility, `--dry-run` presence on mutations, and explicit
 MCP roots and grants. These declarations are not evidence that the operations
 work. The MCP adapter currently registers no tools or resources and starts no

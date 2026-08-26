@@ -16,11 +16,12 @@
 - [x] 2.5 Port upstream semantic checks for IDs, references, timezones, chronology, status/resolution rules, value/type agreement, probabilities, quantiles, target digests, and revealed mirrors
 - [x] 2.6 Add source-tree patching that changes selected nodes while preserving untouched JSON/YAML data and YAML presentation
 - [x] 2.7 Run all upstream valid and invalid fixtures through the Go validator, including explicit rejection of the RFC 3161 negative fixture
-- [x] 2.8 Add parity tests against the upstream Python validator and fuzz/resource-limit tests for JSON and YAML readers
+- [x] 2.8 Add fuzz and resource-limit tests for the bounded JSON and YAML readers
+- [ ] 2.9 Add case-by-case parity against the pinned upstream Python validator and run it as a required CI gate rather than an optional skipped harness
 
 ## 3. Storage, Paths, Transactions, and Errors
 
-- [x] 3.1 Define stable domain error codes/details and CLI exit-code mappings for usage, invalid data, not found, conflict, verification, I/O, network, pending, internal, and interrupt outcomes
+- [x] 3.1 Define stable domain error codes/details and CLI exit-code mappings for usage, invalid data, not found, conflict, verification, I/O, network, pending, unavailable, internal, and interrupt outcomes
 - [x] 3.2 Implement explicit ledger/artifact path resolution, safe relative-path handling, symlink/junction checks, Windows drive/UNC rules, and root confinement helpers
 - [x] 3.3 Implement cross-platform exclusive ledger locks shared by CLI and MCP operations, with deterministic conflict reporting
 - [x] 3.4 Implement parse-validate-patch-validate transactions with same-directory temporary files, flush, OS-specific safe replacement, and recovery journals
@@ -31,9 +32,10 @@
 - [x] 4.1 Build the urfave command tree for init, validate, status, platform, question, forecast, target, timestamp, verify, publish, MCP, completion, and version
 - [x] 4.2 Require `--file/-f` on every ledger operation and stable question/forecast selectors on every record operation; allow `--file -` only for eligible read-only commands
 - [x] 4.3 Implement examples-first English help, typo guidance, full subcommand help, and shell completion for bash, zsh, fish, and PowerShell
-- [x] 4.4 Implement human, plain, quiet, verbose, and stable JSON presenters with strict stdout/stderr separation, TTY detection, `NO_COLOR`, and secret redaction
-- [x] 4.5 Implement `--no-input`, `--dry-run`, timeouts, context cancellation, and prompt rules for multi-file or network actions
-- [x] 4.6 Add golden tests for help, stdout/stderr, JSON schemas, errors, exit codes, non-TTY output, cancellation, and accidental secret disclosure
+- [x] 4.4 Implement human, plain, quiet, verbose, and stable JSON presenters with strict stdout/stderr separation, TTY detection, `NO_COLOR`, `TERM=dumb`, `--no-color`, global-mode handling, and secret redaction
+- [x] 4.5 Implement reusable `--no-input`, timeout, context-cancellation, and confirmation primitives with direct unit tests
+- [ ] 4.6 Wire `--dry-run`, context cancellation, and prompt rules into every implemented multi-file or network action and prove that no side effect occurs on dry-run or denied confirmation
+- [ ] 4.7 Add focused golden/acceptance coverage for help, stdout/stderr, JSON schemas, errors, exit codes, non-TTY output, cancellation during real work, and accidental secret disclosure through implemented secret-bearing operations
 
 ## 5. Ledger Authoring Operations
 

@@ -36,7 +36,9 @@ executable project configuration.
 ## Package boundaries
 
 - `cmd/forecast-ledger`: process entrypoint only.
-- `internal/app`: use-case orchestration and transactions.
+- `internal/app`: transport-neutral application errors and shared contracts.
+- `internal/buildinfo`: build, source, schema, Go, and MCP version metadata.
+- `internal/service`: use-case orchestration shared by CLI and MCP adapters.
 - `internal/ledger`: typed v1 model, selectors, and lifecycle rules.
 - `internal/document`: bounded JSON/YAML parsing and source-preserving patches.
 - `internal/schema`: exact embedded contract and conformance fixtures.

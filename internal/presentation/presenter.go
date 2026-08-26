@@ -72,6 +72,8 @@ func New(stdout, stderr io.Writer, options Options) *Presenter {
 		lookup = os.LookupEnv
 	}
 	_, noColorEnvironment := lookup("NO_COLOR")
+	termName, _ := lookup("TERM")
+	dumbTerminal := strings.EqualFold(strings.TrimSpace(termName), "dumb")
 	mode := ModeHuman
 	switch {
 	case options.JSON:
@@ -83,7 +85,7 @@ func New(stdout, stderr io.Writer, options Options) *Presenter {
 	}
 	return &Presenter{
 		stdout: stdout, stderr: stderr, mode: mode, verbose: options.Verbose,
-		color:       !options.NoColor && !noColorEnvironment && stdoutTTY,
+		color:       !options.NoColor && !noColorEnvironment && !dumbTerminal && stdoutTTY,
 		stdoutIsTTY: stdoutTTY, stderrIsTTY: stderrTTY,
 	}
 }

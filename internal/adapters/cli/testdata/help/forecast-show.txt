@@ -19,5 +19,6 @@ GLOBAL OPTIONS:
    --plain             Write plain text without decoration
    --quiet, -q         Suppress successful output
    --verbose, -v       Write additional diagnostics to stderr
+   --no-color          Disable color and interactive decoration
    --no-input          Never prompt; fail when input is missing
    --timeout duration  Limit network or wait operations (default: 30s)

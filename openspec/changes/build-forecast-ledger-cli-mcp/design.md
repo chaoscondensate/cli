@@ -1,6 +1,6 @@
 ## Context
 
-See `proposal.md` for motivation. This repository currently contains only OpenSpec planning files. The authoritative interoperability source is the republished Forecast Ledger v1.0.0 contract at commit `e409463d702888fefd253b32f21b9b2f864aabed`, not the floating state of a tag or website. The exact schema file has SHA-256 `e63bdd01f0241aa4d94d5ccc45e84bcea70a6a7fd46ab77cff4802b3f8b8fc65`; the current release archive has SHA-256 `a3d6afcf8a3cd9b9e9a650ebac684cbe2f155a81db309797d77694b5f4b9bbda`.
+See `proposal.md` for motivation. The repository currently implements the project foundation, document/validation/storage layers, and the read-only validate/status CLI increment; later authoring, cryptography, timestamp, publication, and MCP operations remain planned. The authoritative interoperability source is the republished Forecast Ledger v1.0.0 contract at commit `e409463d702888fefd253b32f21b9b2f864aabed`, not the floating state of a tag or website. The exact schema file has SHA-256 `e63bdd01f0241aa4d94d5ccc45e84bcea70a6a7fd46ab77cff4802b3f8b8fc65`; the current release archive has SHA-256 `a3d6afcf8a3cd9b9e9a650ebac684cbe2f155a81db309797d77694b5f4b9bbda`.
 
 The older Research folder is useful for threat models and operational use cases, but it describes a pre-release v0.5 shape and non-final protocols. Where it differs, the published v1 schema, English documentation, reference validator, crypto implementation, and deterministic vector win. In particular, v1 has stable forecast IDs, a non-recursive `forecast-envelope/v1`, `forecast-seal/v1`, and OpenTimestamps as its only timestamp protocol. Hash-only `forecast-commit/v1`, RFC 3161, snapshot protocols, and older prediction field names are not v1 CLI contracts.
 
@@ -31,8 +31,10 @@ The CLI must follow the human-first and composable behavior in the Command Line 
 The executable name is `forecast-ledger`, with module path `github.com/chaoscondensate/cli`. One `main` selects either the CLI adapter or MCP stdio adapter; both call the same application services. The intended package boundaries are:
 
 ```text
-cmd/forecast-ledger       process entrypoint and version metadata
-internal/app              use-case orchestration and transactions
+cmd/forecast-ledger       process entrypoint
+internal/app              transport-neutral errors and shared contracts
+internal/buildinfo        build, source, schema, Go, and MCP metadata
+internal/service          use-case orchestration shared by CLI and MCP
 internal/ledger           typed v1 model, selectors, lifecycle rules
 internal/document         JSON/YAML source tree and format-preserving patches
 internal/validation       embedded schema plus semantic checks
@@ -91,7 +93,7 @@ Every ledger command has a required `--file/-f`. Record-specific commands requir
 
 `validate` is local and never performs an implicit network call. `verify` runs the layered verifier; network-dependent OTS checks are explicit and honor timeouts. `publish build` creates a local evidence package at an explicit output path, while `publish verify` validates an existing package. Neither command uploads data or requires source-control metadata.
 
-Global behavior flags are `--json`, `--plain`, `--quiet`, `--verbose`, `--no-color`, `--no-input`, `--dry-run`, and `--timeout` where applicable. Exit categories are: 0 success, 1 internal, 2 usage, 3 invalid data, 4 not found, 5 conflict/precondition, 6 cryptographic/proof failure, 7 local I/O, 8 network/remote, 9 pending/not ready, and 130 interrupted.
+Global behavior flags are `--json`, `--plain`, `--quiet`, `--verbose`, `--no-color`, `--no-input`, `--dry-run`, and `--timeout` where applicable. Exit categories are: 0 success, 1 internal, 2 usage, 3 invalid data, 4 not found, 5 conflict/precondition, 6 cryptographic/proof failure, 7 local I/O, 8 network/remote, 9 pending/not ready, 10 unavailable in the current release, and 130 interrupted. Planned commands may remain registered for structural development tests, but they stay hidden from normal help and return the unavailable category until their application service is connected.
 
 Alternative considered: expose separate `encrypt`, `hide`, and `commit` commands. Rejected because the published contract has one atomic sealed state; partial primitives make it easy to publish plaintext or leave a record that cannot be revealed.
 

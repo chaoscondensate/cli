@@ -9,7 +9,7 @@ func TestStableExitCodeMapping(t *testing.T) {
 	tests := map[ErrorCode]int{
 		CodeUsage: 2, CodeInvalidData: 3, CodeNotFound: 4, CodeConflict: 5,
 		CodeVerification: 6, CodeIO: 7, CodeNetwork: 8, CodePending: 9,
-		CodeInternal: 1, CodeInterrupted: 130,
+		CodeUnavailable: 10, CodeInternal: 1, CodeInterrupted: 130,
 	}
 	for code, expected := range tests {
 		t.Run(string(code), func(t *testing.T) {

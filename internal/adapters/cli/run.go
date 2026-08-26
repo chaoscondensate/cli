@@ -26,7 +26,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		}
 	}
 	presenter := presentation.New(stdout, stderr, presentation.Options{
-		JSON: command.Bool("json"), Plain: command.Bool("plain"), Quiet: command.Bool("quiet"), Verbose: command.Bool("verbose"),
+		JSON: command.Bool("json"), Plain: command.Bool("plain"), Quiet: command.Bool("quiet"), Verbose: command.Bool("verbose"), NoColor: command.Bool("no-color"),
 	})
 	if writeErr := presenter.Failure(err); writeErr != nil {
 		fmt.Fprintf(stderr, "forecast-ledger: output failed\n")

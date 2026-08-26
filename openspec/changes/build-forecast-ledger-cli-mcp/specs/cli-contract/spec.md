@@ -34,7 +34,7 @@ Primary results SHALL be written to stdout; diagnostics, warnings, progress, and
 - **THEN** the CLI emits no color escapes, animation, or interactive progress controls on stdout
 
 ### Requirement: Stable failure classification
-The CLI SHALL return `0` on success and stable non-zero exit categories for usage, invalid ledger data, missing resources, conflicts, verification failure, local I/O failure, network failure, pending/not-ready state, and interruption. JSON errors SHALL include a stable machine code, a plain-English message, and optional structured details without secrets.
+The CLI SHALL return `0` on success and stable non-zero exit categories for usage, invalid ledger data, missing resources, conflicts, verification failure, local I/O failure, network failure, pending/not-ready state, functionality unavailable in the current release, and interruption. Expected unavailable functionality MUST NOT be reported as an unexpected internal failure. JSON errors SHALL include a stable machine code, a plain-English message, and optional structured details without secrets.
 
 #### Scenario: Semantic validation failure
 - **WHEN** a ledger is well-formed JSON or YAML but violates a Forecast Ledger semantic rule
@@ -43,6 +43,10 @@ The CLI SHALL return `0` on success and stable non-zero exit categories for usag
 #### Scenario: Interrupted operation
 - **WHEN** the process receives an interrupt during a long network or file operation
 - **THEN** it stops promptly, exits with the interruption category, and leaves no partial ledger mutation
+
+#### Scenario: Planned command in a preview release
+- **WHEN** a user explicitly invokes a registered command whose application service is not available in the current release
+- **THEN** the command returns the unavailable category, makes no changes, and is not advertised as working in normal help
 
 ### Requirement: Safe and recoverable mutation
 Mutating commands SHALL parse and validate the current file, lock it against concurrent writers, apply the change to an in-memory copy, validate the result, and replace the original through a recoverable same-directory write. They SHALL preserve JSON versus YAML format, newline convention, and comments/order for untouched YAML nodes, refuse unintended overwrite, and support `--dry-run` where an operation changes multiple files or crosses a network boundary.

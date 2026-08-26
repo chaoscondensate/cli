@@ -66,4 +66,19 @@ func TestNonTTYPlainQuietVerboseAndNoColor(t *testing.T) {
 	if presenter.ColorEnabled() {
 		t.Fatal("NO_COLOR was ignored")
 	}
+
+	presenter = New(&stdout, &stderr, Options{StdoutTTY: &isTTY, LookupEnv: func(name string) (string, bool) {
+		if name == "TERM" {
+			return "dumb", true
+		}
+		return "", false
+	}})
+	if presenter.ColorEnabled() {
+		t.Fatal("TERM=dumb was ignored")
+	}
+
+	presenter = New(&stdout, &stderr, Options{NoColor: true, StdoutTTY: &isTTY})
+	if presenter.ColorEnabled() {
+		t.Fatal("NoColor option was ignored")
+	}
 }

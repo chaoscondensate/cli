@@ -35,15 +35,17 @@ func NewCommand(stdin io.Reader, stdout, stderr io.Writer) *urfavecli.Command {
 			&urfavecli.BoolFlag{Name: "plain", Usage: "Write plain text without decoration"},
 			&urfavecli.BoolFlag{Name: "quiet", Aliases: []string{"q"}, Usage: "Suppress successful output"},
 			&urfavecli.BoolFlag{Name: "verbose", Aliases: []string{"v"}, Usage: "Write additional diagnostics to stderr"},
+			&urfavecli.BoolFlag{Name: "no-color", Usage: "Disable color and interactive decoration"},
 			&urfavecli.BoolFlag{Name: "no-input", Usage: "Never prompt; fail when input is missing"},
 			&urfavecli.DurationFlag{Name: "timeout", Value: 30 * time.Second, Usage: "Limit network or wait operations"},
 		},
 		Commands: []*urfavecli.Command{
-			initCommand(),
+			plannedCommand(initCommand()),
 			ledgerReadCommand("validate", "Validate a ledger locally", true),
 			ledgerReadCommand("status", "Show ledger and evidence status", true),
-			platformCommand(), questionCommand(), forecastCommand(), targetCommand(), timestampCommand(),
-			verifyCommand(), publishCommand(), mcpCommand(), versionCommand(),
+			plannedCommand(platformCommand()), plannedCommand(questionCommand()), plannedCommand(forecastCommand()),
+			plannedCommand(targetCommand()), plannedCommand(timestampCommand()), plannedCommand(verifyCommand()),
+			plannedCommand(publishCommand()), plannedCommand(mcpCommand()), versionCommand(),
 		},
 		Action: func(ctx context.Context, command *urfavecli.Command) error {
 			if command.NArg() > 0 {
@@ -191,9 +193,15 @@ func mcpCommand() *urfavecli.Command {
 func versionCommand() *urfavecli.Command {
 	return &urfavecli.Command{Name: "version", Usage: "Show build and contract versions", Description: "Example:\n  forecast-ledger version --json",
 		Flags: []urfavecli.Flag{&urfavecli.BoolFlag{Name: "json", Usage: "Write stable JSON metadata", Local: true}},
+		Before: func(ctx context.Context, command *urfavecli.Command) (context.Context, error) {
+			if command.Bool("json") && (command.Root().Bool("plain") || command.Root().Bool("quiet")) {
+				return ctx, app.NewError(app.CodeUsage, "--json, --plain, and --quiet cannot be combined", nil)
+			}
+			return ctx, nil
+		},
 		Action: func(_ context.Context, command *urfavecli.Command) error {
 			info := buildinfo.Current()
-			if command.Bool("json") {
+			if command.Bool("json") || command.Root().Bool("json") {
 				encoder := json.NewEncoder(command.Root().Writer)
 				encoder.SetEscapeHTML(false)
 				return encoder.Encode(info)
@@ -201,6 +209,11 @@ func versionCommand() *urfavecli.Command {
 			_, err := fmt.Fprintf(command.Root().Writer, "%s %s\nsource revision: %s\ngo: %s\nforecast ledger schema: %s (%s, sha256:%s)\nmcp protocol: %s\n", info.Binary, info.Version, info.SourceRevision, info.GoVersion, info.Schema.Version, info.Schema.Commit, info.Schema.SHA256, info.MCPProtocol)
 			return err
 		}}
+}
+
+func plannedCommand(command *urfavecli.Command) *urfavecli.Command {
+	command.Hidden = true
+	return command
 }
 
 func group(name, usage string, children ...*urfavecli.Command) *urfavecli.Command {
@@ -250,7 +263,7 @@ func secretOutputFlag() *urfavecli.StringFlag {
 	return &urfavecli.StringFlag{Name: "key-file", Required: true, OnlyOnce: true, TakesFile: true, Usage: "New protected key file"}
 }
 func unavailableAction(_ context.Context, _ *urfavecli.Command) error {
-	return app.NewError(app.CodeInternal, "command service is not implemented yet", nil)
+	return app.NewError(app.CodeUnavailable, "command is not available in this preview release", nil)
 }
 
 func requireTargetSelection(ctx context.Context, command *urfavecli.Command) (context.Context, error) {

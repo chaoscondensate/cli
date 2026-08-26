@@ -136,9 +136,11 @@ Inspect the binary and exact embedded contract:
 forecast-ledger version --json
 ```
 
-Run `forecast-ledger --help` or `forecast-ledger <command> --help` for the
-complete command tree and examples. Commands that are still under development
-fail explicitly; they do not silently modify a ledger.
+Run `forecast-ledger --help` for the commands available in the installed
+release. Current development builds hide planned commands from normal help until
+their application service is connected; an explicit invocation fails with exit
+`10` and the machine code `unavailable` without modifying a ledger. Earlier
+Preview releases may still list those planned commands in help.
 
 ## Planned workflows
 

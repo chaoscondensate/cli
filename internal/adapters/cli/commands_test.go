@@ -22,6 +22,16 @@ func TestCommandTreeAndLeafLocalFileFlags(t *testing.T) {
 			t.Errorf("root command %q missing", name)
 		}
 	}
+	for _, name := range []string{"init", "platform", "question", "forecast", "target", "timestamp", "verify", "publish", "mcp"} {
+		if !root.Command(name).Hidden {
+			t.Errorf("planned root command %q is visible", name)
+		}
+	}
+	for _, name := range []string{"validate", "status", "version"} {
+		if root.Command(name).Hidden {
+			t.Errorf("working root command %q is hidden", name)
+		}
+	}
 	expectedGroups := map[string][]string{
 		"platform":  {"add", "update", "list", "show", "remove"},
 		"question":  {"add", "update", "list", "show", "resolve", "annul", "dispute"},
@@ -187,16 +197,55 @@ func TestHelpSuggestionsCompletionAndVersionJSON(t *testing.T) {
 		}
 	}
 
-	code, stdout, stderr = runCLI("forecast-ledger", "version", "--json")
+	for _, args := range [][]string{{"forecast-ledger", "--json", "version"}, {"forecast-ledger", "version", "--json"}} {
+		code, stdout, stderr = runCLI(args...)
+		if code != 0 || stderr != "" {
+			t.Fatalf("version %v code=%d stderr=%q", args, code, stderr)
+		}
+		var got buildinfo.Info
+		if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.Binary != "forecast-ledger" || got.Schema.Version != "1.0.0" {
+			t.Fatalf("unexpected version metadata: %#v", got)
+		}
+	}
+	code, _, stderr = runCLI("forecast-ledger", "--plain", "version", "--json")
+	if code != 2 || !strings.Contains(stderr, "cannot be combined") {
+		t.Fatalf("mixed global/local output modes code=%d stderr=%q", code, stderr)
+	}
+}
+
+func TestRootHelpShowsOnlyWorkingCommandsAndUnavailableHasStableExit(t *testing.T) {
+	code, stdout, stderr := runCLI("forecast-ledger", "--help")
 	if code != 0 || stderr != "" {
-		t.Fatalf("version code=%d stderr=%q", code, stderr)
+		t.Fatalf("root help code=%d stderr=%q", code, stderr)
 	}
-	var got buildinfo.Info
-	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
-		t.Fatal(err)
+	for _, visible := range []string{"validate", "status", "version", "completion"} {
+		if !strings.Contains(stdout, visible) {
+			t.Errorf("root help missing working command %q", visible)
+		}
 	}
-	if got.Binary != "forecast-ledger" || got.Schema.Version != "1.0.0" {
-		t.Fatalf("unexpected version metadata: %#v", got)
+	for _, hidden := range []string{"platform", "question", "forecast", "timestamp", "publish", "mcp"} {
+		if strings.Contains(stdout, "\n   "+hidden+" ") {
+			t.Errorf("root help advertises planned command %q", hidden)
+		}
+	}
+
+	code, stdout, stderr = runCLI("forecast-ledger", "init", "--file", "ledger.yaml", "--ledger-id", "ledger", "--timezone", "UTC", "--forecaster-id", "forecaster", "--forecaster-name", "Forecaster")
+	if code != 10 || stdout != "" || !strings.Contains(stderr, "not available in this preview release") {
+		t.Fatalf("unavailable command code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+
+	code, stdout, stderr = runCLI("forecast-ledger", "--json", "init", "--file", "ledger.yaml", "--ledger-id", "ledger", "--timezone", "UTC", "--forecaster-id", "forecaster", "--forecaster-name", "Forecaster")
+	if code != 10 || stdout != "" {
+		t.Fatalf("JSON unavailable command code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	var envelope struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal([]byte(stderr), &envelope); err != nil || envelope.Code != "unavailable" {
+		t.Fatalf("JSON unavailable error=%v envelope=%#v raw=%q", err, envelope, stderr)
 	}
 }
 
