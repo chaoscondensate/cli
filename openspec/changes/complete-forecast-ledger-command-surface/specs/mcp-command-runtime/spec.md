@@ -16,7 +16,7 @@ Defines a production MCP stdio runtime that exposes the same Forecast Ledger bus
 - **THEN** initialization returns a protocol-level negotiation error and terminates without opening ledger files
 
 ### Requirement: Confine all files to explicit canonical roots
-Serve SHALL require one or more `--ledger-root` values. Repeatable `--output-root` and `--secret-root` values SHALL be optional but required before tools needing those classes can be enabled. Every root SHALL exist, resolve canonically at startup, and be distinct according to the documented overlap policy; secret roots MUST NOT be inside ledger, package, or resource roots.
+Serve SHALL require one or more `--ledger-root` values. Repeatable `--output-root` and `--secret-root` values SHALL be optional but required before tools needing those classes can be enabled. Every root SHALL exist, resolve canonically at startup, and be distinct according to the documented overlap policy; secret roots MUST NOT be inside ledger, package, or resource roots. A root confines locations but SHALL NOT by itself authorize irreversible reveal.
 
 Every tool path SHALL be resolved against the appropriate root and reject absolute paths outside it, `..`, symlink/junction/reparse escape, Windows drive/UNC escape, case-folding collision, device paths, NUL, and path changes between validation and open. The server MUST NOT expand shell syntax or infer a default ledger.
 
@@ -28,16 +28,22 @@ Every tool path SHALL be resolved against the appropriate root and reject absolu
 - **WHEN** startup config places a secret root beneath an output root
 - **THEN** server startup fails before protocol readiness
 
-### Requirement: Derive access from roots and simple safety modes
-The server SHALL expose its full applicable read/write tool surface by default without per-capability grants. Ledger paths SHALL remain confined to explicit ledger roots; package creation requires an output root; private input/key operations require a secret root. A missing required root SHALL fail before opening an unconfined path, reading a secret, acquiring a lock, or creating a file.
+### Requirement: Derive access from roots, safety modes, and an explicit reveal boundary
+The server SHALL expose its applicable read/write tool surface by default without general write or network grants. Ledger paths SHALL remain confined to explicit ledger roots; package creation requires an output root; private input and seal key creation require a secret root. A missing required root SHALL fail before opening an unconfined path, reading a secret, acquiring a lock, or creating a file.
+
+`forecast_reveal` SHALL additionally require the server to start with default-off `--allow-reveal`. A secret root alone MUST NOT enable disclosure. Without the flag the tool SHALL be absent from discovery and a direct call SHALL receive the protocol's unknown-tool response without reading a key or ledger. With the flag, reveal still requires a secret-root reference, write-capable mode, and request-level `confirm: true`. Combining `--allow-reveal` with `--read-only`, or enabling reveal without any secret root, SHALL fail startup as contradictory configuration.
 
 `--read-only` SHALL be an optional server-wide mode that rejects every ledger/artifact/package mutation before side effects while preserving read, status, check, and verification tools. `--offline` SHALL be an optional server-wide mode that opens no network socket: network-required stamp/upgrade calls fail as network-disabled, timestamp/layered verification performs local checks with timing not checked, and package verification remains local. Without `--offline`, timestamp and layered verification tools SHALL use the embedded `opentimestamps-public-v1` profile automatically and MUST NOT require network configuration.
 
-MCP calls MUST never prompt. High-risk inputs SHALL include an explicit `confirm: true` field where the CLI requires `--yes`; confirmation records caller intent but is not presented as an authorization boundary. No MCP input schema SHALL accept calendar, explorer, proxy, or arbitrary Bitcoin endpoint URLs. Optional Bitcoin Core override is CLI-only in v1; MCP uses the built-in public profile or offline mode.
+MCP calls MUST never prompt. High-risk inputs SHALL include an explicit `confirm: true` field where the CLI requires `--yes`; confirmation records caller intent but is not presented as an authorization boundary and does not replace `--allow-reveal`. No MCP input schema SHALL accept calendar, explorer, proxy, arbitrary Bitcoin endpoint URLs, or CLI custom-calendar options. Optional calendar and Bitcoin Core overrides are CLI-only in v1; MCP uses the built-in public profile or offline mode.
 
 #### Scenario: Reveal with confined secret root
 - **WHEN** a client calls `forecast_reveal` with `confirm: true` and a key reference inside a configured secret root
-- **THEN** the tool executes the shared reveal operation without requiring a separate reveal grant
+- **THEN** the tool executes the shared reveal operation only when the server also started with `--allow-reveal`
+
+#### Scenario: Seal-only MCP server
+- **WHEN** a write-capable server has a secret root but omits `--allow-reveal`
+- **THEN** `forecast_seal` may be discovered while `forecast_reveal` is absent and cannot read or disclose an existing key
 
 #### Scenario: Mutation in read-only mode
 - **WHEN** a client calls a mutating tool on a server started with `--read-only`
@@ -52,7 +58,7 @@ The server SHALL expose the following CLI-parity tools backed by the same applic
 | `ledger update`, `validate`, `status` | `ledger_update`, `ledger_validate`, `ledger_status` |
 | `platform add|update|list|show|remove` | `platform_add`, `platform_update`, `platform_list`, `platform_show`, `platform_remove` |
 | `question add|update|list|show|resolve|annul|dispute` | `question_add`, `question_update`, `question_list`, `question_show`, `question_resolve`, `question_annul`, `question_dispute` |
-| `forecast add|list|show|seal|reveal` | `forecast_add`, `forecast_list`, `forecast_show`, `forecast_seal`, `forecast_reveal` |
+| `forecast add|list|show|seal|reveal`, `forecast key-hint update` | `forecast_add`, `forecast_list`, `forecast_show`, `forecast_seal`, `forecast_reveal`, `forecast_key_hint_update` |
 | `target build|check` | `target_build`, `target_check` |
 | `timestamp stamp|upgrade|status|verify` | `timestamp_stamp`, `timestamp_upgrade`, `timestamp_status`, `timestamp_verify` |
 | `verify` | `verification_run` |
@@ -65,7 +71,7 @@ Every input and output schema SHALL be closed, typed, versioned where persisted 
 - **THEN** schema validation rejects the call before executing the application action
 
 ### Requirement: Discover only completed MCP tools
-An MCP tool SHALL be registered and returned by `tools/list` only after its shared service operation, closed schemas, root/mode behavior, rollback/cancellation tests, CLI parity tests, documentation, and applicable native/conformance gates pass. A planned or partially implemented tool MUST be absent from discovery and direct calls SHALL receive the protocol's unknown-tool response without opening files, reading secrets, or contacting the network. Completed tools remain usable while later tools are still absent.
+An MCP tool SHALL be registered and returned by `tools/list` only after its shared service operation, closed schemas, root/mode behavior, rollback/cancellation tests, CLI parity tests, documentation, and applicable native/conformance gates pass. A planned, partially implemented, or startup-disabled tool, including reveal without `--allow-reveal`, MUST be absent from discovery and direct calls SHALL receive the protocol's unknown-tool response without opening files, reading secrets, or contacting the network. Completed and startup-enabled tools remain usable while later or disabled tools are absent.
 
 #### Scenario: Incremental platform rollout
 - **WHEN** `platform_list` is complete but `platform_add` is not
@@ -107,14 +113,14 @@ Every tool call SHALL use its MCP request context and operation timeout. Cancell
 - **THEN** recovery handles only server-created partial files and the tool returns interruption without a complete manifest claim
 
 ### Requirement: Bound server resource consumption
-Serve SHALL enforce reviewed limits for message size, JSON/schema depth, concurrent requests, open files, ledger/input bytes, target/receipt/package bytes, network response bytes, redirects, and operation duration. Limit failures SHALL be recoverable and MUST NOT allocate or log attacker-controlled unbounded data. Protocol network clients SHALL use only built-in profile endpoints with pinned HTTPS hosts and redirect/SSRF protections; explicit outcome-source checking SHALL reject private, link-local, reserved, and redirect-escaped destinations.
+Serve SHALL enforce reviewed limits for message size, JSON/schema depth, concurrent requests, open files, ledger/input bytes, target/receipt/package bytes, network response bytes, redirects, operation duration, unique Bitcoin heights, total HTTP requests, and network concurrency. Limit failures SHALL be recoverable and MUST NOT allocate or log attacker-controlled unbounded data. Protocol network clients SHALL use only built-in profile endpoints with pinned HTTPS hosts and redirect/SSRF protections; explicit outcome-source checking SHALL reject private, link-local, reserved, and redirect-escaped destinations. MCP layered/package verification SHALL share the invocation-wide Bitcoin observation cache and budget defined by the timestamp profile.
 
 #### Scenario: Oversized tool input
 - **WHEN** a request exceeds the configured maximum before full decoding
 - **THEN** it is rejected safely and the server remains available for subsequent valid requests
 
 ### Requirement: Prove real-process protocol and mode behavior
-Release gates SHALL include in-memory and real child-process stdio tests for initialization/version negotiation, stdout purity, every tool schema, default full mode, read-only/offline modes, root-class combinations, built-in network-profile confinement, CLI parity, traversal and root races, secret canaries, concurrent calls, cancellation, oversized/malformed messages, graceful EOF/shutdown, and previous supported protocol compatibility. `mcp serve` MUST remain hidden/unavailable until the server can initialize and serve its declared surface.
+Release gates SHALL include in-memory and real child-process stdio tests for initialization/version negotiation, stdout purity, every tool schema, default full mode, reveal-disabled/reveal-enabled discovery, contradictory reveal/read-only startup, read-only/offline modes, root-class combinations, built-in network-profile confinement and budgets, CLI parity, traversal and root races, secret canaries, concurrent calls, cancellation, oversized/malformed messages, graceful EOF/shutdown, and previous supported protocol compatibility. `mcp serve` MUST remain hidden/unavailable until the server can initialize and serve its declared surface.
 
 #### Scenario: Human log on protocol stdout
 - **WHEN** any startup or tool path writes non-protocol bytes to stdout

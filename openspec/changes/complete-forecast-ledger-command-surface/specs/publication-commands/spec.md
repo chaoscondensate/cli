@@ -16,7 +16,15 @@ Defines deterministic, transport-neutral evidence-package creation and local ver
 - **THEN** build fails before creating the output directory contents and identifies the missing safe relative path
 
 ### Requirement: Include a deterministic allowlisted file set
-The package root SHALL contain `manifest.json`, one ledger at `ledger/<original-base-name>`, targets at their stable `proofs/targets/...` relative paths, receipts at their stable `proofs/receipts/...` relative paths, and only additional explicitly supported public evidence files. Every included file other than the manifest SHALL be represented exactly once in the manifest. Paths SHALL use forward slashes, be relative, normalized, case-collision checked, and sorted by UTF-8 byte order.
+The package root SHALL contain `manifest.json`, one ledger at `ledger/<original-base-name>`, targets at their stable `proofs/targets/...` relative paths, and receipts at their stable `proofs/receipts/...` relative paths. Every included file other than the manifest SHALL be represented exactly once in the manifest. Paths SHALL use forward slashes, be relative, normalized, case-collision checked, and sorted by UTF-8 byte order. The closed v1 manifest role vocabulary SHALL be exactly:
+
+| Role | Required path and meaning |
+| --- | --- |
+| `ledger` | exactly one `ledger/<original-base-name>` entry containing the byte-exact selected ledger |
+| `forecast_target` | one entry for each referenced `proofs/targets/<forecast-id>.json` target |
+| `opentimestamps_receipt` | one entry for each referenced `proofs/receipts/<forecast-id>.json.ots` detached receipt |
+
+No other entry role is valid in v1. Supporting another public evidence file SHALL require a new reviewed manifest profile rather than accepting an unknown role.
 
 The manifest SHALL use a versioned closed schema and contain at least: manifest profile, embedded ledger schema version/commit/digest, packaged ledger path, and sorted file entries with role, path, byte length, SHA-256 algorithm, and lowercase digest. It MUST NOT contain creation time, host/user name, absolute path, source-control data, random ID, or platform separator so identical evidence produces byte-identical canonical manifest bytes across platforms.
 
@@ -27,7 +35,7 @@ The manifest SHALL use a versioned closed schema and contain at least: manifest 
 ### Requirement: Exclude secrets and undisclosed material
 Build MUST exclude key files, actual `--key-file` locations, secret roots and paths, credentials, lock/journal/temp files, raw private seal input, decrypted sealed plaintext, and any file not required by the public ledger evidence. A sealed forecast MAY contribute only public note, commitment, ciphertext, safe logical key hint, target, receipt, and other data already allowed by the ledger contract. A revealed forecast MAY contribute only disclosed material already represented in the validated ledger; the manifest and command output SHALL still redact raw key values and machine-local key locations.
 
-Because the complete ledger is copied byte-for-byte, its schema-required `key_hint` remains present. Package build SHALL accept it only as a non-authoritative logical identifier and SHALL reject an absolute/relative filesystem path, file URI, drive/UNC/device form, secret-root name, credential-bearing URI, or value equal to a known protected path. CLI-created hints use `forecast-key:<forecast-id>` and never record the actual key-file path.
+Because the complete ledger is copied byte-for-byte, its schema-required `key_hint` remains present. Package build SHALL accept it only when it matches the package-safe v1 `scheme:opaque` grammar defined by the cryptography capability and SHALL otherwise fail before output creation with guidance to run `forecast key-hint update`. It MUST NOT guess whether a free-form string is a path or silently rewrite imported bytes. CLI-created hints use `forecast-key:<forecast-id>` and never record the actual key-file path.
 
 Before writing, build SHALL scan the prospective manifest and generated/copy set for protected-root membership, known secret file roles/names, absolute paths, and secret canaries used by acceptance tests. Detection SHALL fail the operation rather than merely warn.
 
@@ -37,7 +45,7 @@ Before writing, build SHALL scan the prospective manifest and generated/copy set
 
 #### Scenario: Imported machine-local key hint
 - **WHEN** the exact ledger contains a key hint that exposes an absolute or relative key-file path
-- **THEN** package build fails secret-path validation rather than rewriting the ledger or copying the key
+- **THEN** package build fails the closed logical-hint validation, identifies the selected forecast, and directs the user to the explicit repair command without rewriting or copying anything
 
 #### Scenario: Unrevealed plaintext found
 - **WHEN** prospective package content contains a sealed forecast's private bundle outside ciphertext
@@ -84,12 +92,22 @@ It SHALL fail if a listed file is missing, a digest/size/role differs, the ledge
 ### Requirement: Keep package verification offline by default
 Package verification SHALL require no original authoring location, source-control repository, hosting service, calendar, or network. `--online` MAY enable existence-timing revalidation through the built-in dual-public-source profile without requiring endpoint configuration; optional Bitcoin Core options MAY replace that profile for independently operated verification. Package integrity and content/reveal results MUST remain independently visible if an online source fails. `--offline` and `--online` MUST be mutually exclusive, and omission of both SHALL remain offline for portable-package verification.
 
+This intentional default differs from layered `forecast-ledger verify`, which is online unless `--offline` is supplied. Help, README, and command references SHALL state the contrast next to both commands. `publish verify` is read-only and SHALL NOT expose `--dry-run`; `--online` opts into network observation while omission or explicit `--offline` keeps portable verification local.
+
 #### Scenario: Package copied to removable media
 - **WHEN** a verifier receives only the retained package and runs offline verification
 - **THEN** manifest, ledger, target, receipt syntax/binding, and reveal checks complete without contacting the original author or publication location
 
 ### Requirement: Use verification exit semantics without hiding the report
-Manifest/path/digest failure SHALL return verification exit `6`; invalid ledger data exit `3`; missing package files exit `4` or `6` according to the stable documented mapping; pending evidence without failure exit `9`; requested network failure exit `8`; a complete applicable pass exit `0`. JSON mode SHALL emit the safely available package/evidence matrix on non-zero verification outcomes.
+Manifest/path/digest failure SHALL return verification exit `6`; invalid ledger data exit `3`; a missing CLI-selected `--file` or `--manifest` SHALL return not-found exit `4`; after a manifest parses successfully, any listed entry that is absent, replaced, or unreadable SHALL be a package-integrity verification failure with exit `6`; pending or budget-incomplete evidence without failure SHALL return exit `9`; requested network failure SHALL return exit `8`; a complete applicable pass SHALL return exit `0`. JSON mode SHALL emit the safely available package/evidence matrix on non-zero verification outcomes.
+
+#### Scenario: Selected manifest does not exist
+- **WHEN** the path passed to `--manifest` is absent
+- **THEN** package verification returns not-found/exit `4` before claiming to have loaded a package identity
+
+#### Scenario: Listed receipt is missing
+- **WHEN** a valid parsed manifest lists a receipt whose package entry is absent
+- **THEN** package integrity fails with exit `6` because the claimed package is incomplete
 
 #### Scenario: One tampered target among valid files
 - **WHEN** one listed target digest differs while other files match

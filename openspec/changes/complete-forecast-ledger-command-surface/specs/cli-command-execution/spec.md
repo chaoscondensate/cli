@@ -29,6 +29,7 @@ The command selector contract SHALL be:
 | `question add|update|show|resolve|annul|dispute` | `--file --question` |
 | `question list` | `--file` |
 | `forecast add|show|seal|reveal` | `--file --question --forecast` |
+| `forecast key-hint update` | `--file --question --forecast` |
 | `forecast list` | `--file --question` |
 | `target build|check` | `--file` plus `--all` or both `--question --forecast` |
 | `timestamp stamp|upgrade|status|verify` | `--file --question --forecast` |
@@ -82,7 +83,7 @@ Persisted timestamps SHALL be RFC 3339 values with seconds and an explicit offse
 - **THEN** the command captures one clock value, validates it against `forecasted_at`, stores it unchanged, and returns it in the result
 
 ### Requirement: Consistent zero-config and offline network behavior
-Every action that can contact the network SHALL identify the built-in profile or explicit advanced source mode it will use and SHALL support `--offline`. Offline mode SHALL override automatic protocol-source use and explicit outcome-source checking, open no socket, and either continue with documented local-only results or fail before side effects when the action inherently requires a network response. Ordinary OpenTimestamps and Bitcoin public verification MUST NOT require calendar/explorer configuration; only the documented CLI Bitcoin Core override may accept an explicit protocol endpoint in v1.
+Every action that can contact the network SHALL identify the built-in profile or explicit advanced source mode it will use and SHALL support `--offline`. Offline mode SHALL override automatic protocol-source use and explicit outcome-source checking, open no socket, and either continue with documented local-only results or fail before side effects when the action inherently requires a network response. Ordinary OpenTimestamps and Bitcoin public verification MUST NOT require calendar/explorer configuration. Only timestamp stamp/upgrade MAY accept the documented explicit CLI custom-calendar mode, and only timestamp/layered/package verification MAY accept the documented CLI Bitcoin Core override; MCP accepts neither arbitrary calendar nor Bitcoin endpoint URLs in v1.
 
 #### Scenario: Offline layered verification
 - **WHEN** a user runs `verify --offline`
@@ -104,7 +105,7 @@ Every ledger mutation SHALL acquire the cross-platform ledger lock, parse and fu
 - **THEN** a second writer returns `conflict` without performing a partial read-modify-write
 
 ### Requirement: Dry-run and confirmation
-Every command that mutates a ledger, creates or replaces an artifact, writes a key, creates a package, or uses the network SHALL support `--dry-run`. Dry-run SHALL perform all local parsing, selection, permission, collision, and prospective validation possible without generating a real secret, writing a file, acquiring a remote result, or changing state; it SHALL return a structured plan that identifies deferred checks. Dry-run success MUST NOT claim that a later network or concurrent write will succeed.
+Every command that mutates a ledger, creates or replaces an artifact, writes a key, or creates a package SHALL support `--dry-run`. A read-only command does not gain dry-run merely because it can observe the network; `--offline` controls network use for layered `verify` and `publish verify`. Dry-run SHALL perform all local parsing, selection, permission, collision, and prospective validation possible without generating a real secret, writing a file, acquiring a remote result, or changing state; it SHALL return a structured plan that identifies deferred checks. Dry-run success MUST NOT claim that a later network or concurrent write will succeed.
 
 Commands that disclose previously sealed material, remove a platform, replace terminal question state, or would overwrite through a separately approved replacement flow SHALL require interactive confirmation or `--yes`. With `--no-input`, non-TTY stdin, or MCP execution, missing explicit approval SHALL fail before side effects.
 
@@ -115,6 +116,10 @@ Commands that disclose previously sealed material, remove a platform, replace te
 #### Scenario: Non-interactive reveal without approval
 - **WHEN** reveal would disclose a sealed forecast and stdin is not interactive without `--yes`
 - **THEN** it fails before reading the key file or changing the ledger
+
+#### Scenario: Read-only online verification
+- **WHEN** layered `verify` or `publish verify --online` is selected
+- **THEN** the command performs no persistent mutation, exposes no `--dry-run`, and uses `--offline` or omission of `--online` as its documented network control
 
 ### Requirement: Stable result and error envelopes
 Human output SHALL be concise English. JSON success SHALL be one object with `ok: true`, stable operation `code`, plain `message`, and typed `data`; JSON failure SHALL be one object on stderr with `ok: false`, stable error `code`, plain `message`, and optional redacted `details`. Primary success output belongs only on stdout; errors, warnings, progress, and verbose diagnostics belong only on stderr.
@@ -161,7 +166,7 @@ The same ledger and explicit inputs SHALL produce equivalent domain results, JSO
 - **THEN** the operation rejects the path before opening or creating the target
 
 ### Requirement: Correct the registered preview tree before availability
-The existing hidden/unavailable urfave tree is a preview scaffold, not a compatibility promise for completed actions. Before the affected leaf becomes visible, implementation and help goldens SHALL change `target check`, all timestamp actions, and layered `verify` to reject `--file -`; SHALL make `timestamp verify` a mutating/network-capable action with `--dry-run`; SHALL keep the already registered required scalar `question add --type`; and SHALL make MCP root flags repeatable. Release notes SHALL identify these preview corrections, and no command may be advertised with the old contradictory contract.
+The existing hidden/unavailable urfave tree is a preview scaffold, not a compatibility promise for completed actions. Before the affected leaf becomes visible, implementation and help goldens SHALL change `target check`, all timestamp actions, and layered `verify` to reject `--file -`; SHALL make `timestamp verify` a mutating/network-capable action with `--dry-run`; SHALL keep the already registered required scalar `question add --type`; SHALL make MCP root flags repeatable; and SHALL retain the registered reveal gate while removing the general write/network grants. Release notes SHALL identify these preview corrections, and no command may be advertised with the old contradictory contract.
 
 #### Scenario: Preview timestamp verify becomes available
 - **WHEN** `timestamp verify` passes its implementation gate

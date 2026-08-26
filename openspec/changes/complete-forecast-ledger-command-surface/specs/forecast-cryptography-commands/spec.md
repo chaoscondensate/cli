@@ -139,6 +139,23 @@ Seal SHALL write and secure the key first, then commit the ledger. If key creati
 - **WHEN** the key is durable but post-validation or safe replacement fails
 - **THEN** the original ledger remains unchanged and output identifies a retained orphan key file using a redacted/safe path
 
+### Requirement: Repair non-authoritative key hints safely
+`forecast-ledger forecast key-hint update` SHALL require `--file`, `--question`, `--forecast`, and scalar `--key-hint`. It SHALL select a sealed or revealed forecast with a supported commitment and change only `commitment.key_hint`; it MUST NOT read, move, create, discover, validate, or disclose any actual key file. The operation SHALL remain available for imported `unanchored`, `pending`, `verified`, or `failed` integrity because the hint is outside seal authentication and `forecast-envelope/v1`; every target, receipt, disclosed key, commitment digest, ciphertext, and integrity byte SHALL remain unchanged. Identical input SHALL be idempotent.
+
+A package-safe v1 hint SHALL match the closed ASCII form `scheme:opaque`: scheme MUST match `[a-z][a-z0-9+.-]*`, MUST NOT equal `file`, and opaque MUST match `[A-Za-z0-9._~+-]+`. Slashes, backslashes, additional colons, percent encoding, whitespace, authority/user-info syntax, query, fragment, drive/UNC/device syntax, and empty components are forbidden. For scheme `forecast-key`, opaque MUST equal the selected forecast ID. CLI seal creation SHALL continue to use `forecast-key:<forecast-id>`; other safe logical schemes are explicit public metadata and MUST NOT trigger automatic key discovery.
+
+#### Scenario: Normalize an imported path hint
+- **WHEN** a schema-valid imported sealed forecast has `key_hint: keys/f-001.key` and the user updates it to `forecast-key:f-001`
+- **THEN** only the hint changes, the forecast becomes package-safe, and every existing cryptographic target and receipt still verifies byte-for-byte
+
+#### Scenario: Reject a file-like logical hint
+- **WHEN** an update supplies `file:secret.key`, `secret-manager://item`, `C:\\keys\\f.key`, or an opaque value containing path or credential syntax
+- **THEN** the command returns invalid data before mutation and identifies the required non-location `scheme:opaque` form
+
+#### Scenario: Repair a failed imported record
+- **WHEN** an imported forecast has terminal failed integrity but only its unsafe key hint needs normalization
+- **THEN** key-hint update may change that non-evidentiary hint while preserving the complete failed integrity record
+
 ### Requirement: Reveal only after complete authentication
 `forecast-ledger forecast reveal` SHALL require approval, a selected sealed forecast, and an explicit protected `--key-file`. Before opening a ledger write transaction it SHALL read the bounded key file, authenticate/decrypt the original ciphertext, verify the commitment hash, exact associated data, question/forecast IDs, protocol identifiers, and exact canonical private bundle, and validate the six derived public mirror fields against the question type and chronology. It MUST NOT claim or attempt a ledger-ID binding that does not exist in `forecast-seal/v1`.
 

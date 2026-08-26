@@ -1,11 +1,11 @@
 ## 1. Shared operation contracts and change ownership
 
 - [ ] 1.1 Add `internal/service` request, result, warning, side-effect, recovery, root/mode/network-profile, and operation interfaces without creating a storage-to-service import cycle.
-- [ ] 1.2 Define closed typed input models and versioned JSON Schemas for init, root metadata, platform, question, forecast, resolution, dispute, and publication inputs, including explicit null/removal semantics.
+- [ ] 1.2 Define closed typed input models and versioned JSON Schemas for init, root metadata, platform, question, forecast, key-hint repair, resolution, dispute, and publication inputs, including explicit null/removal semantics and deliberate init/question-add type normalization.
 - [ ] 1.3 Reuse the bounded JSON/YAML parser for operation inputs and add rejection tests for duplicate keys, unknown fields, multiple documents, invalid exact-number forms, excessive depth, and excessive bytes.
 - [ ] 1.4 Build validated indexes for platform IDs, question IDs, globally unique forecast IDs, per-question order, platform references, and forecast supersession links.
 - [ ] 1.5 Add injectable observation clock and CSPRNG effect interfaces whose deterministic implementations are available only to tests.
-- [ ] 1.6 Implement shared dry-run planning, explicit confirmation, non-interactive approval, cancellation, and timeout policies for CLI and MCP callers.
+- [ ] 1.6 Implement shared dry-run planning only for persistent mutation/resource creation, explicit confirmation, non-interactive approval, cancellation, and timeout policies for CLI and MCP callers; keep read-only network verification controlled by online/offline mode rather than dry-run.
 - [ ] 1.7 Extend stable public result/error codes and CLI exit mapping for usage, invalid, not-found, conflict, verification, I/O, network-disabled, incomplete, pending, unavailable, and interruption outcomes; do not add a separate permission exit class.
 - [ ] 1.8 Generate CLI input/result references and MCP schemas from the operation contracts, and fail CI when regeneration changes the tree.
 - [ ] 1.9 Reject every ledger whose root `schema_version` is not exactly `1.0.0` with code `unsupported_schema_version` and invalid-data exit 3, without fetching, coercing, or guessing a migration.
@@ -29,7 +29,7 @@
 - [ ] 3.4 Implement exclusive JSON/YAML ledger creation and reject every pre-existing file, link, junction, reparse point, or directory destination.
 - [ ] 3.5 Wire `forecast-ledger init` in urfave with leaf-local `--file`, required root identity flags, `--input`, conditional `--key-file`, dry-run, approval, JSON, and stable exit behavior.
 - [ ] 3.6 Add init schema, semantic, presentation, private-input, rollback, JSON golden, help, completion, and native-platform acceptance tests; unhide `init` only when they pass.
-- [ ] 3.7 Implement `ledger update` for the root title, description, default timezone, and mutable forecaster profile fields, with omission-preserves/null-removes semantics for optional values and immutable schema, ledger, creation, forecaster identity/kind, collection, and imported-publication fields.
+- [ ] 3.7 Implement `ledger update` for root title, description, default timezone, and mutable forecaster kind/profile fields, including atomic individual/team member-shape transitions, omission-preserves/null-removes semantics, immutable schema/ledger/creation/forecaster ID/collections/publication, and current-metadata/no-authorship warnings.
 - [ ] 3.8 Wire and test `forecast-ledger ledger update` with leaf-local `--file` and `--input`, dry-run, approval, JSON, minimal-patch preservation, help, completion, and native-platform acceptance gates.
 
 ## 4. Platform commands
@@ -45,9 +45,9 @@
 
 ## 5. Question authoring and lifecycle
 
-- [ ] 5.1 Implement binary, multiple-choice, numeric, and date question builders with required scalar `--type`, required `forecast_window` and `expected_resolution_at`, type-specific exclusion, unique options/tags, platform-reference, and window chronology rules; reject a duplicate `type` field in `--input`.
+- [ ] 5.1 Implement shared binary, multiple-choice, numeric, and date question builders with init-document versus scalar question-add type normalization, required `forecast_window` and `expected_resolution_at`, type-specific exclusion, unique options/tags, platform-reference, and window chronology rules; reject a duplicate `type` field in question-add `--input`.
 - [ ] 5.2 Implement `question add` with exactly one initial public or sealed forecast, conditional protected `--key-file`, global ID checks, and one atomic valid commit.
-- [ ] 5.3 Implement `question update` with the descriptive/unresolved-status allowlist, checks that changed windows still contain every existing forecast, and precomputed-target conflict rejection when a target-covered change would stale any retained target or integrity artifact.
+- [ ] 5.3 Implement `question update` with the descriptive/unresolved-status allowlist, checks that changed windows still contain every existing forecast, precomputed-target conflict rejection when evidence would stale, and actionable annul-plus-new-question guidance with no override or target rewrite.
 - [ ] 5.4 Implement deterministic `question list` with type, lifecycle, window, forecast count, expected resolution, and integrity counts.
 - [ ] 5.5 Implement redacted `question show` with resolution metadata and forecast summaries but no sealed plaintext or revealed key material.
 - [ ] 5.6 Implement `question resolve` for closed/awaiting or disputed questions with typed outcomes, evidence-source validation, chronology, confirmation, retained forecasts, and explicit notice that resolving a dispute replaces the v1 current-resolution object.
@@ -86,74 +86,76 @@
 - [ ] 8.6 Implement `forecast reveal` confirmation, all required revealed fields (`value`, `rationale`, `key_factors`, `comment`, and retained `commitment`), retained ciphertext/integrity evidence, and correct-key idempotency.
 - [ ] 8.7 Wire `forecast seal|reveal` in urfave with exact selectors, private `--input`, explicit `--key-file`, dry-run/approval, secret-safe JSON, help, and completion.
 - [ ] 8.8 Add positive plaintext/AAD/target/key byte vectors, cross-ledger and bound-versus-unbound field cases, cross-language, wrong-key, tampered-field, fuzz, property, rollback, key-protection, output-writer-failure, secret-canary, and native-platform tests; unhide seal/reveal independently only after their gates pass.
+- [ ] 8.9 Implement `forecast key-hint update` for sealed/revealed records using the closed path-free `scheme:opaque` grammar, idempotent single-field patching, explicit support for imported failed integrity, and proof that seal/target/receipt/integrity bytes remain unchanged.
+- [ ] 8.10 Wire CLI and MCP key-hint update with exact selectors and scalar hint, dry-run, JSON/help/completion, package-repair guidance, invalid path/credential cases, and native-platform acceptance tests.
 
 ## 9. Pure-Go OpenTimestamps core
 
-- [ ] 9.1 Implement bounded detached SHA-256 receipt parsing for the reviewed OTS operation and attestation subset without Python or subprocesses.
+- [ ] 9.1 Implement bounded detached SHA-256 receipt parsing and construction for the reviewed OTS operation/attestation subset, including exact append-16-byte-nonce then SHA-256 blinding, without Python or subprocesses.
 - [ ] 9.2 Implement a lossless proof tree that deterministically serializes supported nodes and safely preserves or explicitly rejects unknown nodes.
 - [ ] 9.3 Implement proof-operation evaluation, attestation extraction, semantic-superset comparison, deterministic branch merge, and receipt binding checks.
-- [ ] 9.4 Implement immutable `opentimestamps-public-v1` metadata with four pinned submission endpoints, accepted receipt identities, fixed two-of-four success, two public Bitcoin APIs, source IDs/trust text, help/version exposure, and no runtime download or extension.
+- [ ] 9.4 Implement immutable `opentimestamps-public-v1` metadata with four pinned submission endpoints, accepted returned identities, fixed two-of-four success, two public Bitcoin APIs, exact height/request/concurrency budgets, source IDs/trust/privacy text, help/version exposure, and no runtime download or extension.
 - [ ] 9.5 Implement optional CLI Bitcoin Core verification with protected auth-file reading, bounded RPC requests, precedence over the public profile, and independently operated trust reporting.
-- [ ] 9.6 Implement dual-public-source verification against mempool.space and Blockstream with required hash/header agreement, local header/proof-of-work/attestation checks, bounded requests, and mandatory third-party trust limitations.
-- [ ] 9.7 Add official Python client round-trip/info/upgrade/verify differential fixtures for every supported operation and attestation.
+- [ ] 9.6 Implement dual-public-source verification against mempool.space and Blockstream with required hash/header agreement, invocation-wide `(source,height)` deduplication/singleflight, 32-height/128-request/4-concurrency limits, local header/proof-of-work/attestation checks, and mandatory third-party trust/privacy limitations.
+- [ ] 9.7 Add official Python client round-trip/info/stamp/upgrade/verify differential fixtures for nonce blinding and every supported operation and attestation.
 - [ ] 9.8 Add malformed, oversized, excessive-depth, unsupported-operation, redirect, timeout, and parser/evaluator fuzz tests.
-- [ ] 9.9 Add profile identity, mocked 2-of-4 calendar, dual-source agreement/disagreement/outage, Bitcoin Core, real-calendar nightly, and tracked independent-review gates before stable OTS availability.
+- [ ] 9.9 Add profile/returned-identity, pool-remapping, mocked 2-of-4/custom-calendar, dual-source agreement/disagreement/outage/rate-limit/budget, privacy, Bitcoin Core, real-calendar liveness nightly, and tracked independent-review gates before stable OTS availability.
 
 ## 10. Timestamp commands
 
-- [ ] 10.1 Implement `timestamp stamp` preflight, concurrent built-in four-calendar submission, fixed two-response success, deterministic receipt merge, durable target/receipt writes, and pending ledger transition.
+- [ ] 10.1 Implement `timestamp stamp` preflight, fresh 16-byte nonce blinding before calendar submission, concurrent built-in four-calendar/fixed two-response default plus validated explicit CLI custom mode, deterministic branch merge for one nonce, durable target/receipt writes, retry reuse, and pending ledger transition.
 - [ ] 10.2 Implement stamp retry and recovery for target/receipt/ledger interruption without duplicate implicit requests or deletion of unowned artifacts.
-- [ ] 10.3 Implement `timestamp upgrade` for matching pending evidence, built-in-profile calendar identities only, semantic-superset receipt replacement, and pending/not-ready results without premature verification.
+- [ ] 10.3 Implement `timestamp upgrade` for matching pending evidence using built-in accepted identities by default or explicit safe CLI custom calendars, semantic-superset receipt replacement, custom trust labeling, and pending/not-ready results without premature verification.
 - [ ] 10.4 Implement local-only `timestamp status` states `unanchored`, `pending`, `confirmed_unverified`, `verified`, `failed`, and `inconsistent` with safe next actions; classify missing artifacts referenced by pending or verified evidence as `inconsistent`.
 - [ ] 10.5 Implement zero-config `timestamp verify` through the dual-public-source profile plus optional CLI Bitcoin Core override after exact target/receipt checks, deriving conservative `anchored_before` and block height.
 - [ ] 10.6 Implement atomic pending-to-verified ledger transition, retained proof references, byte-for-byte preservation of every imported `external_anchor`, explicit verification time, and the valid-but-too-late warning; treat imported `failed` integrity as terminal and require a new forecast revision for recovery.
-- [ ] 10.7 Wire all four urfave timestamp actions with exact selectors, zero-config built-in sources, `--offline`, optional Core URL/protected auth options, dry-run, timeout, JSON results, honest exits, help, and completion.
-- [ ] 10.8 Add idempotency, offline-no-socket, pending/network/crypto exit, public-source agreement/disagreement, late-anchor, recovery, source-trust, credential-redaction, cancellation, JSON golden, and native-platform acceptance tests; unhide actions only after applicable OTS gates pass.
+- [ ] 10.7 Wire all four urfave timestamp actions with exact selectors, zero-config built-in sources, CLI-only repeatable custom calendars/threshold for stamp and upgrade, `--offline`, optional Core URL/protected auth for verification, dry-run only on stamp/upgrade/verify mutations, timeout, JSON results, honest exits, help, and completion.
+- [ ] 10.8 Add nonce/privacy, idempotency, offline-no-socket, pending/network/crypto/budget exit, public-source agreement/disagreement/deduplication, custom-calendar safety, late-anchor, recovery, source-trust, credential-redaction, cancellation, JSON golden, and native-platform acceptance tests; unhide actions only after applicable OTS gates pass.
 
 ## 11. Layered verification
 
 - [ ] 11.1 Implement the stable layer result model with `pass`, `fail`, `pending`, `not_applicable`, and `not_checked`, deterministic aggregation, reason codes, evidence, and limitations; return overall `incomplete` with exit 9 whenever required work remains and reserve exit 0 for a complete pass.
 - [ ] 11.2 Implement document verification with bounded parse, embedded schema, format, domain, semantic, and artifact-path checks plus dependency blocking.
 - [ ] 11.3 Implement content-binding verification by rebuilding and comparing exact public or original sealed targets and every recorded metadata field.
-- [ ] 11.4 Implement automatic built-in-profile existence-timing verification, explicit offline behavior, and optional CLI Bitcoin Core replacement, including proof validity versus pre-outcome sufficiency.
+- [ ] 11.4 Implement automatic built-in-profile existence-timing verification with invocation-wide height deduplication and exact request budgets, explicit offline behavior, and optional CLI Bitcoin Core replacement, including proof validity versus pre-outcome sufficiency and incomplete/budget handling.
 - [ ] 11.5 Implement revealed-forecast authentication and mirror comparison without exposing decrypted fields or stored keys.
 - [ ] 11.6 Implement outcome metadata/digest checks and optional bounded `--check-sources` reachability without asserting authority or substantive truth.
-- [ ] 11.7 Include authorship, completeness, calibration, self-reported-time, and outcome-truth limitations in every human, JSON, and MCP report.
-- [ ] 11.8 Wire `forecast-ledger verify` with all/default and narrowed selectors, real-file enforcement, automatic built-in Bitcoin sources, `--offline`, optional Core, separate `--check-sources`, deterministic JSON, and documented exit precedence.
+- [ ] 11.7 Include authorship, completeness, calibration, self-reported-time, outcome-truth, calendar request-timing/blinded-commitment, and Bitcoin block-height-interest limitations in every human, JSON, and MCP report.
+- [ ] 11.8 Wire read-only `forecast-ledger verify` with all/default and narrowed selectors, real-file enforcement, automatic built-in Bitcoin sources, `--offline`, optional Core, separate `--check-sources`, no dry-run, deterministic JSON, request summaries, and documented exit precedence.
 - [ ] 11.9 Add mixed-matrix, dependency, edited-ledger, late-proof, edited-reveal, source, offline-no-network, determinism, JSON golden, and native-platform tests; unhide `verify` only when complete.
 
 ## 12. Publication commands
 
-- [ ] 12.1 Define the closed versioned canonical publication manifest and deterministic path, role, ordering, digest, and schema-pin rules.
+- [ ] 12.1 Define the closed versioned canonical publication manifest with exactly `ledger`, `forecast_target`, and `opentimestamps_receipt` entry roles plus deterministic path, ordering, digest, and schema-pin rules.
 - [ ] 12.2 Implement the allowlisted evidence graph rooted at the exact complete ledger and every referenced target/OTS receipt, with no source-control or recursive directory discovery.
-- [ ] 12.3 Implement secret/private/temp/lock/journal exclusion, protected-root checks, absolute-path checks, package secret-canary scanning, and rejection of path-like `key_hint` values; preserve safe logical hints such as `forecast-key:<forecast-id>` without copying or recording the actual key path.
+- [ ] 12.3 Implement secret/private/temp/lock/journal exclusion, protected-root checks, package secret-canary scanning, strict shared `scheme:opaque` key-hint validation, and actionable key-hint repair without copying or recording an actual key path.
 - [ ] 12.4 Implement `publish build` full source verification, collision preflight, new-root creation, safe file copying, manifest-last commit, dry-run, and interruption recovery.
-- [ ] 12.5 Implement `publish verify` manifest-first confinement, listed file size/digest/role checks, unexpected-file rejection, then document/content/reveal/offline timestamp verification.
-- [ ] 12.6 Implement optional `--online` package timing checks through the built-in public profile plus optional Core replacement, without coupling package integrity to source availability.
-- [ ] 12.7 Wire both urfave publication actions with explicit `--file`, `--output` or `--manifest`, dry-run, JSON identity/matrix output, help, and completion.
+- [ ] 12.5 Implement `publish verify` manifest-first confinement, exact role checks, selected-path not-found exit 4 versus missing-listed-entry verification exit 6, unexpected-file rejection, then document/content/reveal/offline timestamp verification.
+- [ ] 12.6 Implement optional `--online` package timing checks through the shared budgeted/deduplicated built-in public observer plus optional Core replacement, including privacy/request summaries and without coupling package integrity to source availability.
+- [ ] 12.7 Wire both urfave publication actions with explicit `--file`, `--output` or `--manifest`, dry-run only for build, explicit offline-default versus `--online` verify behavior, JSON identity/matrix output, help, and completion.
 - [ ] 12.8 Add standalone source-control-free, byte-determinism, missing/tampered/extra file, traversal/link/case collision, adjacent-key, pending-proof, interruption, removable-copy, JSON golden, and native-platform tests; unhide both actions independently.
 
 ## 13. MCP runtime and parity
 
 - [ ] 13.1 Add the pinned MCP SDK and implement `mcp serve` stdio initialization, version negotiation, root/mode and built-in-profile metadata, clean stdout, stderr diagnostics, graceful EOF, and shutdown.
-- [ ] 13.2 Implement startup canonicalization and overlap validation for named ledger, output, and secret roots with no inferred default ledger.
-- [ ] 13.3 Implement default full online operation plus optional whole-server `--read-only` and `--offline` modes, with required root-class checks before secret, network, lock, or file effects and no per-capability grants.
+- [ ] 13.2 Implement startup canonicalization and overlap validation for named ledger, output, and secret roots with no inferred default ledger, plus contradiction checks for reveal without a secret root or reveal combined with read-only mode.
+- [ ] 13.3 Implement default full online operation plus optional whole-server `--read-only` and `--offline` modes, required root-class checks before secret/network/lock/file effects, no general write/network grants, and default-off `--allow-reveal` as the sole capability boundary.
 - [ ] 13.4 Generate and register closed tools for ledger init/update/validate/status and all platform actions over the shared service operations.
-- [ ] 13.5 Generate and register closed tools for all question and forecast actions, including private protected-file references and explicit confirmation fields.
+- [ ] 13.5 Generate and register closed tools for all question and forecast actions, including key-hint repair, private protected-file references, explicit confirmation fields, and conditional reveal registration only when startup enables it.
 - [ ] 13.6 Generate and register closed tools for target, timestamp, layered verification, and publication actions with matching dry-run/offline behavior, built-in network profile use, and no endpoint URL inputs.
 - [ ] 13.7 Implement versioned redacted `forecast-ledger://` resources for addressed ledgers, questions, forecasts, artifact summaries, reports, and manifests.
 - [ ] 13.8 Implement stable recoverable tool failures, protocol-error separation, request cancellation/timeouts, immediate deterministic conflict for a second writer on the same ledger, cross-ledger concurrency, and global resource limits.
-- [ ] 13.9 Wire urfave `mcp serve` with repeatable ledger/output/secret roots, optional `--read-only`/`--offline`, limits, help, completion, and no protocol-breaking banner.
-- [ ] 13.10 Register only completed tools in MCP discovery, return unknown-tool for direct calls to absent tools without side effects, and add in-memory and real-process tests for incremental discovery, every available schema/tool, CLI parity, root-class combinations, full/read-only and online/offline modes, pinned-endpoint confinement, root races/traversal, secret canaries, framing purity, cancellation, immediate writer conflicts, malformed/oversized requests, and prior supported protocol compatibility; unhide `mcp serve` only when complete.
+- [ ] 13.9 Wire urfave `mcp serve` with repeatable ledger/output/secret roots, optional `--read-only`/`--offline`/`--allow-reveal`, removal of general allow-write/allow-network flags, limits, help, completion, and no protocol-breaking banner.
+- [ ] 13.10 Register only completed and startup-enabled tools in MCP discovery, return unknown-tool for absent/disabled direct calls without side effects, and add in-memory and real-process tests for incremental and reveal-conditional discovery, every available schema/tool, CLI parity, root/mode contradictions, full/read-only and online/offline modes, pinned-endpoint/budget confinement, root races/traversal, secret canaries, framing purity, cancellation, immediate writer conflicts, malformed/oversized requests, and prior supported protocol compatibility; unhide `mcp serve` only when complete.
 
 ## 14. Command surface and user documentation
 
 - [ ] 14.1 Add a command-availability manifest that proves every visible leaf has a real service action and complete acceptance gate, and fails if any planned leaf still uses the unavailable handler at final release.
-- [ ] 14.2 Add full English `--help` text and examples for every command using explicit `--file`, simple terminology, safe placeholders, stdin rules, built-in network-profile disclosure, offline/Core choices, dry-run, approvals, exits, `--plain`/`--quiet` output rules, and no secrets.
+- [ ] 14.2 Add full English `--help` text and examples for every command using explicit `--file`, simple terminology, safe placeholders, stdin rules, built-in/custom network-profile disclosure, online/offline/Core choices, mutation-only dry-run, approvals, exits, `--plain`/`--quiet` output rules, and no secrets.
 - [ ] 14.3 Generate and review command reference pages covering every flag, closed input shape, output envelope, business precondition, mutation, artifact, recovery, and network behavior.
-- [ ] 14.4 Document the complete public/sealed/reveal, target/timestamp/verify, zero-config network profile, standalone publication, and MCP root/read-only/offline workflows in README and project documentation.
-- [ ] 14.5 Document schema v1 initial-question/forecast constraints, global ID uniqueness, append-only revisions, dispute replacement semantics, OTS trust boundaries, and all verification limitations.
-- [ ] 14.6 Update `AGENTS.md` with rules requiring code changes to update README, command references, examples, schemas, OpenSpec artifacts, and release notes when observable behavior changes, and reconcile its stale MCP read-only/grant wording with the full-by-default, root-confined, optional read-only/offline design.
+- [ ] 14.4 Document the complete public/sealed/reveal and key-hint repair, target/timestamp/verify, zero-config plus advanced custom calendar, standalone publication, and MCP root/read-only/offline/reveal workflows in README and project documentation.
+- [ ] 14.5 Document schema v1 initial-question/forecast constraints, init versus question-add type inputs, global ID uniqueness, append-only revisions, current forecaster metadata, frozen targeted-question recovery, dispute replacement semantics, OTS nonce/trust/liveness/privacy/request-budget boundaries, online-default versus package-offline-default behavior, and all verification limitations.
+- [ ] 14.6 Update `AGENTS.md` with rules requiring code changes to update README, command references, examples, schemas, OpenSpec artifacts, and release notes when observable behavior changes, and reconcile its stale MCP wording with root confinement, optional read-only/offline modes, no general grants, and the sole explicit reveal gate.
 - [ ] 14.7 Mention Chaos Condensate and `https://chaoscondensate.com/` in appropriate README, project-context, and documentation locations without characterizing the organization, practice, or website as non-commercial.
 - [ ] 14.8 Add docs link, example, command/flag, generated-reference, secret-canary, simple-English lint, and clean-tree checks to CI.
 
@@ -163,7 +165,7 @@
 - [ ] 15.2 Add macOS, Linux, and Windows CI matrices for locking, replacement, path confinement, key permissions/ACLs, target/package determinism, cancellation, and recovery.
 - [ ] 15.3 Add race tests and bounded fuzz targets for parsers, selectors, canonicalization, crypto inputs, OTS proofs, manifests, MCP messages, and path normalization.
 - [ ] 15.4 Add Go/Python schema validator parity using normalized verdicts, issue codes, and locations for shared fixtures.
-- [ ] 15.5 Run pinned target/seal vectors, OTS differential suites, layered verification matrices, publication determinism, and real-process MCP tests as release-blocking checks.
+- [ ] 15.5 Run pinned target/seal/key-hint vectors, nonce-blinded OTS differential and profile-liveness suites, budgeted layered verification matrices, publication determinism/role/exit tests, and reveal-conditional real-process MCP tests as release-blocking checks.
 - [ ] 15.6 Verify GoReleaser cross-builds and package smoke tests exercise the complete visible command/help surface on macOS, Linux, and Windows artifacts.
 - [ ] 15.7 Update changelog and release notes with newly available commands, correction of hidden preview flags and stdin behavior before those commands become stable, experimental OTS status, migration/no-migration statement, recovery behavior, and security/trust limitations.
-- [ ] 15.8 Run `go test`, race, fuzz smoke, lint, generated-file, OpenSpec strict validation, docs, package, and native smoke gates; record evidence that all 29 requested actions and every advertised MCP parity tool are implemented before marking the change complete.
+- [ ] 15.8 Run `go test`, race, fuzz smoke, lint, generated-file, OpenSpec strict validation, docs, package, and native smoke gates; record evidence that all 30 required actions and every advertised/startup-enabled MCP parity tool are implemented before marking the change complete.

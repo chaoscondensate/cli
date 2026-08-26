@@ -33,7 +33,7 @@ For every forecast with integrity target metadata, content binding SHALL rebuild
 - **THEN** content binding fails even if the receipt remains a valid proof for the old artifact
 
 ### Requirement: Verify existence timing with the built-in network profile
-When an applicable retained OTS receipt contains a supported Bitcoin attestation, verification SHALL automatically use `opentimestamps-public-v1` and the same dual-public-source agreement and local header/proof checks as `timestamp verify`; users SHALL not need to choose or configure an explorer. An advanced user MAY select the same optional Bitcoin Core mode as `timestamp verify` for independently operated verification.
+When an applicable retained OTS receipt contains a supported Bitcoin attestation, verification SHALL automatically use `opentimestamps-public-v1` and the same dual-public-source agreement, invocation-wide height deduplication, request/concurrency budgets, and local header/proof checks as `timestamp verify`; users SHALL not need to choose or configure an explorer. An advanced user MAY select the same optional Bitcoin Core mode as `timestamp verify` for independently operated verification. Layered verification is read-only and SHALL NOT expose `--dry-run` merely because this default mode observes the network.
 
 `--offline` SHALL disable every network request. Offline mode SHALL parse and inspect retained receipts but report attestations as `not_checked` or pending unless ledger metadata already contains internally consistent previously verified evidence. Because v1 does not retain the prior Bitcoin source identity, an offline report relying on stored verified metadata SHALL disclose that limitation and MUST NOT present the prior source as independently rechecked.
 
@@ -46,6 +46,10 @@ Existence timing SHALL report target/receipt binding, proof validity, Bitcoin so
 #### Scenario: Zero-config online verification
 - **WHEN** a supported receipt is checked without `--offline` or Bitcoin Core options
 - **THEN** existence timing uses the built-in dual-public-source profile and reports its third-party trust boundary
+
+#### Scenario: Many forecasts share one block height
+- **WHEN** multiple selected receipts attest to the same Bitcoin block height
+- **THEN** the invocation reuses one validated observation per public source and height instead of repeating requests per forecast
 
 #### Scenario: Valid late anchor
 - **WHEN** a verified proof's conservative bound is not earlier than the known outcome
@@ -66,14 +70,18 @@ For resolved questions, outcome evidence SHALL validate resolution type, chronol
 - **THEN** the layer reports source availability and byte match while retaining the limitation that substantive correctness was not established
 
 ### Requirement: State protocol limitations in every report
-Every human and JSON report SHALL explicitly state that Forecast Ledger v1 does not by itself prove authorship, completeness of the ledger or forecast set, truth or calibration of a forecast, exactness of self-reported times, or substantive correctness of outcome evidence. Filesystem, archive, hosting, source-control, and external-anchor timestamps MUST NOT be promoted to cryptographic existence evidence.
+Every human and JSON report SHALL explicitly state that Forecast Ledger v1 does not by itself prove authorship, completeness of the ledger or forecast set, truth or calibration of a forecast, exactness of self-reported times, or substantive correctness of outcome evidence. Filesystem, archive, hosting, source-control, and external-anchor timestamps MUST NOT be promoted to cryptographic existence evidence. An online report SHALL state that remote Bitcoin sources learn requested block heights and approximate timestamp periods; a stamp/report involving calendars SHALL state that calendar services learn request timing and blinded commitments. The report MUST NOT imply network privacy or anonymity.
 
 #### Scenario: Every technical layer passes
 - **WHEN** all applicable automated checks pass
 - **THEN** overall reports verified technical evidence and still includes every required limitation
 
+#### Scenario: Online verification privacy disclosure
+- **WHEN** existence timing contacts the built-in public Bitcoin sources
+- **THEN** human, JSON, and MCP results identify the contacted source IDs and disclose block-height interest without exposing target plaintext
+
 ### Requirement: Apply deterministic overall status and exit precedence
-Overall SHALL be `fail` when any required applicable layer fails, `pending` when none fail and at least one is pending, `incomplete` when none fail/pending but a requested required layer is not checked, and `pass` only when every requested applicable layer passes. Document invalidity SHALL use exit `3`; cryptographic/evidence failure exit `6`; pending or incomplete exit `9`; required automatic or explicitly selected network failure exit `8`; only a complete pass exits `0`. JSON output SHALL still contain the full safely available matrix for non-zero evidence outcomes.
+Overall SHALL be `fail` when any required applicable layer fails, `pending` when none fail and at least one is pending, `incomplete` when none fail/pending but a requested required layer is not checked, including request-budget exhaustion, and `pass` only when every requested applicable layer passes. Document invalidity SHALL use exit `3`; cryptographic/evidence failure exit `6`; pending or incomplete exit `9`; required automatic or explicitly selected network failure exit `8`; only a complete pass exits `0`. JSON output SHALL still contain the full safely available matrix for non-zero evidence outcomes.
 
 #### Scenario: Failure plus pending
 - **WHEN** content binding fails and another receipt is pending

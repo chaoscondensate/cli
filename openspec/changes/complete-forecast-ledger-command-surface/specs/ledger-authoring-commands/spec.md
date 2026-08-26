@@ -5,7 +5,7 @@ Defines complete business behavior for creating a Forecast Ledger and safely man
 ## ADDED Requirements
 
 ### Requirement: Initialize a schema-valid ledger with an initial question
-`forecast-ledger init` SHALL create a new `.json`, `.yaml`, or `.yml` file at the explicit `--file` path and MUST refuse an existing destination. It SHALL require `--ledger-id`, `--timezone`, `--forecaster-id`, `--forecaster-name`, and a bounded `--input` document containing exactly one initial question with exactly one initial public or sealed forecast because the pinned Forecast Ledger v1 contract requires non-empty `questions` and `forecasts` arrays. Additional questions and forecasts are added after initialization through their normal commands. `--forecaster-kind` SHALL default to `individual`; team forecasters SHALL supply at least two uniquely identified members in the input. Optional title, description, contact, profiles, platforms, and explicit `created_at` MAY be supplied in the same input.
+`forecast-ledger init` SHALL create a new `.json`, `.yaml`, or `.yml` file at the explicit `--file` path and MUST refuse an existing destination. It SHALL require `--ledger-id`, `--timezone`, `--forecaster-id`, `--forecaster-name`, and a bounded `--input` document containing exactly one initial question with its required `type` and exactly one initial public or sealed forecast because the pinned Forecast Ledger v1 contract requires non-empty `questions` and `forecasts` arrays. Additional questions and forecasts are added after initialization through their normal commands. Unlike `question add`, init has no separate question-type flag because its input owns the complete initial question. Both paths SHALL normalize the type into the same question builder and validation rules while retaining intentionally distinct closed input schemas. `--forecaster-kind` SHALL default to `individual`; team forecasters SHALL supply at least two uniquely identified members in the input. Optional title, description, contact, profiles, platforms, and explicit `created_at` MAY be supplied in the same input.
 
 An initial sealed forecast SHALL use the exact normal seal profile, SHALL require an explicit new `--key-file`, and SHALL cause the complete init input to be treated as private. A public initial forecast MUST reject `--key-file`. Key creation, ledger creation, rollback/recovery, redaction, and dry-run behavior SHALL match `forecast seal`; no incomplete ledger may be committed if either resource fails.
 
@@ -28,9 +28,9 @@ The created document SHALL use schema version `1.0.0`, an empty platform map unl
 - **THEN** init returns `conflict` and does not replace or follow it
 
 ### Requirement: Update mutable root metadata
-`forecast-ledger ledger update` SHALL require `--file` and a closed `--input` patch. It SHALL allow only root `title`, `description`, and `default_timezone`, plus `forecaster.name`, `forecaster.contact`, `forecaster.profiles`, and, for a team, `forecaster.members`. Omission SHALL preserve a value; explicit null SHALL remove only optional title, description, contact, or profiles. The resulting timezone SHALL be a known IANA name; profiles SHALL be valid; member IDs SHALL be unique; a team SHALL retain at least two members; an individual MUST NOT gain members.
+`forecast-ledger ledger update` SHALL require `--file` and a closed `--input` patch. It SHALL allow only root `title`, `description`, and `default_timezone`, plus `forecaster.kind`, `forecaster.name`, `forecaster.contact`, `forecaster.profiles`, and `forecaster.members`. Omission SHALL preserve a value; explicit null SHALL remove only optional title, description, contact, profiles, or members when the resulting forecaster is individual. The resulting timezone SHALL be a known IANA name; profiles SHALL be valid; member IDs SHALL be unique. An atomic individual-to-team transition SHALL include at least two valid members in the same patch; an atomic team-to-individual transition SHALL remove members in the same patch. Output and documentation SHALL state that v1 stores current forecaster metadata, retains no internal identity history, and does not prove authorship.
 
-The operation MUST NOT change `schema_version`, `ledger_id`, `created_at`, forecaster ID/kind, platforms, questions, forecast history, integrity evidence, or the schema's legacy publication object. v1 authoring SHALL not create or edit publication/source-control metadata; an existing schema-valid publication object is preserved byte-for-byte as imported data.
+The operation MUST NOT change `schema_version`, `ledger_id`, `created_at`, forecaster ID, platforms, questions, forecast history, integrity evidence, or the schema's legacy publication object. v1 authoring SHALL not create or edit publication/source-control metadata; an existing schema-valid publication object is preserved byte-for-byte as imported data.
 
 #### Scenario: Update forecaster contact
 - **WHEN** a patch changes forecaster email and omits profiles
@@ -40,8 +40,12 @@ The operation MUST NOT change `schema_version`, `ledger_id`, `created_at`, forec
 - **WHEN** a team member patch would leave fewer than two members
 - **THEN** update returns invalid data and leaves the ledger unchanged
 
+#### Scenario: Convert an individual identity to a team
+- **WHEN** one patch changes forecaster kind to team and supplies at least two uniquely identified members
+- **THEN** the root metadata changes atomically, existing questions and evidence remain unchanged, and output reports the lack of internal identity history or authorship proof
+
 #### Scenario: Attempt immutable root change
-- **WHEN** a patch includes ledger ID, forecaster ID/kind, publication, or questions
+- **WHEN** a patch includes ledger ID, forecaster ID, publication, or questions
 - **THEN** the closed input is rejected before mutation
 
 ### Requirement: Add, update, inspect, and remove platforms
@@ -85,6 +89,8 @@ Binary and date questions MUST NOT contain options or unit. Multiple-choice ques
 
 Before changing any field included by `forecast-envelope/v1`, update SHALL reconstruct every affected old and prospective forecast target. If any bytes would change and matching integrity target metadata or a deterministic target artifact already exists, update MUST return conflict rather than silently invalidating retained content/timestamp evidence. Changes to fields excluded from the target MAY proceed when all other rules pass.
 
+Once any forecast under the question has a retained deterministic target or target-bearing integrity metadata, target-covered question wording and timing fields are frozen in v1: there is no override, target replacement, or evidence rewrite. Help and conflict output SHALL direct the user to annul the original question, create a new question with a new globally unique ID, and record the predecessor in notes when the real-world question materially changed; the original question, forecasts, targets, and receipts remain intact.
+
 #### Scenario: Shorten forecast window past a forecast
 - **WHEN** a proposed close time is earlier than an existing forecast's `forecasted_at`
 - **THEN** update returns `conflict` or invalid data and preserves the original question
@@ -96,6 +102,10 @@ Before changing any field included by `forecast-envelope/v1`, update SHALL recon
 #### Scenario: Change targeted question wording
 - **WHEN** title or resolution criteria changes target bytes for a question with a retained target artifact
 - **THEN** update returns conflict and preserves the question and evidence bytes
+
+#### Scenario: Replace a materially changed targeted question
+- **WHEN** an operator needs to change frozen wording or timing after evidence exists
+- **THEN** help identifies annul-plus-new-question as the supported workflow and does not offer an overwrite or target-rebuild escape hatch
 
 ### Requirement: List and show questions
 `question list` SHALL return questions sorted by stable ID with type, status, forecast count, forecast window, expected resolution time, and integrity counts. `question show` SHALL return the selected question, its public metadata, resolution if present, and forecast summaries without exposing sealed plaintext or revealed key material. Neither action SHALL fetch outcome URLs, verify timestamps, or mutate state.
