@@ -1,7 +1,7 @@
 # Explanation
 
 <!-- doc-metadata
-coverage: v0.2.0
+coverage: v0.2.1
 reviewed: 2026-08-26
 owner: documentation
 generated: false

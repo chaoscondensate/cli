@@ -5,6 +5,15 @@ tags and downloadable files are published on GitHub Releases.
 
 ## Unreleased
 
+## 0.2.1 - 2026-08-26
+
+### Fixed
+
+- Validate Windows owner-only key ACLs structurally instead of comparing a
+  non-canonical SDDL rendering.
+- Snapshot artifact-root identity from an open handle so replacement is
+  detected reliably on Windows.
+
 ## 0.2.0 - 2026-08-26
 
 ### Added

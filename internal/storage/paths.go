@@ -137,7 +137,11 @@ func NewPathResolver(root string) (*PathResolver, error) {
 	if !info.IsDir() {
 		return nil, unsafePathError("artifact root must be a directory")
 	}
-	return &PathResolver{root: filepath.Clean(canonical), rootInfo: info}, nil
+	identity, err := statPathIdentity(canonical)
+	if err != nil {
+		return nil, app.NewError(app.CodeIO, "artifact root identity cannot be read", err)
+	}
+	return &PathResolver{root: filepath.Clean(canonical), rootInfo: identity}, nil
 }
 
 func (r *PathResolver) Root() string { return r.root }
@@ -148,7 +152,7 @@ func (r *PathResolver) Resolve(relative string, mustExist bool) (string, error) 
 	if r == nil || r.root == "" || r.rootInfo == nil {
 		return "", app.NewError(app.CodeInternal, "path resolver is not initialized", nil)
 	}
-	current, err := os.Stat(r.root)
+	current, err := statPathIdentity(r.root)
 	if err != nil {
 		return "", app.NewError(app.CodeConflict, "configured root changed after startup", err)
 	}
@@ -167,6 +171,19 @@ func (r *PathResolver) Resolve(relative string, mustExist bool) (string, error) 
 		return "", err
 	}
 	return candidate, nil
+}
+
+// statPathIdentity derives FileInfo from an open handle instead of a pathname.
+// On Windows, os.Stat may defer loading the file ID until os.SameFile runs; if
+// the path was replaced in between, both FileInfo values can then describe the
+// replacement. File.Stat snapshots the identity from the opened object.
+func statPathIdentity(path string) (fs.FileInfo, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	return file.Stat()
 }
 
 func ValidateRelativePath(path string) error {

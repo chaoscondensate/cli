@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"unsafe"
 
 	"github.com/chaoscondensate/cli/internal/app"
@@ -84,7 +83,7 @@ func checkProtectedFile(path string) error {
 }
 
 func checkWindowsOwnerOnly(path string, expected *windows.SID) error {
-	descriptor, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION)
+	descriptor, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
 	if err != nil {
 		return app.NewError(app.CodeIO, "protected key ACL cannot be read", err)
 	}
@@ -100,11 +99,16 @@ func checkWindowsOwnerOnly(path string, expected *windows.SID) error {
 	if err != nil || control&windows.SE_DACL_PROTECTED == 0 {
 		return app.NewError(app.CodeConflict, "protected key ACL inheritance is not disabled", err)
 	}
-	// The SDDL conversion is the least ambiguous native representation: require
-	// one protected full-access allow ACE for precisely the current owner SID.
-	want := "O:" + expected.String() + "D:P(A;;FA;;;" + expected.String() + ")"
-	actual := descriptor.String()
-	if actual != want && !strings.Contains(actual, "D:P(A;;FA;;;"+expected.String()+")") {
+	var ace *windows.ACCESS_ALLOWED_ACE
+	if err := windows.GetAce(dacl, 0, &ace); err != nil || ace == nil {
+		return app.NewError(app.CodeConflict, "protected key ACL entry cannot be read", err)
+	}
+	const fileAllAccess windows.ACCESS_MASK = windows.STANDARD_RIGHTS_REQUIRED | windows.SYNCHRONIZE | 0x1ff
+	aceSID := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
+	if ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE ||
+		ace.Header.AceFlags != 0 ||
+		ace.Mask != fileAllAccess ||
+		aceSID == nil || !aceSID.IsValid() || !aceSID.Equals(expected) {
 		return app.NewError(app.CodeConflict, "protected key ACL grants access beyond the current owner", nil)
 	}
 	return nil
