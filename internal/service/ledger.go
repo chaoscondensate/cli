@@ -115,7 +115,7 @@ func loadAndValidateLedger(ctx context.Context, filename string, stdin io.Reader
 		return nil, app.NewError(app.CodeInternal, "ledger schema validation could not run", err)
 	}
 	if len(schemaIssues) > 0 {
-		return nil, app.WithDetails(app.NewError(app.CodeInvalidData, "ledger does not match Forecast Ledger v1", nil), map[string]any{"issues": schemaIssues})
+		return nil, app.WithDetails(app.NewError(app.CodeInvalidData, "ledger does not match Forecast Ledger v1", nil), map[string]any{"issues": ledgerSchemaDiagnostics(parsed, schemaIssues)})
 	}
 	model, err := validation.DecodeLedger(parsed)
 	if err != nil {
@@ -126,7 +126,7 @@ func loadAndValidateLedger(ctx context.Context, filename string, stdin io.Reader
 		return nil, app.NewError(app.CodeInternal, "ledger semantic validation could not run", err)
 	}
 	if len(semanticIssues) > 0 {
-		return nil, app.WithDetails(app.NewError(app.CodeInvalidData, "ledger has semantic validation errors", nil), map[string]any{"issues": semanticIssues})
+		return nil, app.WithDetails(app.NewError(app.CodeInvalidData, "ledger has semantic validation errors", nil), map[string]any{"issues": ledgerSemanticDiagnostics(parsed, semanticIssues)})
 	}
 	return &LoadedLedger{Path: path, Document: parsed, Model: model}, nil
 }

@@ -34,9 +34,10 @@ forecast-ledger mcp serve --ledger-root main=/data/ledgers --read-only
 forecast-ledger mcp serve --ledger-root main=/data/ledgers --offline
 ```
 
-Read-only rejects mutation before secret, lock, or write effects. Offline opens
-no network socket; stamp and upgrade are disabled, while verification returns
-explicit local-only layers.
+Read-only omits every mutating tool from `tools/list`; a direct call to an
+omitted name receives the protocol's unknown-tool response before secret, lock,
+file, or network effects. Offline opens no network socket; stamp and upgrade are
+disabled, while verification returns explicit local-only layers.
 
 The server accepts at most 16 concurrent tool calls and 8 MiB of decoded
 arguments per call by default. Set smaller or larger bounded values at startup

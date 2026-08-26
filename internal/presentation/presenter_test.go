@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/chaoscondensate/cli/internal/app"
+	"github.com/chaoscondensate/cli/internal/ledger"
 )
 
 func TestStableJSONUsesCorrectStreamsAndRedactsSecrets(t *testing.T) {
@@ -80,5 +81,32 @@ func TestNonTTYPlainQuietVerboseAndNoColor(t *testing.T) {
 	presenter = New(&stdout, &stderr, Options{NoColor: true, StdoutTTY: &isTTY})
 	if presenter.ColorEnabled() {
 		t.Fatal("NoColor option was ignored")
+	}
+}
+
+func TestRedactUsesPublicTaggedUnionJSONShape(t *testing.T) {
+	data := struct {
+		Value     ledger.ForecastValue `json:"value"`
+		Integrity ledger.Integrity     `json:"integrity"`
+	}{
+		Value: ledger.ForecastValue{Binary: &ledger.BinaryValue{Kind: ledger.ValueBinary, ProbabilityBP: 6250}},
+		Integrity: ledger.Integrity{Pending: &ledger.PendingIntegrity{
+			Status: ledger.IntegrityPending,
+			Target: ledger.ForecastTarget{Scope: "forecast-envelope/v1", Canonicalization: "RFC8785", ArtifactPath: "proofs/targets/f-one.json", Digest: ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(strings.Repeat("a", 64))}},
+		}},
+	}
+	redacted := Redact(data)
+	encoded, err := json.Marshal(redacted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(encoded)
+	for _, forbidden := range []string{"Binary", "MultipleChoice", "Numeric", "Date", "Unanchored", "Pending", "Verified", "Failed"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("internal union branch %q leaked in %s", forbidden, text)
+		}
+	}
+	if !strings.Contains(text, `"kind":"binary"`) || !strings.Contains(text, `"status":"pending"`) {
+		t.Fatalf("public union shape missing from %s", text)
 	}
 }

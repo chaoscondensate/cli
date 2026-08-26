@@ -82,6 +82,10 @@ jobs:
           done
           "$binary" verify --help
 
+      - name: Run native dogfood lifecycle
+        shell: bash
+        run: bash scripts/dogfood.sh "$RUNNER_TEMP/forecast-ledger${{ runner.os == 'Windows' && '.exe' || '' }}"
+
   format:
     name: Formatting
     runs-on: ubuntu-latest

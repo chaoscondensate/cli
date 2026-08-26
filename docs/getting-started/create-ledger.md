@@ -18,19 +18,19 @@ empty draft.
 Create `initial-question.yaml`:
 
 ```yaml
-created_at: 2026-08-26T12:00:00+01:00
+created_at: "2026-08-26T12:00:00+01:00"
 question:
   id: q-example
   title: Will the named event happen by the deadline?
   type: binary
   resolution_criteria: Resolve from the named public source.
   forecast_window:
-    closes_at: 2026-12-31T23:59:59Z
-  expected_resolution_at: 2027-01-15T12:00:00Z
+    closes_at: "2026-12-31T23:59:59Z"
+  expected_resolution_at: "2027-01-15T12:00:00Z"
   initial_forecast:
     id: f-example-001
     visibility: public
-    forecasted_at: 2026-08-26T12:00:00+01:00
+    forecasted_at: "2026-08-26T12:00:00+01:00"
     value:
       kind: binary
       probability_bp: 6000

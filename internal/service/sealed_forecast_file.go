@@ -30,6 +30,9 @@ func PlanForecastSealFile(ctx context.Context, path, keyPath string, questionID,
 	if err != nil {
 		return ForecastFileResult{}, err
 	}
+	if err := validateProspectiveFileMutation(loaded, mutation.Patches); err != nil {
+		return ForecastFileResult{}, err
+	}
 	result, err := buildForecastMutationFileResult(loaded.Document, loaded.Model, questionID, forecastID, mutation)
 	if err != nil {
 		return ForecastFileResult{}, err
@@ -145,6 +148,9 @@ func PlanForecastRevealFile(ctx context.Context, path, keyPath string, questionI
 	if err != nil {
 		return ForecastFileResult{}, err
 	}
+	if err := validateProspectiveFileMutation(loaded, mutation.Patches); err != nil {
+		return ForecastFileResult{}, err
+	}
 	return buildForecastMutationFileResult(loaded.Document, loaded.Model, questionID, forecastID, mutation)
 }
 
@@ -199,6 +205,9 @@ func PlanForecastKeyHintUpdateFile(ctx context.Context, path string, questionID,
 	}
 	mutation, err := BuildForecastKeyHintUpdate(loaded.Model, questionID, forecastID, keyHint)
 	if err != nil {
+		return ForecastFileResult{}, err
+	}
+	if err := validateProspectiveFileMutation(loaded, mutation.Patches); err != nil {
 		return ForecastFileResult{}, err
 	}
 	return buildForecastMutationFileResult(loaded.Document, loaded.Model, questionID, forecastID, mutation)

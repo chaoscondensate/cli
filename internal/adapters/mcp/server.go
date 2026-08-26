@@ -154,6 +154,9 @@ func (s *Server) registerTools() error {
 		if definition.Name == service.OperationForecastReveal && !s.config.Mode.AllowReveal {
 			continue
 		}
+		if s.config.Mode.ReadOnly && definition.Policy.PersistentEffect {
+			continue
+		}
 		if (definition.Name == service.OperationForecastSeal || definition.Name == service.OperationForecastReveal) && !s.roots.Has(service.RootSecret) {
 			continue
 		}
@@ -171,7 +174,7 @@ func (s *Server) registerTools() error {
 		if err != nil {
 			return err
 		}
-		description := fmt.Sprintf("%s. file paths use root-name:relative/path. access=%s network=%s", definition.CLI, accessLabel(s.config.Mode), definition.Policy.Network)
+		description := fmt.Sprintf("%s. file paths use root-name:relative/path. effect=%s server_access=%s network=%s", definition.CLI, effectLabel(definition.Policy), accessLabel(s.config.Mode), definition.Policy.Network)
 		s.sdk.AddTool(&sdk.Tool{Name: definition.MCPTool, Description: description, InputSchema: schema}, s.toolHandler(definition, allowed, contract.Required))
 	}
 	return nil
@@ -231,4 +234,11 @@ func accessLabel(mode service.AccessMode) string {
 		return "read-only"
 	}
 	return "read-write"
+}
+
+func effectLabel(policy service.OperationPolicy) string {
+	if policy.PersistentEffect {
+		return "mutating"
+	}
+	return "read-only"
 }

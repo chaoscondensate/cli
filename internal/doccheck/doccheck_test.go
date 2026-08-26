@@ -2,6 +2,8 @@ package doccheck
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"fmt"
 	"net/url"
 	"os"
@@ -12,6 +14,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/chaoscondensate/cli/internal/document"
+	"github.com/chaoscondensate/cli/internal/service"
 )
 
 var markdownLinkPattern = regexp.MustCompile(`!?\[[^\]]*\]\(([^)[:space:]]+)(?:[[:space:]]+"[^"]*")?\)`)
@@ -24,6 +29,66 @@ type page struct {
 	links    []string
 }
 
+func TestMaintainedYAMLInputsMatchOperationContracts(t *testing.T) {
+	repositoryRoot := findRepositoryRoot(t)
+	tests := []struct {
+		path        string
+		fence       int
+		schema      service.InputSchemaName
+		destination func() any
+	}{
+		{path: "docs/getting-started/create-ledger.md", fence: 0, schema: service.InputSchemaInit, destination: func() any { return &service.InitInput{} }},
+		{path: "docs/getting-started/create-ledger.md", fence: 1, schema: service.InputSchemaRootMetadata, destination: func() any { return &service.RootMetadataPatchInput{} }},
+		{path: "docs/how-to/manage-platforms.md", fence: 0, schema: service.InputSchemaPlatformCreate, destination: func() any { return &service.PlatformCreateInput{} }},
+		{path: "docs/how-to/manage-platforms.md", fence: 1, schema: service.InputSchemaPlatformPatch, destination: func() any { return &service.PlatformPatchInput{} }},
+		{path: "docs/how-to/manage-questions.md", fence: 0, schema: service.InputSchemaQuestionPatch, destination: func() any { return &service.QuestionPatchInput{} }},
+		{path: "docs/how-to/manage-public-forecasts.md", fence: 0, schema: service.InputSchemaForecastCreate, destination: func() any { return &service.ForecastCreateInput{} }},
+		{path: "docs/how-to/seal-and-reveal-forecasts.md", fence: 0, schema: service.InputSchemaForecastSeal, destination: func() any { return &service.SealedForecastInput{} }},
+	}
+	for _, test := range tests {
+		t.Run(test.path, func(t *testing.T) {
+			content, err := os.ReadFile(filepath.Join(repositoryRoot, filepath.FromSlash(test.path)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			fences := fencedExamples(string(content), "yaml")
+			if test.fence >= len(fences) {
+				t.Fatalf("YAML fence %d is missing", test.fence)
+			}
+			if err := service.DecodeOperationInput(context.Background(), "-", strings.NewReader(fences[test.fence]), test.schema, test.destination()); err != nil {
+				t.Fatalf("maintained YAML input does not match %s: %v", test.schema, err)
+			}
+		})
+	}
+}
+
+func fencedExamples(content, wantedLanguage string) []string {
+	var examples []string
+	scanner := bufio.NewScanner(strings.NewReader(content))
+	language := ""
+	var body strings.Builder
+	for scanner.Scan() {
+		trimmed := strings.TrimSpace(scanner.Text())
+		if language == "" {
+			if strings.HasPrefix(trimmed, "```") {
+				language = strings.TrimSpace(strings.TrimPrefix(trimmed, "```"))
+				body.Reset()
+			}
+			continue
+		}
+		if trimmed == "```" {
+			if language == wantedLanguage {
+				examples = append(examples, body.String())
+			}
+			language = ""
+			continue
+		}
+		body.WriteString(scanner.Text())
+		body.WriteByte('\n')
+	}
+	return examples
+}
+
 func TestMaintainedDocumentation(t *testing.T) {
 	t.Parallel()
 	repositoryRoot := findRepositoryRoot(t)
@@ -34,8 +99,48 @@ func TestMaintainedDocumentation(t *testing.T) {
 	for _, current := range pages {
 		validateMetadata(t, repositoryRoot, current)
 		validateFences(t, current)
+		validateDataExamples(t, current)
 	}
 	validateLinksAndNavigation(t, repositoryRoot, docsRoot, pages)
+}
+
+func validateDataExamples(t *testing.T, current *page) {
+	t.Helper()
+	scanner := bufio.NewScanner(strings.NewReader(current.content))
+	language := ""
+	startLine := 0
+	var content strings.Builder
+	lineNumber := 0
+	for scanner.Scan() {
+		lineNumber++
+		trimmed := strings.TrimSpace(scanner.Text())
+		if language == "" {
+			if trimmed == "```yaml" || trimmed == "```json" {
+				language = strings.TrimPrefix(trimmed, "```")
+				startLine = lineNumber + 1
+				content.Reset()
+			}
+			continue
+		}
+		if trimmed == "```" {
+			var err error
+			if language == "yaml" {
+				_, err = document.ParseYAML(bytes.NewBufferString(content.String()), document.DefaultLimits)
+			} else {
+				_, err = document.ParseJSON(bytes.NewBufferString(content.String()), document.DefaultLimits)
+			}
+			if err != nil {
+				t.Errorf("%s:%d: %s example is not executable input: %v", current.rel, startLine, language, err)
+			}
+			language = ""
+			continue
+		}
+		content.WriteString(scanner.Text())
+		content.WriteByte('\n')
+	}
+	if err := scanner.Err(); err != nil {
+		t.Errorf("%s: scan data examples: %v", current.rel, err)
+	}
 }
 
 func findRepositoryRoot(t *testing.T) string {

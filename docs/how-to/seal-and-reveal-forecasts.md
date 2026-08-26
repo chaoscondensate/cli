@@ -17,8 +17,8 @@ ID; it never hides or reseals an existing public record.
 Prepare the private input in an owner-only file, or supply it on stdin:
 
 ```yaml
-forecasted_at: 2026-09-01T09:00:00+01:00
-recorded_at: 2026-09-01T09:01:00+01:00
+forecasted_at: "2026-09-01T09:00:00+01:00"
+recorded_at: "2026-09-01T09:01:00+01:00"
 value:
   kind: binary
   probability_bp: 6500

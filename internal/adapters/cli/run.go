@@ -42,3 +42,4 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 type presentedApplicationError struct{ error }
 
 func (presentedApplicationError) AlreadyPresented() bool { return true }
+func (e presentedApplicationError) Unwrap() error        { return e.error }

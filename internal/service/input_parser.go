@@ -10,12 +10,14 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 
 	"github.com/chaoscondensate/cli/internal/app"
 	"github.com/chaoscondensate/cli/internal/document"
 	jsonschema "github.com/santhosh-tekuri/jsonschema/v6"
+	jsonschemakind "github.com/santhosh-tekuri/jsonschema/v6/kind"
 )
 
 var inputValidators sync.Map
@@ -43,10 +45,22 @@ func decodeOperationInput(ctx context.Context, source string, stdin io.Reader, s
 		if errors.As(err, &applicationErr) {
 			return applicationErr
 		}
-		return app.NewError(app.CodeInvalidData, "operation input cannot be parsed", err)
+		parseFailure := app.NewError(app.CodeInvalidData, "operation input cannot be parsed", err)
+		var parseErr *document.ParseError
+		if errors.As(err, &parseErr) {
+			return app.WithDetails(parseFailure, map[string]any{"issues": []document.Diagnostic{parseErr.Diagnostic}})
+		}
+		return parseFailure
 	}
 	if ctx != nil && ctx.Err() != nil {
 		return app.NewError(app.CodeInterrupted, "operation input was interrupted", ctx.Err())
+	}
+
+	if issues := operationTimestampTagIssues(parsed); len(issues) > 0 {
+		return app.WithDetails(
+			app.NewError(app.CodeInvalidData, "operation input uses a YAML timestamp outside a timestamp field", nil),
+			map[string]any{"schema": schemaName, "issues": issues},
+		)
 	}
 
 	validator, err := compiledInputValidator(schemaName)
@@ -56,7 +70,7 @@ func decodeOperationInput(ctx context.Context, source string, stdin io.Reader, s
 	if err := validator.Validate(parsed.Root.Any()); err != nil {
 		return app.WithDetails(
 			app.NewError(app.CodeInvalidData, "operation input does not match its closed schema", nil),
-			map[string]any{"schema": schemaName, "issue": safeInputSchemaIssue(err)},
+			map[string]any{"schema": schemaName, "issues": inputSchemaIssues(parsed, err)},
 		)
 	}
 
@@ -90,7 +104,7 @@ func parseOperationInputSource(source string, stdin io.Reader, limits document.L
 	case ".json":
 		return document.ParseJSON(file, limits)
 	case ".yaml", ".yml":
-		return document.ParseYAML(file, limits)
+		return document.ParseYAMLWithTimestampScalars(file, limits)
 	default:
 		return nil, app.NewError(app.CodeUsage, "operation input filename must end in .json, .yaml, or .yml", nil)
 	}
@@ -105,7 +119,7 @@ func parseUnknownInputFormat(reader io.Reader, limits document.Limits) (*documen
 	if len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') {
 		return document.ParseJSON(bytes.NewReader(raw), limits)
 	}
-	return document.ParseYAML(bytes.NewReader(raw), limits)
+	return document.ParseYAMLWithTimestampScalars(bytes.NewReader(raw), limits)
 }
 
 func compiledInputValidator(name InputSchemaName) (*jsonschema.Schema, error) {
@@ -154,4 +168,143 @@ func safeInputSchemaIssue(err error) string {
 		return "schema.root"
 	}
 	return "schema." + strings.Join(validationErr.InstanceLocation, ".")
+}
+
+var timestampInputFields = map[string]struct{}{
+	"created_at": {}, "opens_at": {}, "closes_at": {}, "expected_resolution_at": {},
+	"forecasted_at": {}, "recorded_at": {}, "outcome_known_at": {},
+	"retrieved_at": {}, "published_at": {},
+}
+
+func operationTimestampTagIssues(parsed *document.Document) []document.Diagnostic {
+	if parsed == nil || parsed.Root == nil {
+		return nil
+	}
+	issues := make([]document.Diagnostic, 0)
+	var visit func(*document.Value)
+	visit = func(value *document.Value) {
+		if value == nil {
+			return
+		}
+		if value.SourceTag == "!!timestamp" {
+			field := pointerLastToken(value.Source.Pointer)
+			if _, allowed := timestampInputFields[field]; !allowed {
+				issues = append(issues, document.Diagnostic{
+					Code: "input.timestamp_field", Message: "YAML timestamp scalars are allowed only in timestamp fields", Location: value.Source,
+				})
+			}
+		}
+		for _, child := range value.Array {
+			visit(child)
+		}
+		for _, member := range value.Object {
+			visit(member.Value)
+		}
+	}
+	visit(parsed.Root)
+	return issues
+}
+
+func inputSchemaIssues(parsed *document.Document, err error) []document.Diagnostic {
+	var validationErr *jsonschema.ValidationError
+	if !errors.As(err, &validationErr) {
+		return []document.Diagnostic{{Code: "schema.validation", Message: "input does not match its schema", Location: rootInputLocation(parsed)}}
+	}
+	issues := make([]document.Diagnostic, 0)
+	var collect func(*jsonschema.ValidationError)
+	collect = func(current *jsonschema.ValidationError) {
+		if current == nil {
+			return
+		}
+		if len(current.Causes) > 0 {
+			for _, cause := range current.Causes {
+				collect(cause)
+			}
+			return
+		}
+		pointer := jsonPointer(current.InstanceLocation)
+		code := "schema.validation"
+		keyword := "validation"
+		if current.ErrorKind != nil {
+			path := current.ErrorKind.KeywordPath()
+			if len(path) > 0 {
+				keyword = strings.Join(path, ".")
+				code = "schema." + keyword
+			}
+		}
+		if additional, ok := current.ErrorKind.(*jsonschemakind.AdditionalProperties); ok && len(additional.Properties) > 0 {
+			properties := append([]string(nil), additional.Properties...)
+			sort.Strings(properties)
+			for _, property := range properties {
+				propertyPointer := appendJSONPointer(pointer, property)
+				issues = append(issues, document.Diagnostic{
+					Code: code, Message: "unknown field " + property, Location: inputLocation(parsed, propertyPointer),
+				})
+			}
+			return
+		}
+		issues = append(issues, document.Diagnostic{
+			Code: code, Message: "input does not satisfy " + keyword, Location: inputLocation(parsed, pointer),
+		})
+	}
+	collect(validationErr)
+	if len(issues) == 0 {
+		issues = append(issues, document.Diagnostic{Code: safeInputSchemaIssue(err), Message: "input does not match its schema", Location: rootInputLocation(parsed)})
+	}
+	sort.SliceStable(issues, func(i, j int) bool {
+		if issues[i].Location.Pointer != issues[j].Location.Pointer {
+			return issues[i].Location.Pointer < issues[j].Location.Pointer
+		}
+		return issues[i].Code < issues[j].Code
+	})
+	return issues
+}
+
+func inputLocation(parsed *document.Document, pointer string) document.SourceRef {
+	if parsed != nil {
+		if locations := parsed.Locations[pointer]; len(locations) > 0 {
+			return locations[0]
+		}
+		for parent := pointer; parent != ""; {
+			parent = parentPointer(parent)
+			if locations := parsed.Locations[parent]; len(locations) > 0 {
+				location := locations[0]
+				location.Pointer = pointer
+				return location
+			}
+		}
+	}
+	return document.SourceRef{Pointer: pointer, Start: document.Position{Line: 1, Column: 1}}
+}
+
+func rootInputLocation(parsed *document.Document) document.SourceRef {
+	return inputLocation(parsed, "")
+}
+
+func jsonPointer(tokens []string) string {
+	result := ""
+	for _, token := range tokens {
+		result = appendJSONPointer(result, token)
+	}
+	return result
+}
+
+func appendJSONPointer(pointer, token string) string {
+	token = strings.ReplaceAll(strings.ReplaceAll(token, "~", "~0"), "/", "~1")
+	return pointer + "/" + token
+}
+
+func pointerLastToken(pointer string) string {
+	index := strings.LastIndex(pointer, "/")
+	if index < 0 || index == len(pointer)-1 {
+		return ""
+	}
+	return strings.ReplaceAll(strings.ReplaceAll(pointer[index+1:], "~1", "/"), "~0", "~")
+}
+
+func parentPointer(pointer string) string {
+	if index := strings.LastIndex(pointer, "/"); index >= 0 {
+		return pointer[:index]
+	}
+	return ""
 }

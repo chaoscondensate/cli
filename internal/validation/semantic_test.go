@@ -75,8 +75,15 @@ func TestSemanticValidationChecksArtifactDigest(t *testing.T) {
 		},
 		Timestamps: []ledger.OTSTimestamp{{Type: "opentimestamps", ProofPath: "proofs/one.ots", State: ledger.OTSPending}},
 	}}
+	issues, err := ValidateSemantics(model, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasSemanticCode(issues, "semantic.artifact_unavailable") || hasSemanticCode(issues, "semantic.artifact_missing") {
+		t.Fatalf("model-only validation treated unavailable artifacts as invalid: %#v", issues)
+	}
 	artifacts := fstest.MapFS{"targets/one.json": &fstest.MapFile{Data: data}}
-	issues, err := ValidateSemantics(model, artifacts)
+	issues, err = ValidateSemantics(model, artifacts)
 	if err != nil {
 		t.Fatal(err)
 	}

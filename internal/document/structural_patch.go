@@ -2,6 +2,7 @@ package document
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -88,7 +89,10 @@ func jsonStructuralEdit(document *Document, operation PatchOperation) (byteEdit,
 		if node.Source.End == nil {
 			return byteEdit{}, fmt.Errorf("%w: JSON source range is incomplete", ErrUnsupportedPatch)
 		}
-		replacement, err := canonical.Marshal(operation.Value)
+		rawNode := document.Raw[node.Source.Start.Offset:node.Source.End.Offset]
+		multiline := bytes.Contains(rawNode, []byte{'\n'}) || bytes.Contains(rawNode, []byte{'\r'})
+		indent := jsonLineIndent(document.Raw, node.Source.Start.Offset)
+		replacement, err := renderJSONFragment(operation.Value, multiline, indent, preferredNewline(document.Newlines))
 		if err != nil {
 			return byteEdit{}, fmt.Errorf("encode JSON replacement: %w", err)
 		}
@@ -113,10 +117,6 @@ func jsonStructuralEdit(document *Document, operation PatchOperation) (byteEdit,
 }
 
 func jsonAdd(document *Document, parent *Value, token string, value any) (byteEdit, error) {
-	encoded, err := canonical.Marshal(value)
-	if err != nil {
-		return byteEdit{}, fmt.Errorf("encode JSON addition: %w", err)
-	}
 	if parent.Source.End == nil {
 		return byteEdit{}, fmt.Errorf("%w: JSON parent source range is incomplete", ErrUnsupportedPatch)
 	}
@@ -133,6 +133,18 @@ func jsonAdd(document *Document, parent *Value, token string, value any) (byteEd
 		}
 		closeOffset := parent.Source.End.Offset - 1
 		multiline, insertOffset, indent := jsonCollectionInsertion(document.Raw, parent, closeOffset)
+		replaceEnd := insertOffset
+		if multiline && len(parent.Object) > 0 {
+			last := parent.Object[len(parent.Object)-1].Value
+			if last.Source.End == nil {
+				return byteEdit{}, fmt.Errorf("%w: JSON member source range is incomplete", ErrUnsupportedPatch)
+			}
+			insertOffset = last.Source.End.Offset
+		}
+		encoded, err := renderJSONFragment(value, multiline, indent, preferredNewline(document.Newlines))
+		if err != nil {
+			return byteEdit{}, fmt.Errorf("encode JSON addition: %w", err)
+		}
 		var replacement []byte
 		if len(parent.Object) == 0 {
 			if multiline {
@@ -148,13 +160,28 @@ func jsonAdd(document *Document, parent *Value, token string, value any) (byteEd
 		replacement = append(replacement, key...)
 		replacement = append(replacement, ':', ' ')
 		replacement = append(replacement, encoded...)
-		return byteEdit{start: insertOffset, end: insertOffset, replacement: replacement}, nil
+		if multiline {
+			replacement = append(replacement, preferredNewline(document.Newlines)...)
+		}
+		return byteEdit{start: insertOffset, end: replaceEnd, replacement: replacement}, nil
 	case ValueArray:
 		if token != "-" {
 			return byteEdit{}, fmt.Errorf("%w: JSON array additions must use /-", ErrUnsupportedPatch)
 		}
 		closeOffset := parent.Source.End.Offset - 1
 		multiline, insertOffset, indent := jsonCollectionInsertion(document.Raw, parent, closeOffset)
+		replaceEnd := insertOffset
+		if multiline && len(parent.Array) > 0 {
+			last := parent.Array[len(parent.Array)-1]
+			if last.Source.End == nil {
+				return byteEdit{}, fmt.Errorf("%w: JSON item source range is incomplete", ErrUnsupportedPatch)
+			}
+			insertOffset = last.Source.End.Offset
+		}
+		encoded, err := renderJSONFragment(value, multiline, indent, preferredNewline(document.Newlines))
+		if err != nil {
+			return byteEdit{}, fmt.Errorf("encode JSON addition: %w", err)
+		}
 		var replacement []byte
 		if len(parent.Array) > 0 {
 			replacement = append(replacement, ',')
@@ -168,10 +195,25 @@ func jsonAdd(document *Document, parent *Value, token string, value any) (byteEd
 			replacement = append(replacement, indent...)
 		}
 		replacement = append(replacement, encoded...)
-		return byteEdit{start: insertOffset, end: insertOffset, replacement: replacement}, nil
+		if multiline {
+			replacement = append(replacement, preferredNewline(document.Newlines)...)
+		}
+		return byteEdit{start: insertOffset, end: replaceEnd, replacement: replacement}, nil
 	default:
 		return byteEdit{}, fmt.Errorf("%w: patch parent is not a collection", ErrUnsupportedPatch)
 	}
+}
+
+func renderJSONFragment(value any, multiline bool, indent, newline []byte) ([]byte, error) {
+	if !multiline || isScalarReplacement(value) {
+		return json.Marshal(value)
+	}
+	encoded, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	encoded = bytes.ReplaceAll(encoded, []byte("\n"), append(append([]byte(nil), newline...), indent...))
+	return encoded, nil
 }
 
 func jsonCollectionInsertion(raw []byte, parent *Value, closeOffset int64) (bool, int64, []byte) {
@@ -189,6 +231,15 @@ func jsonCollectionInsertion(raw []byte, parent *Value, closeOffset int64) (bool
 		return true, lineStart, indent
 	}
 	return false, closeOffset, nil
+}
+
+func jsonLineIndent(raw []byte, offset int64) []byte {
+	start := sourceLineStart(raw, offset)
+	end := start
+	for end < int64(len(raw)) && (raw[end] == ' ' || raw[end] == '\t') {
+		end++
+	}
+	return append([]byte(nil), raw[start:end]...)
 }
 
 func jsonRemove(document *Document, parent *Value, token string) (byteEdit, error) {
@@ -542,11 +593,36 @@ func renderYAMLAddedSequence(indent string, value any, newline []byte) ([]byte, 
 
 func renderYAMLAdded(indent, prefix string, value any, newline []byte) ([]byte, error) {
 	if !isScalarReplacement(value) {
-		encoded, err := canonical.Marshal(value)
+		encoded, err := yaml.Marshal(value)
 		if err != nil {
 			return nil, err
 		}
-		return append([]byte(indent+prefix+" "), append(encoded, newline...)...), nil
+		encoded = bytes.TrimSuffix(encoded, []byte("\n"))
+		lines := strings.Split(string(encoded), "\n")
+		var output strings.Builder
+		if prefix == "-" {
+			output.WriteString(indent)
+			output.WriteString("- ")
+			output.WriteString(lines[0])
+			output.Write(newline)
+			for _, line := range lines[1:] {
+				output.WriteString(indent)
+				output.WriteString("  ")
+				output.WriteString(line)
+				output.Write(newline)
+			}
+			return []byte(output.String()), nil
+		}
+		output.WriteString(indent)
+		output.WriteString(prefix)
+		output.Write(newline)
+		for _, line := range lines {
+			output.WriteString(indent)
+			output.WriteString("  ")
+			output.WriteString(line)
+			output.Write(newline)
+		}
+		return []byte(output.String()), nil
 	}
 	encoded, err := yaml.Marshal(value)
 	if err != nil {

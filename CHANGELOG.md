@@ -5,6 +5,28 @@ tags and downloadable files are published on GitHub Releases.
 
 ## Unreleased
 
+## 0.2.2 - 2026-08-26
+
+### Fixed
+
+- Preserve retained target and OpenTimestamps evidence while authoring later
+  forecasts and question lifecycle changes.
+- Keep YAML timestamp inputs, structured validation diagnostics, and private
+  input permission errors safe and consistent across CLI transports.
+- Preserve readable expanded JSON/YAML ledger formatting as records are added
+  or revealed.
+- Return exit 9 after presenting pending or incomplete layered and package
+  verification reports instead of remapping them to an internal failure.
+- Show type-aware question, forecast, and verification details in human and
+  plain output without exposing sealed data or internal Go union fields.
+- Omit mutating MCP tools from read-only discovery and report static tool
+  effects separately from the server's current mode.
+
+### Testing
+
+- Add a reproducible multi-question dogfood lifecycle and run it in native
+  macOS, Linux, and Windows CI jobs.
+
 ## 0.2.1 - 2026-08-26
 
 ### Fixed

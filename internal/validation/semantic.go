@@ -43,8 +43,10 @@ func DecodeLedger(source *document.Document) (*ledger.Ledger, error) {
 }
 
 // ValidateSemantics runs cross-field checks after structural validation.
-// artifacts is rooted at the ledger's artifact directory; nil means target
-// artifacts are unavailable and is reported only when a check requires one.
+// artifacts is rooted at the ledger's artifact directory. A nil filesystem
+// intentionally skips artifact-byte checks for model-only prospective
+// validation and stdin inspection; path-backed validation must pass the
+// confined ledger-relative filesystem so missing or changed artifacts fail.
 func ValidateSemantics(model *ledger.Ledger, artifacts fs.FS) ([]SemanticIssue, error) {
 	if model == nil {
 		return nil, errors.New("ledger is nil")
@@ -287,7 +289,6 @@ func (v *semanticValidator) validateArtifact(integrity ledger.Integrity, pointer
 		return
 	}
 	if v.artifacts == nil {
-		v.add("semantic.artifact_unavailable", pointer+"/target/artifact_path", "target artifact is not available for validation")
 		return
 	}
 	data, err := fs.ReadFile(v.artifacts, string(target.ArtifactPath))

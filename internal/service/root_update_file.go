@@ -28,6 +28,13 @@ func PlanRootMetadataFileUpdate(ctx context.Context, path string, input RootMeta
 	if err != nil {
 		return RootMetadataFileResult{}, err
 	}
+	update, err := BuildRootMetadataUpdate(loaded.Model, input)
+	if err != nil {
+		return RootMetadataFileResult{}, err
+	}
+	if err := validateProspectiveFileMutation(loaded, update.Patches); err != nil {
+		return RootMetadataFileResult{}, err
+	}
 	return buildRootMetadataFileResult(loaded.Document, loaded.Model, input)
 }
 

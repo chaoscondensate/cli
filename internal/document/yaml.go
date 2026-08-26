@@ -17,17 +17,29 @@ import (
 var yamlLinePattern = regexp.MustCompile(`(?:^| )line ([0-9]+)(?::|$)`)
 
 type yamlParser struct {
-	raw       []byte
-	starts    []int64
-	limits    Limits
-	nodes     int
-	aliases   int
-	expanded  int
-	anchors   map[string]*yaml.Node
-	locations map[string][]SourceRef
+	raw                   []byte
+	starts                []int64
+	limits                Limits
+	nodes                 int
+	aliases               int
+	expanded              int
+	anchors               map[string]*yaml.Node
+	locations             map[string][]SourceRef
+	allowTimestampScalars bool
 }
 
 func ParseYAML(r io.Reader, limits Limits) (*Document, error) {
+	return parseYAML(r, limits, false)
+}
+
+// ParseYAMLWithTimestampScalars accepts YAML's !!timestamp scalar tag as a
+// string while retaining the tag on Value.SourceTag. Callers must reject tags
+// outside fields whose schema explicitly declares an RFC 3339 timestamp.
+func ParseYAMLWithTimestampScalars(r io.Reader, limits Limits) (*Document, error) {
+	return parseYAML(r, limits, true)
+}
+
+func parseYAML(r io.Reader, limits Limits, allowTimestampScalars bool) (*Document, error) {
 	limits = normalizedLimits(limits)
 	raw, err := readBounded(r, limits.MaxBytes)
 	if err != nil {
@@ -59,11 +71,12 @@ func ParseYAML(r io.Reader, limits Limits) (*Document, error) {
 	}
 
 	parser := &yamlParser{
-		raw:       raw,
-		starts:    starts,
-		limits:    limits,
-		anchors:   make(map[string]*yaml.Node),
-		locations: make(map[string][]SourceRef),
+		raw:                   raw,
+		starts:                starts,
+		limits:                limits,
+		anchors:               make(map[string]*yaml.Node),
+		locations:             make(map[string][]SourceRef),
+		allowTimestampScalars: allowTimestampScalars,
 	}
 	if err := parser.checkPhysical(syntax.Content[0], "", 1); err != nil {
 		return nil, err
@@ -166,6 +179,11 @@ func (p *yamlParser) checkScalarTag(node *yaml.Node, pointer string) error {
 	switch node.ShortTag() {
 	case "!!str", "!!bool", "!!null", "!!int":
 		return nil
+	case "!!timestamp":
+		if p.allowTimestampScalars {
+			return nil
+		}
+		return p.failure("document.unsupported_tag", "YAML scalar tag is not supported", pointer, node, nil)
 	case "!!float":
 		return p.failure("document.float_not_allowed", "floating-point numbers are not allowed", pointer, node, nil)
 	default:
@@ -205,6 +223,13 @@ func (p *yamlParser) toValue(node *yaml.Node, pointer string, depth int, active 
 		case "!!str":
 			value.Kind = ValueString
 			value.String = node.Value
+		case "!!timestamp":
+			if !p.allowTimestampScalars {
+				return nil, p.failure("document.unsupported_tag", "YAML scalar tag is not supported", pointer, node, nil)
+			}
+			value.Kind = ValueString
+			value.String = node.Value
+			value.SourceTag = "!!timestamp"
 		case "!!bool":
 			parsed, err := strconv.ParseBool(strings.ToLower(node.Value))
 			if err != nil {

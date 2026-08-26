@@ -50,3 +50,12 @@ func TestRuntimeTimeoutAndCancellation(t *testing.T) {
 		t.Fatalf("canceled confirmation: %v", err)
 	}
 }
+
+func TestPresentedApplicationErrorPreservesExitCategory(t *testing.T) {
+	for _, code := range []app.ErrorCode{app.CodePending, app.CodeIncomplete, app.CodeVerification} {
+		err := presentedApplicationError{app.NewError(code, "report already presented", nil)}
+		if got, want := app.ExitCodeOf(err), app.ExitCodeOf(app.NewError(code, "", nil)); got != want {
+			t.Fatalf("code %s mapped to %d, want %d", code, got, want)
+		}
+	}
+}

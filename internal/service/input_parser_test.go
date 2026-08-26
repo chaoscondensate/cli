@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -64,5 +65,43 @@ func TestDecodeOperationInputAcceptsTypedJSONAndYAML(t *testing.T) {
 		if destination.Name != "Metaculus" || destination.Kind != "scoring_platform" {
 			t.Fatalf("decoded input = %#v", destination)
 		}
+	}
+}
+
+func TestDecodeOperationInputNormalizesOnlyTimestampTypedYAMLScalars(t *testing.T) {
+	input := "forecasted_at: 2026-09-01T09:00:00+01:00\nvalue:\n  kind: binary\n  probability_bp: 5000\n"
+	var destination ForecastCreateInput
+	if err := DecodeOperationInput(context.Background(), "-", strings.NewReader(input), InputSchemaForecastCreate, &destination); err != nil {
+		t.Fatal(err)
+	}
+	if destination.ForecastedAt != "2026-09-01T09:00:00+01:00" {
+		t.Fatalf("forecasted_at = %q", destination.ForecastedAt)
+	}
+
+	var platform PlatformCreateInput
+	err := DecodeOperationInput(context.Background(), "-", strings.NewReader("name: 2026-08-14\nkind: informal\n"), InputSchemaPlatformCreate, &platform)
+	if app.ErrorCodeOf(err) != app.CodeInvalidData {
+		t.Fatalf("non-timestamp YAML tag error = %v", err)
+	}
+	var applicationErr *app.Error
+	if !errors.As(err, &applicationErr) || applicationErr.Details == nil || applicationErr.Details["issues"] == nil {
+		t.Fatalf("timestamp field issue details = %#v", err)
+	}
+}
+
+func TestDecodeOperationInputPreservesStructuredSchemaIssueLocations(t *testing.T) {
+	input := "name: Metaculus\nkind: scoring_platform\nextra: true\n"
+	var destination PlatformCreateInput
+	err := DecodeOperationInput(context.Background(), "-", strings.NewReader(input), InputSchemaPlatformCreate, &destination)
+	var applicationErr *app.Error
+	if !errors.As(err, &applicationErr) {
+		t.Fatalf("error = %#v", err)
+	}
+	issues, ok := applicationErr.Details["issues"].([]document.Diagnostic)
+	if !ok || len(issues) != 1 {
+		t.Fatalf("issues = %#v", applicationErr.Details["issues"])
+	}
+	if issues[0].Code != "schema.additionalProperties" || issues[0].Location.Pointer != "/extra" || issues[0].Location.Start.Line != 3 {
+		t.Fatalf("issue = %#v", issues[0])
 	}
 }

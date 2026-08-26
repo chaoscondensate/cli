@@ -30,6 +30,12 @@ and recursively discovered directories are not copied. Key hints must use the
 path-free `scheme:opaque` form. Repair an imported location-like hint with
 `forecast-ledger forecast key-hint update` before building.
 
+The ledger is the publication graph's source of truth. `target build` can create
+a useful standalone target beside a ledger without changing ledger integrity;
+that adjacent file is intentionally not discovered or copied unless a retained
+integrity record references it. This keeps package content explicit and
+reviewable without requiring Git-managed storage.
+
 The canonical `manifest.json` is written last. Its closed
 `forecast-ledger-publication/v1` profile contains one exact ledger entry and
 only `forecast_target` or `opentimestamps_receipt` evidence entries, sorted by

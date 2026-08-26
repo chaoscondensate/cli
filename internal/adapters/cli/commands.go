@@ -15,6 +15,7 @@ import (
 	"github.com/chaoscondensate/cli/internal/app"
 	"github.com/chaoscondensate/cli/internal/buildinfo"
 	"github.com/chaoscondensate/cli/internal/ledger"
+	"github.com/chaoscondensate/cli/internal/presentation"
 	"github.com/chaoscondensate/cli/internal/service"
 	"github.com/chaoscondensate/cli/internal/storage"
 	"github.com/chaoscondensate/cli/internal/timestamp/ots"
@@ -164,7 +165,7 @@ func initAction(ctx context.Context, command *urfavecli.Command) error {
 	case ledger.VisibilitySealed:
 		if command.String("input") != "-" {
 			if err := storage.CheckProtectedFile(command.String("input")); err != nil {
-				return err
+				return protectedArgumentError(err, "--input")
 			}
 		}
 		if strings.TrimSpace(keyPath) == "" {
@@ -405,6 +406,7 @@ func questionCommand() *urfavecli.Command {
 	list := leaf("list", "List questions", "forecast-ledger question list --file ledger.yaml", true, []urfavecli.Flag{fileFlag(true)})
 	list.Action = questionListAction
 	show := leaf("show", "Show a question", "forecast-ledger question show --file ledger.yaml --question q-launch", true, []urfavecli.Flag{fileFlag(true), questionFlag()})
+	show.Description += "\n\nNormal human and plain output includes public business fields and redacted forecast summaries."
 	show.Action = questionShowAction
 	resolve := leaf("resolve", "Resolve a question", "forecast-ledger question resolve --file ledger.yaml --question q-launch --input resolution.yaml --yes", false, []urfavecli.Flag{fileFlag(false), questionFlag(), inputFlag()})
 	resolve.Action = questionResolveAction
@@ -443,7 +445,7 @@ func questionAddAction(ctx context.Context, command *urfavecli.Command) error {
 	case ledger.VisibilitySealed:
 		if command.String("input") != "-" {
 			if err := storage.CheckProtectedFile(command.String("input")); err != nil {
-				return err
+				return protectedArgumentError(err, "--input")
 			}
 		}
 		if strings.TrimSpace(keyPath) == "" {
@@ -506,7 +508,7 @@ func questionListAction(ctx context.Context, command *urfavecli.Command) error {
 		if index > 0 {
 			lines.WriteByte('\n')
 		}
-		fmt.Fprintf(&lines, "%s\t%s\t%s\t%d\t%s", item.ID, item.Type, item.Status, item.ForecastCount, item.ExpectedResolutionAt)
+		fmt.Fprintf(&lines, "%s\t%s\t%s\t%s\t%d\t%s", item.ID, item.Title, item.Type, item.Status, item.ForecastCount, item.ExpectedResolutionAt)
 	}
 	message := lines.String()
 	if message == "" {
@@ -524,8 +526,12 @@ func questionShowAction(ctx context.Context, command *urfavecli.Command) error {
 	if err != nil {
 		return err
 	}
-	message := fmt.Sprintf("%s\t%s\t%s\t%d forecasts", result.ID, result.Type, result.Status, len(result.Forecasts))
-	return presenterFor(command).Success("question.show", message, map[string]any{"ledger_id": ledgerID, "question": result})
+	presenter := presenterFor(command)
+	message := "Question was found"
+	if presenter.Mode() != presentation.ModeJSON && presenter.Mode() != presentation.ModeQuiet {
+		message = formatQuestionView(presenter.Mode(), result)
+	}
+	return presenter.Success("question.show", message, map[string]any{"ledger_id": ledgerID, "question": result})
 }
 
 func questionResolveAction(ctx context.Context, command *urfavecli.Command) error {
@@ -596,6 +602,7 @@ func forecastCommand() *urfavecli.Command {
 	list := leaf("list", "List forecasts", "forecast-ledger forecast list --file ledger.yaml --question q-launch", true, []urfavecli.Flag{fileFlag(true), questionFlag()})
 	list.Action = forecastListAction
 	show := leaf("show", "Show a forecast", "forecast-ledger forecast show --file ledger.yaml --question q-launch --forecast f-001", true, []urfavecli.Flag{fileFlag(true), questionFlag(), forecastFlag()})
+	show.Description += "\n\nNormal human and plain output includes type-aware public values; sealed private fields stay redacted."
 	show.Action = forecastShowAction
 	seal := leaf("seal", "Create and append a sealed forecast", "forecast-ledger forecast seal --file ledger.yaml --question q-launch --forecast f-002 --input private.yaml --key-file secret.key", false, []urfavecli.Flag{fileFlag(false), questionFlag(), forecastFlag(), inputFlag(), secretOutputFlag()})
 	seal.Action = forecastSealAction
@@ -645,7 +652,7 @@ func forecastListAction(ctx context.Context, command *urfavecli.Command) error {
 		if index > 0 {
 			lines.WriteByte('\n')
 		}
-		fmt.Fprintf(&lines, "%s\t%s\t%s\t%s\t%s", item.ID, item.ForecastedAt, item.RecordedAt, item.Visibility, item.IntegrityStatus)
+		fmt.Fprintf(&lines, "%s\t%s\t%s\t%s\t%s\t%s", item.ID, item.ForecastedAt, item.RecordedAt, item.Visibility, item.IntegrityStatus, item.ValueSummary)
 	}
 	message := lines.String()
 	if message == "" {
@@ -663,8 +670,12 @@ func forecastShowAction(ctx context.Context, command *urfavecli.Command) error {
 	if err != nil {
 		return err
 	}
-	message := fmt.Sprintf("%s\t%s\t%s\t%s\t%s", result.Summary.ID, result.Summary.ForecastedAt, result.Summary.RecordedAt, result.Summary.Visibility, result.Summary.IntegrityStatus)
-	return presenterFor(command).Success("forecast.show", message, map[string]any{"ledger_id": ledgerID, "question_id": questionID, "forecast": result})
+	presenter := presenterFor(command)
+	message := "Forecast was found"
+	if presenter.Mode() != presentation.ModeJSON && presenter.Mode() != presentation.ModeQuiet {
+		message = formatForecastView(presenter.Mode(), result)
+	}
+	return presenter.Success("forecast.show", message, map[string]any{"ledger_id": ledgerID, "question_id": questionID, "forecast": result})
 }
 
 func forecastSealAction(ctx context.Context, command *urfavecli.Command) error {
@@ -755,10 +766,27 @@ func decodePrivateOperationInput(ctx context.Context, path string, stdin io.Read
 	}
 	data, err := storage.ReadProtectedFile(path, 8<<20)
 	if err != nil {
-		return err
+		return protectedArgumentError(err, "--input")
 	}
 	defer clear(data)
 	return service.DecodeOperationInput(ctx, "-", bytes.NewReader(data), schema, destination)
+}
+
+func protectedArgumentError(err error, argument string) error {
+	var applicationErr *app.Error
+	if !errors.As(err, &applicationErr) {
+		return err
+	}
+	message := applicationErr.Message
+	for _, phrase := range []string{"protected key file", "protected key path", "protected file"} {
+		message = strings.ReplaceAll(message, phrase, "protected "+argument+" file")
+	}
+	details := make(map[string]any, len(applicationErr.Details)+1)
+	for key, value := range applicationErr.Details {
+		details[key] = value
+	}
+	details["argument"] = argument
+	return app.WithDetails(app.NewError(applicationErr.Code, message, applicationErr.Cause), details)
 }
 
 func targetCommand() *urfavecli.Command {
@@ -946,6 +974,7 @@ func verifyCommand() *urfavecli.Command {
 		return ctx, nil
 	}
 	command.Action = verificationAction
+	command.Description += "\n\nNormal human and plain output includes the complete ordered evidence matrix."
 	return command
 }
 
@@ -964,7 +993,12 @@ func verificationAction(ctx context.Context, command *urfavecli.Command) error {
 	if err != nil {
 		return err
 	}
-	if err := presenterFor(command).Success("verification."+string(report.Overall), "Verification completed with status "+string(report.Overall), report); err != nil {
+	presenter := presenterFor(command)
+	message := "Verification completed with status " + string(report.Overall)
+	if presenter.Mode() != presentation.ModeJSON && presenter.Mode() != presentation.ModeQuiet {
+		message = formatVerificationReport(presenter.Mode(), report)
+	}
+	if err := presenter.Success("verification."+string(report.Overall), message, report); err != nil {
 		return err
 	}
 	if report.FailureCode != "" {
@@ -1026,7 +1060,12 @@ func publicationVerifyAction(ctx context.Context, command *urfavecli.Command) er
 	if err != nil {
 		return err
 	}
-	if err := presenterFor(command).Success("publication.verification."+string(result.Overall), "Package verification completed with status "+string(result.Overall), result); err != nil {
+	presenter := presenterFor(command)
+	message := "Package verification completed with status " + string(result.Overall)
+	if presenter.Mode() != presentation.ModeJSON && presenter.Mode() != presentation.ModeQuiet {
+		message = formatPublicationVerification(presenter.Mode(), result)
+	}
+	if err := presenter.Success("publication.verification."+string(result.Overall), message, result); err != nil {
 		return err
 	}
 	if result.FailureCode != "" {
@@ -1046,6 +1085,7 @@ func mcpCommand() *urfavecli.Command {
 		&urfavecli.IntFlag{Name: "max-concurrent", Value: 16, Usage: "Maximum concurrent MCP tool calls (1-256)"},
 		&urfavecli.IntFlag{Name: "max-tool-bytes", Value: 8 << 20, Usage: "Maximum decoded tool argument bytes"},
 	})
+	serve.Description += "\n\nRead-only mode omits mutating tools from discovery; direct calls to omitted names return unknown-tool."
 	serve.Action = mcpServeAction
 	return group("mcp", "Run the MCP adapter", serve)
 }
@@ -1085,6 +1125,155 @@ func versionCommand() *urfavecli.Command {
 		}}
 }
 
+func formatQuestionView(mode presentation.Mode, view service.QuestionView) string {
+	fields := [][2]string{
+		{"id", string(view.ID)}, {"title", view.Title}, {"type", string(view.Type)}, {"status", string(view.Status)},
+		{"resolution_criteria", view.ResolutionCriteria}, {"created_at", string(view.CreatedAt)},
+		{"forecast_window", compactPublicJSON(view.ForecastWindow)}, {"expected_resolution_at", string(view.ExpectedResolutionAt)},
+	}
+	if view.Options != nil {
+		fields = append(fields, [2]string{"options", compactPublicJSON(*view.Options)})
+	}
+	if view.Unit != nil {
+		fields = append(fields, [2]string{"unit", compactPublicJSON(view.Unit)})
+	}
+	if view.PlatformRefs != nil {
+		fields = append(fields, [2]string{"platform_refs", compactPublicJSON(*view.PlatformRefs)})
+	}
+	if view.Tags != nil {
+		fields = append(fields, [2]string{"tags", compactPublicJSON(*view.Tags)})
+	}
+	if view.Notes != nil {
+		fields = append(fields, [2]string{"notes", *view.Notes})
+	}
+	if view.Resolution != nil {
+		fields = append(fields, [2]string{"resolution", compactPublicJSON(view.Resolution)})
+	}
+	var output strings.Builder
+	writeDisplayFields(&output, mode, fields)
+	for _, forecast := range view.Forecasts {
+		if output.Len() > 0 {
+			output.WriteByte('\n')
+		}
+		if mode == presentation.ModePlain {
+			fmt.Fprintf(&output, "forecast\t%s\t%s\t%s\t%s", forecast.Summary.ID, forecast.Summary.Visibility, forecast.Summary.IntegrityStatus, forecast.Summary.ValueSummary)
+		} else {
+			fmt.Fprintf(&output, "Forecast: %s (%s, %s)", forecast.Summary.ID, forecast.Summary.Visibility, forecast.Summary.IntegrityStatus)
+			if forecast.Summary.ValueSummary != "" {
+				fmt.Fprintf(&output, "\n  Value: %s", forecast.Summary.ValueSummary)
+			}
+		}
+	}
+	return output.String()
+}
+
+func formatForecastView(mode presentation.Mode, view service.ForecastView) string {
+	fields := [][2]string{
+		{"id", string(view.Summary.ID)}, {"forecasted_at", string(view.Summary.ForecastedAt)}, {"recorded_at", string(view.Summary.RecordedAt)},
+		{"visibility", string(view.Summary.Visibility)}, {"integrity_status", string(view.Summary.IntegrityStatus)},
+	}
+	if view.Value != nil {
+		fields = append(fields, [2]string{"value", compactPublicJSON(view.Value)})
+	}
+	if view.Rationale != nil {
+		fields = append(fields, [2]string{"rationale", *view.Rationale})
+	}
+	if view.KeyFactors != nil {
+		fields = append(fields, [2]string{"key_factors", compactPublicJSON(*view.KeyFactors)})
+	}
+	if view.Comment != nil {
+		fields = append(fields, [2]string{"comment", *view.Comment})
+	}
+	if view.PublicNote != nil {
+		fields = append(fields, [2]string{"public_note", *view.PublicNote})
+	}
+	if view.Summary.SupersedesForecastID != nil {
+		fields = append(fields, [2]string{"supersedes_forecast_id", string(*view.Summary.SupersedesForecastID)})
+	}
+	if view.Commitment != nil {
+		fields = append(fields, [2]string{"commitment", compactPublicJSON(view.Commitment)})
+	}
+	var output strings.Builder
+	writeDisplayFields(&output, mode, fields)
+	return output.String()
+}
+
+func formatVerificationReport(mode presentation.Mode, report service.VerificationReport) string {
+	var output strings.Builder
+	if mode == presentation.ModePlain {
+		fmt.Fprintf(&output, "overall\t%s\ndocument\t%s", report.Overall, report.Document.State)
+		for _, forecast := range report.Forecasts {
+			for _, layer := range forecast.Layers {
+				fmt.Fprintf(&output, "\n%s\t%s\t%s\t%s", forecast.QuestionID, forecast.ForecastID, layer.Name, layer.State)
+			}
+		}
+		return output.String()
+	}
+	fmt.Fprintf(&output, "Overall: %s\nDocument: %s", report.Overall, report.Document.State)
+	for _, forecast := range report.Forecasts {
+		fmt.Fprintf(&output, "\nForecast: %s / %s", forecast.QuestionID, forecast.ForecastID)
+		for _, layer := range forecast.Layers {
+			fmt.Fprintf(&output, "\n  %s: %s", layer.Name, layer.State)
+			if len(layer.ReasonCodes) > 0 {
+				fmt.Fprintf(&output, " (%s)", strings.Join(layer.ReasonCodes, ", "))
+			}
+		}
+	}
+	return output.String()
+}
+
+func formatPublicationVerification(mode presentation.Mode, result service.PublicationVerifyResult) string {
+	var output strings.Builder
+	if mode == presentation.ModePlain {
+		fmt.Fprintf(&output, "overall\t%s\nmanifest\t%s\nfiles\t%d\nbytes\t%d", result.Overall, result.ManifestSHA256, result.FileCount, result.TotalBytes)
+		for _, file := range result.Files {
+			fmt.Fprintf(&output, "\nfile\t%s\t%s\t%d\t%s", file.Role, file.Path, file.Size, file.SHA256)
+		}
+		for _, forecast := range result.Evidence {
+			for _, layer := range forecast.Layers {
+				fmt.Fprintf(&output, "\n%s\t%s\t%s\t%s", forecast.QuestionID, forecast.ForecastID, layer.Name, layer.State)
+			}
+		}
+		return output.String()
+	}
+	fmt.Fprintf(&output, "Overall: %s\nManifest SHA-256: %s\nFiles: %d\nBytes: %d", result.Overall, result.ManifestSHA256, result.FileCount, result.TotalBytes)
+	for _, file := range result.Files {
+		fmt.Fprintf(&output, "\nFile: %s (%s, %d bytes, %s)", file.Path, file.Role, file.Size, file.SHA256)
+	}
+	for _, forecast := range result.Evidence {
+		fmt.Fprintf(&output, "\nForecast: %s / %s", forecast.QuestionID, forecast.ForecastID)
+		for _, layer := range forecast.Layers {
+			fmt.Fprintf(&output, "\n  %s: %s", layer.Name, layer.State)
+			if len(layer.ReasonCodes) > 0 {
+				fmt.Fprintf(&output, " (%s)", strings.Join(layer.ReasonCodes, ", "))
+			}
+		}
+	}
+	return output.String()
+}
+
+func writeDisplayFields(output *strings.Builder, mode presentation.Mode, fields [][2]string) {
+	for index, field := range fields {
+		if index > 0 {
+			output.WriteByte('\n')
+		}
+		if mode == presentation.ModePlain {
+			fmt.Fprintf(output, "%s\t%s", field[0], field[1])
+		} else {
+			label := strings.ReplaceAll(field[0], "_", " ")
+			fmt.Fprintf(output, "%s: %s", strings.ToUpper(label[:1])+label[1:], field[1])
+		}
+	}
+}
+
+func compactPublicJSON(value any) string {
+	encoded, err := json.Marshal(presentation.Redact(value))
+	if err != nil {
+		return ""
+	}
+	return string(encoded)
+}
+
 func group(name, usage string, children ...*urfavecli.Command) *urfavecli.Command {
 	return &urfavecli.Command{Name: name, Usage: usage, Commands: children, Action: func(ctx context.Context, command *urfavecli.Command) error {
 		if command.NArg() > 0 {
@@ -1105,7 +1294,7 @@ func leaf(name, usage, example string, readOnly bool, flags []urfavecli.Flag) *u
 func fileFlag(allowStdin bool) *urfavecli.StringFlag {
 	usage := "Ledger file path"
 	if allowStdin {
-		usage += "; use - for stdin"
+		usage += "; use - for ledger bytes on stdin (sibling artifacts are unavailable)"
 	}
 	return &urfavecli.StringFlag{Name: "file", Aliases: []string{"f"}, Required: true, OnlyOnce: true, TakesFile: true, Usage: usage,
 		Validator: func(value string) error {

@@ -92,7 +92,7 @@ func UpdateLedger(ctx context.Context, ledgerPath string, options TransactionOpt
 	}
 	if options.Validate != nil {
 		if err := options.Validate(parsed); err != nil {
-			return app.NewError(app.CodeInvalidData, "ledger failed pre-mutation validation", err)
+			return validationFailure("ledger failed pre-mutation validation", err)
 		}
 	}
 	if options.Mutate == nil {
@@ -111,7 +111,7 @@ func UpdateLedger(ctx context.Context, ledgerPath string, options TransactionOpt
 	}
 	if options.Validate != nil {
 		if err := options.Validate(post); err != nil {
-			return app.NewError(app.CodeInvalidData, "ledger failed post-mutation validation", err)
+			return validationFailure("ledger failed post-mutation validation", err)
 		}
 	}
 	if err := contextError(ctx); err != nil {
@@ -180,6 +180,15 @@ func UpdateLedger(ctx context.Context, ledgerPath string, options TransactionOpt
 		return err
 	}
 	return nil
+}
+
+func validationFailure(message string, cause error) error {
+	wrapped := app.NewError(app.CodeInvalidData, message, cause)
+	var applicationErr *app.Error
+	if errors.As(cause, &applicationErr) && len(applicationErr.Details) > 0 {
+		return app.WithDetails(wrapped, applicationErr.Details)
+	}
+	return wrapped
 }
 
 // RecoverLedger completes a journaled replacement only when the original or

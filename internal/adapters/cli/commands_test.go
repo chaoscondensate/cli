@@ -11,11 +11,23 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/chaoscondensate/cli/internal/app"
 	"github.com/chaoscondensate/cli/internal/buildinfo"
 	contractschema "github.com/chaoscondensate/cli/internal/schema"
 	"github.com/chaoscondensate/cli/internal/storage"
 	urfavecli "github.com/urfave/cli/v3"
 )
+
+func TestProtectedArgumentErrorLabelsSelectedRole(t *testing.T) {
+	inputErr := protectedArgumentError(app.NewError(app.CodeConflict, "protected key file must have mode 0600", nil), "--input")
+	if !strings.Contains(inputErr.Error(), "--input") || strings.Contains(inputErr.Error(), "key file") {
+		t.Fatalf("input error = %q", inputErr)
+	}
+	keyErr := app.NewError(app.CodeConflict, "protected key file must have mode 0600", nil)
+	if !strings.Contains(keyErr.Error(), "key file") || strings.Contains(keyErr.Error(), "--input") {
+		t.Fatalf("key error = %q", keyErr)
+	}
+}
 
 func TestCommandTreeAndLeafLocalFileFlags(t *testing.T) {
 	root := NewCommand(strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{})
@@ -289,7 +301,7 @@ func TestQuestionAuthoringAndLifecycleCommands(t *testing.T) {
 		t.Fatalf("question add code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	code, stdout, stderr = runCLI("forecast-ledger", "question", "list", "--file", path)
-	if code != 0 || stderr != "" || !strings.Contains(stdout, "q-new\tbinary\topen\t1") {
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "q-new\tWill the new event happen?\tbinary\topen\t1") {
 		t.Fatalf("question list code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	updated, err := os.ReadFile(path)
@@ -386,6 +398,14 @@ func TestForecastSealRevealAndKeyHintCommands(t *testing.T) {
 	ledgerBytes, _ := os.ReadFile(path)
 	if strings.Contains(string(ledgerBytes), canary) {
 		t.Fatal("sealed forecast plaintext leaked into ledger")
+	}
+	code, stdout, stderr = runCLI("forecast-ledger", "forecast", "show", "--file", path, "--question", "q-election-coalition", "--forecast", "f-election-coalition-002")
+	if code != 0 || stderr != "" || strings.Contains(stdout, canary) || !strings.Contains(stdout, "visibility\tsealed") || !strings.Contains(stdout, "integrity_status\tunanchored") || strings.Contains(stdout, "probability_bp") {
+		t.Fatalf("sealed forecast show code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	code, stdout, stderr = runCLI("forecast-ledger", "question", "show", "--file", path, "--question", "q-election-coalition")
+	if code != 0 || stderr != "" || strings.Contains(stdout, canary) || !strings.Contains(stdout, "title\tWhich coalition will form the next government?") || !strings.Contains(stdout, "forecast\tf-election-coalition-002\tsealed\tunanchored") {
+		t.Fatalf("question show code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	code, _, stderr = runCLI("forecast-ledger", "forecast", "reveal", "--file", path, "--question", "q-election-coalition", "--forecast", "f-election-coalition-002", "--key-file", keyPath)
 	if code != 2 || !strings.Contains(stderr, "use --yes") {

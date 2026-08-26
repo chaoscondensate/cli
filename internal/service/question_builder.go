@@ -354,7 +354,7 @@ func ValidateProspectiveLedgerModel(model *ledger.Ledger) error {
 		return app.NewError(app.CodeInvalidData, "prospective ledger cannot be parsed", err)
 	}
 	if err := ValidateLedgerDocument(parsed, nil); err != nil {
-		return app.NewError(app.CodeInvalidData, "prospective ledger is not valid", err)
+		return preserveValidationDetails(app.CodeInvalidData, "prospective ledger is not valid", err)
 	}
 	return nil
 }

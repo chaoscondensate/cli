@@ -13,7 +13,8 @@ next: generated/index.md
 Every ledger leaf defines its own required `--file/-f`; groups do not own that
 flag. Read-only `validate`, `status`, `platform list|show`, `question list|show`,
 and `forecast list|show` accept `--file -`. Artifact, timestamp, verification,
-publication, mutation, and MCP operations require real paths.
+publication, mutation, and MCP operations require real paths. Stdin provides
+only ledger bytes and cannot resolve sibling target or receipt paths.
 
 ## Command surface
 
@@ -52,10 +53,17 @@ Global result modes are normal human output, `--json`, `--plain`, or `--quiet`.
 The last three are mutually exclusive. `--no-color` and `TERM=dumb` disable
 decoration. `--timeout` bounds network/wait operations.
 
+Question and forecast show output includes business fields and type-aware public
+values in normal human and plain modes. Layered verification prints its complete
+ordered evidence matrix without requiring `--verbose`. Quote RFC 3339 values in
+maintained YAML input, such as `recorded_at: "2026-09-01T09:01:00Z"`.
+
 `mcp serve` also accepts repeatable named `--output-root` and `--secret-root`,
 whole-server `--read-only` and `--offline`, default-off `--allow-reveal`, and
 bounded `--max-concurrent` and `--max-tool-bytes` limits. It has no general
 write or network grant flags.
+Read-only startup omits every mutating tool from discovery; calling an omitted
+name returns the MCP unknown-tool protocol response.
 
 ## Stable exits
 

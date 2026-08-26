@@ -43,7 +43,7 @@ Update only the allowed fields with a closed patch:
 ```yaml
 status: closed
 forecast_window:
-  closes_at: 2026-10-01T22:00:00+01:00
+  closes_at: "2026-10-01T22:00:00+01:00"
 notes: Ready for resolution review.
 ```
 
@@ -69,7 +69,10 @@ forecast-ledger question show --file ledger.yaml --question q-launch
 
 Both accept `--file -`. Show returns public question metadata, the current
 resolution, and redacted forecast summaries. It never decrypts a sealed
-forecast or prints a revealed key.
+forecast or prints a revealed key. Normal human and plain output includes the
+question's title, type, lifecycle, resolution rules and times, type-specific
+options or unit, and its forecast summaries. Stdin supplies only ledger bytes,
+so these reads do not resolve sibling evidence artifacts.
 
 Resolution is an explicit, approved claim. First set an unresolved question to
 `closed` or `awaiting_resolution`, then provide an outcome and at least one

@@ -8,8 +8,10 @@ DESCRIPTION:
    Example:
      forecast-ledger forecast show --file ledger.yaml --question q-launch --forecast f-001
 
+   Normal human and plain output includes type-aware public values; sealed private fields stay redacted.
+
 OPTIONS:
-   --file string, -f string  Ledger file path; use - for stdin
+   --file string, -f string  Ledger file path; use - for ledger bytes on stdin (sibling artifacts are unavailable)
    --question string         Stable question ID
    --forecast string         Stable forecast ID
    --help, -h                show help

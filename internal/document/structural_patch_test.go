@@ -1,6 +1,7 @@
 package document
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -72,5 +73,84 @@ func TestApplyPatchCanAddRemoveOptionalFieldsAndReplaceSubtrees(t *testing.T) {
 	output := string(got)
 	if !strings.Contains(output, "  keep: yes\n") || strings.Contains(output, "remove:") || !strings.Contains(output, "added: new") || !strings.Contains(output, `"new":"value"`) {
 		t.Fatalf("unexpected patched YAML:\n%s", output)
+	}
+}
+
+func TestApplyPatchKeepsLargeExpandedYAMLLedgerReviewable(t *testing.T) {
+	input := "# keep this review note\nquestions:\n  - id: q-one\n    forecasts:\n      - id: f-000\n        value:\n          kind: binary\n          probability_bp: 5000\n"
+	doc, err := ParseYAML(strings.NewReader(input), DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	operations := make([]PatchOperation, 0, 30)
+	for index := 1; index <= 30; index++ {
+		operations = append(operations, PatchOperation{Kind: PatchAdd, Pointer: "/questions/0/forecasts/-", Value: map[string]any{
+			"id":          fmt.Sprintf("f-%03d", index),
+			"value":       map[string]any{"kind": "binary", "probability_bp": 5000 + index},
+			"key_factors": []string{"first factor", "second factor"},
+		}})
+	}
+	got, err := ApplyPatch(doc, operations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(got)
+	if !strings.Contains(output, "# keep this review note\n") || strings.Contains(output, `{"id"`) {
+		t.Fatalf("expanded YAML was collapsed into JSON fragments:\n%s", output)
+	}
+	for lineNumber, line := range strings.Split(output, "\n") {
+		if len(line) > 200 {
+			t.Fatalf("line %d has %d bytes; document is not reviewable", lineNumber+1, len(line))
+		}
+	}
+}
+
+func TestApplyPatchIndentsNewFragmentsInPrettyJSON(t *testing.T) {
+	input := "{\n  \"questions\": [\n    {\n      \"id\": \"q-one\",\n      \"forecasts\": [\n        {\n          \"id\": \"f-zero\"\n        }\n      ]\n    }\n  ],\n  \"untouched\": { \"spacing\" : true }\n}\n"
+	doc, err := ParseJSON(strings.NewReader(input), DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := ApplyPatch(doc, []PatchOperation{{Kind: PatchAdd, Pointer: "/questions/0/forecasts/-", Value: map[string]any{
+		"id": "f-one", "value": map[string]any{"kind": "binary", "probability_bp": 5000},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(got)
+	if strings.Contains(output, `{"id":"f-one"`) || !strings.Contains(output, "        \"id\": \"f-one\"") || !strings.Contains(output, `"untouched": { "spacing" : true }`) {
+		t.Fatalf("pretty JSON fragment or untouched bytes changed:\n%s", output)
+	}
+	if strings.Contains(output, "      }      ]") || !strings.Contains(output, "\n      ]") {
+		t.Fatalf("closing array delimiter did not remain expanded:\n%s", output)
+	}
+}
+
+func TestApplyPatchKeepsRepeatedJSONAdditionsExpanded(t *testing.T) {
+	input := "{\n  \"forecasts\": [\n    {\n      \"id\": \"f-zero\"\n    }\n  ]\n}\n"
+	doc, err := ParseJSON(strings.NewReader(input), DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	operations := make([]PatchOperation, 0, 30)
+	for index := 1; index <= 30; index++ {
+		operations = append(operations, PatchOperation{Kind: PatchAdd, Pointer: "/forecasts/-", Value: map[string]any{
+			"id": fmt.Sprintf("f-%03d", index), "value": map[string]any{"kind": "binary", "probability_bp": 5000 + index},
+		}})
+	}
+	got, err := ApplyPatch(doc, operations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for lineNumber, line := range strings.Split(string(got), "\n") {
+		if len(line) > 200 {
+			t.Fatalf("line %d has %d bytes; repeated JSON additions collapsed", lineNumber+1, len(line))
+		}
+	}
+	if count := strings.Count(string(got), `"id":`); count != 31 {
+		t.Fatalf("got %d forecast IDs, want 31", count)
+	}
+	if strings.Contains(string(got), "\n,\n") {
+		t.Fatalf("repeated additions put commas on separate lines:\n%s", got)
 	}
 }

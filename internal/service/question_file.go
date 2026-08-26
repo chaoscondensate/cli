@@ -62,6 +62,9 @@ func PlanQuestionAddSealedFile(ctx context.Context, path, keyPath string, input 
 	if err != nil {
 		return QuestionFileResult{}, err
 	}
+	if err := validateProspectiveFileMutation(loaded, mutation.Patches); err != nil {
+		return QuestionFileResult{}, err
+	}
 	result, err := buildQuestionFileResult(loaded.Document, loaded.Model, input.ID, mutation)
 	if err != nil {
 		return QuestionFileResult{}, err
@@ -218,6 +221,9 @@ func planQuestionMutation(ctx context.Context, path string, id ledger.Slug, buil
 		return QuestionFileResult{}, err
 	}
 	if err := rejectExistingQuestionTargets(loaded.Path, id, mutation); err != nil {
+		return QuestionFileResult{}, err
+	}
+	if err := validateProspectiveFileMutation(loaded, mutation.Patches); err != nil {
 		return QuestionFileResult{}, err
 	}
 	return buildQuestionFileResult(loaded.Document, loaded.Model, id, mutation)

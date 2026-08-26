@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 
@@ -21,6 +22,7 @@ type ForecastSummary struct {
 	Visibility           ledger.ForecastVisibility `json:"visibility"`
 	SupersedesForecastID *ledger.Slug              `json:"supersedes_forecast_id,omitempty"`
 	IntegrityStatus      ledger.IntegrityStatus    `json:"integrity_status"`
+	ValueSummary         string                    `json:"value_summary,omitempty"`
 }
 
 type CommitmentView struct {
@@ -194,7 +196,19 @@ func summarizeForecast(forecast ledger.Forecast) ForecastSummary {
 	return ForecastSummary{
 		ID: forecast.ID, ForecastedAt: forecast.ForecastedAt, RecordedAt: forecast.RecordedAt,
 		Visibility: forecast.Visibility, SupersedesForecastID: cloneSlug(forecast.SupersedesForecastID), IntegrityStatus: integrityStatus(forecast.Integrity),
+		ValueSummary: forecastValueSummary(forecast.Value),
 	}
+}
+
+func forecastValueSummary(value *ledger.ForecastValue) string {
+	if value == nil {
+		return ""
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return ""
+	}
+	return string(encoded)
 }
 
 func integrityStatus(value ledger.Integrity) ledger.IntegrityStatus {

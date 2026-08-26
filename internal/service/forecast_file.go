@@ -37,6 +37,9 @@ func PlanPublicForecastAddFile(ctx context.Context, path string, questionID, for
 	if err != nil {
 		return ForecastFileResult{}, err
 	}
+	if err := validateProspectiveFileMutation(loaded, mutation.Patches); err != nil {
+		return ForecastFileResult{}, err
+	}
 	return buildForecastMutationFileResult(loaded.Document, loaded.Model, questionID, forecastID, mutation)
 }
 

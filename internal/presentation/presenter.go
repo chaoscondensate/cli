@@ -193,6 +193,17 @@ func redact(value reflect.Value, key string) any {
 	if !value.IsValid() {
 		return nil
 	}
+	if value.CanInterface() {
+		if marshaler, ok := value.Interface().(json.Marshaler); ok {
+			encoded, err := marshaler.MarshalJSON()
+			if err == nil {
+				var public any
+				if json.Unmarshal(encoded, &public) == nil {
+					return redact(reflect.ValueOf(public), key)
+				}
+			}
+		}
+	}
 	if value.Kind() == reflect.Interface || value.Kind() == reflect.Pointer {
 		if value.IsNil() {
 			return nil

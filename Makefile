@@ -1,10 +1,13 @@
-.PHONY: build test license-check release-check release-snapshot
+.PHONY: build test dogfood license-check release-check release-snapshot
 
 build:
 	sh scripts/build.sh
 
 test:
 	go test ./...
+
+dogfood: build
+	bash scripts/dogfood.sh dist/forecast-ledger
 
 license-check:
 	reuse lint

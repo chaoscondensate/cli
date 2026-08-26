@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/chaoscondensate/cli/internal/app"
+	"github.com/chaoscondensate/cli/internal/document"
 	"github.com/chaoscondensate/cli/internal/ledger"
 	ledgerschema "github.com/chaoscondensate/cli/internal/schema"
 )
@@ -246,7 +247,17 @@ func validateAbsoluteURI(value, field string) error {
 func emptyOptional(value *string) bool { return value == nil || strings.TrimSpace(*value) == "" }
 
 func invalidField(field, message string) error {
-	return app.WithDetails(app.NewError(app.CodeInvalidData, message, nil), map[string]any{"field": field})
+	pointer := ""
+	for _, token := range strings.Split(field, ".") {
+		pointer += "/" + strings.ReplaceAll(strings.ReplaceAll(token, "~", "~0"), "/", "~1")
+	}
+	issue := document.Diagnostic{
+		Code: "semantic.invalid_field", Message: message,
+		Location: document.SourceRef{Pointer: pointer},
+	}
+	return app.WithDetails(app.NewError(app.CodeInvalidData, message, nil), map[string]any{
+		"field": field, "issues": []document.Diagnostic{issue},
+	})
 }
 
 func cloneString(value *string) *string {

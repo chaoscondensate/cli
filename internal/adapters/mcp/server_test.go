@@ -50,6 +50,18 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 				t.Errorf("tool %s exposes forbidden MCP endpoint input %q", tool.Name, forbidden)
 			}
 		}
+		definition, ok := operationDefinitionByTool(tool.Name)
+		if !ok {
+			t.Errorf("tool %s has no operation definition", tool.Name)
+		} else {
+			expectedEffect := "effect=read-only"
+			if definition.Policy.PersistentEffect {
+				expectedEffect = "effect=mutating"
+			}
+			if !strings.Contains(tool.Description, expectedEffect) || !strings.Contains(tool.Description, "server_access=read-write") {
+				t.Errorf("tool %s description does not separate effect and server mode: %q", tool.Name, tool.Description)
+			}
+		}
 	}
 	sort.Strings(names)
 	if containsName(names, "forecast_reveal") {
@@ -127,6 +139,14 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	if !escape.IsError {
 		t.Fatal("root traversal was accepted")
 	}
+	missingRoot, err := client.CallTool(ctx, &sdk.CallToolParams{Name: "ledger_validate", Arguments: map[string]any{"file": "missing:ledger.json"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	missingRootText := toolText(missingRoot)
+	if !missingRoot.IsError || !strings.Contains(missingRootText, `"root":"missing"`) || !strings.Contains(missingRootText, `"class":"ledger"`) || strings.Contains(missingRootText, ledgerRoot) {
+		t.Fatalf("root diagnostic is not safe: %s", missingRootText)
+	}
 
 	templates, err := client.ListResourceTemplates(ctx, nil)
 	if err != nil || len(templates.ResourceTemplates) != 1 {
@@ -188,16 +208,16 @@ func TestMCPRevealDiscoveryReadOnlyOfflineAndRootValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, tool := range readOnlyTools.Tools {
-		if tool.Name == "forecast_seal" || tool.Name == "forecast_reveal" || strings.HasPrefix(tool.Name, "publication_") {
-			t.Fatalf("tool %s discovered without its required startup root/capability", tool.Name)
+		definition, ok := operationDefinitionByTool(tool.Name)
+		if !ok || definition.Policy.PersistentEffect {
+			t.Fatalf("mutating or unknown tool %s discovered in read-only mode", tool.Name)
+		}
+		if !strings.Contains(tool.Description, "effect=read-only") || !strings.Contains(tool.Description, "server_access=read-only") {
+			t.Fatalf("read-only tool description is ambiguous: %q", tool.Description)
 		}
 	}
-	result, err := client2.CallTool(ctx, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{"file": "main:missing.json", "platform": "x", "input": map[string]any{"name": "X", "kind": "informal"}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !result.IsError || !strings.Contains(toolText(result), "read-only") {
-		t.Fatalf("read-only mutation did not fail before file access: %s", toolText(result))
+	if _, err := client2.CallTool(ctx, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{"file": "main:missing.json", "platform": "x", "input": map[string]any{"name": "X", "kind": "informal"}}}); err == nil {
+		t.Fatal("read-only mutation direct call did not return unknown-tool protocol error")
 	}
 
 	limited, err := New(Config{LedgerRoots: []string{"main=" + ledgerRoot}, MaxConcurrent: 1, MaxToolBytes: 1024})
@@ -304,6 +324,15 @@ func containsName(values []string, wanted string) bool {
 		}
 	}
 	return false
+}
+
+func operationDefinitionByTool(name string) (service.OperationDefinition, bool) {
+	for _, definition := range service.OperationDefinitions() {
+		if definition.MCPTool == name {
+			return definition, true
+		}
+	}
+	return service.OperationDefinition{}, false
 }
 
 func toolText(result *sdk.CallToolResult) string {

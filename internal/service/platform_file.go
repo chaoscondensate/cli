@@ -56,6 +56,13 @@ func planPlatformMutation(ctx context.Context, path string, id ledger.Slug, buil
 	if err != nil {
 		return PlatformFileResult{}, err
 	}
+	mutation, err := builder(loaded.Model)
+	if err != nil {
+		return PlatformFileResult{}, err
+	}
+	if err := validateProspectiveFileMutation(loaded, mutation.Patches); err != nil {
+		return PlatformFileResult{}, err
+	}
 	return buildPlatformFileResult(loaded.Document, loaded.Model, id, builder)
 }
 

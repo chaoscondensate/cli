@@ -17,8 +17,8 @@ ledger and question; forecast IDs must be unique across the entire ledger.
 Create `forecast.yaml` with a value that matches the question type:
 
 ```yaml
-forecasted_at: 2026-09-01T09:00:00+01:00
-recorded_at: 2026-09-01T09:01:00+01:00
+forecasted_at: "2026-09-01T09:00:00+01:00"
+recorded_at: "2026-09-01T09:01:00+01:00"
 value:
   kind: binary
   probability_bp: 6500
@@ -64,6 +64,13 @@ forecast-ledger forecast show \
 
 Both read commands accept `--file -`. They do not contact the network or change
 integrity data. A sealed forecast is shown only as a redacted summary, and a
-revealed forecast never prints its stored revealed key.
+revealed forecast never prints its stored revealed key. Normal human and plain
+list rows include a type-aware public value summary; show includes all public
+business fields. Because stdin contains only ledger bytes, these commands do
+not resolve or check sibling target and receipt files.
+
+Quote timestamps in maintained YAML input as shown above. The CLI also accepts
+a YAML timestamp scalar in a known timestamp field, but rejects that implicit
+type in ordinary text fields.
 
 [How-to index](index.md) · [Documentation index](../index.md)

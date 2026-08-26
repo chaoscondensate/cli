@@ -215,7 +215,9 @@ forecast-ledger verify --file ledger.yaml
 ```
 
 Verification reports content binding, existence timing, reveal authentication,
-and outcome evidence separately. See [Verify evidence](docs/how-to/verify-evidence.md).
+and outcome evidence separately. Normal human and `--plain` output include the
+complete ordered layer matrix; `--json` adds the same matrix as stable data. See
+[Verify evidence](docs/how-to/verify-evidence.md).
 
 Build a standalone package without Git or a hosted service, then verify its
 manifest and evidence offline:
@@ -228,7 +230,9 @@ forecast-ledger publish verify \
 ```
 
 Use `--online` on `publish verify` only when you want fresh Bitcoin-source
-checks. See [Build and verify publication packages](docs/how-to/publish-evidence.md).
+checks. Publication follows evidence paths recorded in the selected ledger. A
+standalone target merely sitting beside the ledger is not packaged until the
+ledger references it. See [Build and verify publication packages](docs/how-to/publish-evidence.md).
 
 Run the local MCP stdio adapter with explicit named roots:
 
@@ -240,8 +244,10 @@ forecast-ledger mcp serve \
 ```
 
 The default MCP server is read-write and online within those roots. Use
-`--read-only` or `--offline` to limit the whole server. Reveal remains absent
-unless `--allow-reveal` is explicitly set. See [Run the MCP server](docs/how-to/run-mcp.md).
+`--read-only` or `--offline` to limit the whole server. In read-only mode,
+mutating tools are omitted from discovery and direct calls to their names are
+unknown-tool errors. Reveal remains absent unless `--allow-reveal` is explicitly
+set. See [Run the MCP server](docs/how-to/run-mcp.md).
 
 Validate a local JSON or YAML ledger without network access:
 
@@ -260,6 +266,13 @@ Read-only commands that support stdin accept `--file -`:
 ```sh
 forecast-ledger validate --file - < ledger.json
 ```
+
+Stdin contains only ledger bytes, so it cannot resolve sibling targets or
+receipts. Commands that inspect or mutate evidence therefore require a real
+`--file` path. In YAML input, quote RFC 3339 timestamps, for example
+`forecasted_at: "2026-09-01T09:00:00Z"`; this keeps examples portable across
+YAML parsers even though the CLI safely normalizes timestamp-tagged scalars in
+known timestamp fields.
 
 Use stable JSON output in scripts:
 

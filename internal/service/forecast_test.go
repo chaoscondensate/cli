@@ -101,7 +101,7 @@ func TestForecastFileMutationIsMinimalAndStdinReadsWork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains(updated, []byte(`"id":"f-election-coalition-002"`)) {
+	if !bytes.Contains(updated, []byte(`"id": "f-election-coalition-002"`)) {
 		t.Fatal("appended forecast is missing")
 	}
 	ledgerID, items, err := LoadForecastList(context.Background(), "-", bytes.NewReader(updated), "q-election-coalition")

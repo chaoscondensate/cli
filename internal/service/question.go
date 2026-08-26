@@ -30,6 +30,7 @@ type IntegrityCounts struct {
 
 type QuestionSummary struct {
 	ID                   ledger.Slug           `json:"id"`
+	Title                string                `json:"title"`
 	Type                 ledger.QuestionType   `json:"type"`
 	Status               ledger.QuestionStatus `json:"status"`
 	ForecastWindow       ledger.ForecastWindow `json:"forecast_window"`
@@ -337,7 +338,7 @@ func buildQuestionTerminalMutation(model *ledger.Ledger, position int, question 
 }
 
 func summarizeQuestion(question ledger.Question) QuestionSummary {
-	result := QuestionSummary{ID: question.ID, Type: question.Type, Status: question.Status, ForecastWindow: question.ForecastWindow, ExpectedResolutionAt: question.ExpectedResolutionAt, ForecastCount: len(question.Forecasts)}
+	result := QuestionSummary{ID: question.ID, Title: question.Title, Type: question.Type, Status: question.Status, ForecastWindow: question.ForecastWindow, ExpectedResolutionAt: question.ExpectedResolutionAt, ForecastCount: len(question.Forecasts)}
 	for _, forecast := range question.Forecasts {
 		switch integrityStatus(forecast.Integrity) {
 		case ledger.IntegrityUnanchored:

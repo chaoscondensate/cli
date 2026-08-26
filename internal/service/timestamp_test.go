@@ -78,6 +78,94 @@ func TestTimestampStampPendingStatusAndRetry(t *testing.T) {
 	}
 }
 
+func TestAuthoringLifecyclePreservesRetainedTimestampEvidence(t *testing.T) {
+	raw, err := fs.ReadFile(contractschema.Conformance(), "individual-ledger.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := t.TempDir()
+	ledgerPath := filepath.Join(directory, "ledger.json")
+	if err := os.WriteFile(ledgerPath, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	transport := timestampRoundTripper(func(request *http.Request) (*http.Response, error) {
+		identity := "https://alice.btc.calendar.opentimestamps.org"
+		if strings.Contains(request.URL.Host, "b.pool") {
+			identity = "https://bob.btc.calendar.opentimestamps.org"
+		}
+		branch, serializeErr := ots.SerializeCalendarResponse([]ots.Sequence{{{Attestation: &ots.Attestation{Kind: ots.AttestationPending, Calendar: identity}}}})
+		if serializeErr != nil {
+			t.Fatal(serializeErr)
+		}
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader(branch)), Header: make(http.Header)}, nil
+	})
+	options := TimestampStampOptions{
+		Effects:        Effects{Clock: fixedTestClock{}, Random: deterministicTestRandom{reader: bytes.NewReader(bytes.Repeat([]byte{0x63}, 16))}},
+		CalendarClient: &ots.CalendarClient{HTTPClient: &http.Client{Transport: transport}},
+	}
+	const questionID, stampedForecastID = "q-election-coalition", "f-election-coalition-001"
+	stamped, err := CommitTimestampStamp(context.Background(), ledgerPath, questionID, stampedForecastID, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetPath := filepath.Join(directory, filepath.FromSlash(string(stamped.TargetPath)))
+	receiptPath := filepath.Join(directory, filepath.FromSlash(string(stamped.ReceiptPath)))
+	targetBefore, err := os.ReadFile(targetPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receiptBefore, err := os.ReadFile(receiptPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	input := coalitionForecastInput()
+	input.ForecastedAt = "2026-09-02T09:00:00+01:00"
+	input.RecordedAt = timestampPointer("2026-09-02T09:01:00+01:00")
+	prior := ledger.Slug(stampedForecastID)
+	input.SupersedesForecastID = &prior
+	if _, err := CommitPublicForecastAddFile(context.Background(), ledgerPath, questionID, "f-election-coalition-002", input, *input.RecordedAt); err != nil {
+		t.Fatalf("append after timestamp: %v", err)
+	}
+	notes := Optional[string]{Set: true, Value: "Reviewed after the second forecast."}
+	if _, err := CommitQuestionUpdateFile(context.Background(), ledgerPath, questionID, QuestionPatchInput{Notes: notes}); err != nil {
+		t.Fatalf("metadata update after timestamp: %v", err)
+	}
+	closed := Optional[ledger.QuestionStatus]{Set: true, Value: ledger.QuestionClosed}
+	if _, err := CommitQuestionUpdateFile(context.Background(), ledgerPath, questionID, QuestionPatchInput{Status: closed}); err != nil {
+		t.Fatalf("close after timestamp: %v", err)
+	}
+	outcome := "centre-left"
+	recordedAt := ledger.Timestamp("2026-10-15T12:01:00+01:00")
+	resolution := ResolutionInput{
+		Outcome: ResolutionOutcome{Text: &outcome}, OutcomeKnownAt: "2026-10-15T12:00:00+01:00", RecordedAt: &recordedAt,
+		Sources: []EvidenceSourceInput{{Title: "Official result", URL: "https://example.org/result", RetrievedAt: "2026-10-15T12:00:30+01:00"}},
+	}
+	if _, err := CommitQuestionResolveFile(context.Background(), ledgerPath, questionID, resolution, recordedAt); err != nil {
+		t.Fatalf("resolve after timestamp: %v", err)
+	}
+
+	targetAfter, err := os.ReadFile(targetPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receiptAfter, err := os.ReadFile(receiptPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(targetBefore, targetAfter) || !bytes.Equal(receiptBefore, receiptAfter) {
+		t.Fatal("authoring changed retained target or receipt bytes")
+	}
+	loaded, err := LoadAndValidateLedger(context.Background(), ledgerPath, nil)
+	if err != nil {
+		t.Fatalf("final ledger with retained evidence is invalid: %v", err)
+	}
+	_, question, err := selectQuestion(loaded.Model, questionID)
+	if err != nil || question.Status != ledger.QuestionResolved || len(question.Forecasts) != 2 {
+		t.Fatalf("final lifecycle state = %#v, %v", question, err)
+	}
+}
+
 func TestTimestampDryRunAndOfflineHaveNoEffects(t *testing.T) {
 	raw, err := fs.ReadFile(contractschema.Conformance(), "individual-ledger.json")
 	if err != nil {

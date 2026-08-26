@@ -85,9 +85,12 @@ type Value struct {
 	Bool   bool
 	Int    int64
 	String string
-	Array  []*Value
-	Object []Member
-	Source SourceRef
+	// SourceTag retains a safe parser-level scalar tag when an opt-in parser
+	// needs schema-directed normalization. It is never part of Any().
+	SourceTag string
+	Array     []*Value
+	Object    []Member
+	Source    SourceRef
 }
 
 type Member struct {
