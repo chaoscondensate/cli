@@ -1,7 +1,7 @@
 # Getting started
 
 <!-- doc-metadata
-coverage: unreleased-main
+coverage: v0.2.0
 reviewed: 2026-08-26
 owner: documentation
 generated: false
@@ -22,8 +22,7 @@ result.
 - [Validate or inspect an existing ledger](../../README.md#quick-start).
 - [Review the implementation and compatibility baseline](../development/documentation-baseline.md).
 
-Release `v0.1.1` does not contain initialization. The current unreleased source
-implements the complete advertised command surface. Timestamp support is
+Release `v0.2.0` implements the complete advertised command surface. Timestamp support is
 experimental and remains subject to the review gates in the baseline.
 
 [Documentation index](../index.md)

@@ -5,6 +5,8 @@ tags and downloadable files are published on GitHub Releases.
 
 ## Unreleased
 
+## 0.2.0 - 2026-08-26
+
 ### Added
 
 - Complete ledger, platform, question, public forecast, sealed forecast,

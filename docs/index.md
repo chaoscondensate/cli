@@ -1,7 +1,7 @@
 # Forecast Ledger CLI documentation
 
 <!-- doc-metadata
-coverage: unreleased-main
+coverage: v0.2.0
 reviewed: 2026-08-26
 owner: documentation
 generated: false
@@ -10,8 +10,8 @@ prerequisites: none
 next: getting-started/index.md
 -->
 
-This documentation covers the current Forecast Ledger CLI repository. Release
-`v0.1.1` is Preview. The current unreleased source implements authoring,
+This documentation covers Forecast Ledger CLI release `v0.2.0`. The release is
+Preview and implements authoring,
 cryptographic targets and sealed forecasts, experimental OpenTimestamps,
 layered verification, standalone publication packages, and the MCP stdio
 adapter. See the

@@ -1,8 +1,8 @@
 # Explanation
 
 <!-- doc-metadata
-coverage: v0.1.1
-reviewed: 2026-08-25
+coverage: v0.2.0
+reviewed: 2026-08-26
 owner: documentation
 generated: false
 security-critical: false
