@@ -20,6 +20,8 @@ Serve SHALL require one or more `--ledger-root` values. Repeatable `--output-roo
 
 Every tool path SHALL be resolved against the appropriate root and reject absolute paths outside it, `..`, symlink/junction/reparse escape, Windows drive/UNC escape, case-folding collision, device paths, NUL, and path changes between validation and open. The server MUST NOT expand shell syntax or infer a default ledger.
 
+A missing-root or confinement error SHALL identify the applicable stable root class (`ledger`, `output`, or `secret`) and, when configured roots are numbered or named, its safe root identifier. It MUST NOT reduce every root failure to an indistinguishable generic message or expose the configured absolute path.
+
 #### Scenario: Ledger tool traversal
 - **WHEN** a tool supplies a file path that escapes through a symlink or junction
 - **THEN** it returns a recoverable path error before opening the escaped file
@@ -28,12 +30,16 @@ Every tool path SHALL be resolved against the appropriate root and reject absolu
 - **WHEN** startup config places a secret root beneath an output root
 - **THEN** server startup fails before protocol readiness
 
+#### Scenario: Tool requires an output root
+- **WHEN** a package-building call has no configured output root
+- **THEN** the recoverable error identifies the `output` root class without disclosing any absolute ledger or secret path
+
 ### Requirement: Derive access from roots, safety modes, and an explicit reveal boundary
 The server SHALL expose its applicable read/write tool surface by default without general write or network grants. Ledger paths SHALL remain confined to explicit ledger roots; package creation requires an output root; private input and seal key creation require a secret root. A missing required root SHALL fail before opening an unconfined path, reading a secret, acquiring a lock, or creating a file.
 
 `forecast_reveal` SHALL additionally require the server to start with default-off `--allow-reveal`. A secret root alone MUST NOT enable disclosure. Without the flag the tool SHALL be absent from discovery and a direct call SHALL receive the protocol's unknown-tool response without reading a key or ledger. With the flag, reveal still requires a secret-root reference, write-capable mode, and request-level `confirm: true`. Combining `--allow-reveal` with `--read-only`, or enabling reveal without any secret root, SHALL fail startup as contradictory configuration.
 
-`--read-only` SHALL be an optional server-wide mode that rejects every ledger/artifact/package mutation before side effects while preserving read, status, check, and verification tools. `--offline` SHALL be an optional server-wide mode that opens no network socket: network-required stamp/upgrade calls fail as network-disabled, timestamp/layered verification performs local checks with timing not checked, and package verification remains local. Without `--offline`, timestamp and layered verification tools SHALL use the embedded `opentimestamps-public-v1` profile automatically and MUST NOT require network configuration.
+`--read-only` SHALL be an optional server-wide mode that startup-disables every ledger/artifact/package mutation while preserving read, status, check, and verification tools. Mutating tools SHALL be absent from discovery in this mode, and a direct call SHALL receive the protocol's unknown-tool response before secret, lock, file, or network side effects. `--offline` SHALL be an optional server-wide mode that opens no network socket: network-required stamp/upgrade calls fail as network-disabled, timestamp/layered verification performs local checks with timing not checked, and package verification remains local. Without `--offline`, timestamp and layered verification tools SHALL use the embedded `opentimestamps-public-v1` profile automatically and MUST NOT require network configuration.
 
 MCP calls MUST never prompt. High-risk inputs SHALL include an explicit `confirm: true` field where the CLI requires `--yes`; confirmation records caller intent but is not presented as an authorization boundary and does not replace `--allow-reveal`. No MCP input schema SHALL accept calendar, explorer, proxy, arbitrary Bitcoin endpoint URLs, or CLI custom-calendar options. Optional calendar and Bitcoin Core overrides are CLI-only in v1; MCP uses the built-in public profile or offline mode.
 
@@ -47,7 +53,7 @@ MCP calls MUST never prompt. High-risk inputs SHALL include an explicit `confirm
 
 #### Scenario: Mutation in read-only mode
 - **WHEN** a client calls a mutating tool on a server started with `--read-only`
-- **THEN** the tool returns a recoverable read-only error before secret, lock, or file side effects
+- **THEN** the tool is absent from discovery and the direct call returns the protocol's unknown-tool response before secret, lock, file, or network side effects
 
 ### Requirement: Expose a complete closed tool surface
 The server SHALL expose the following CLI-parity tools backed by the same application actions:
@@ -64,14 +70,18 @@ The server SHALL expose the following CLI-parity tools backed by the same applic
 | `verify` | `verification_run` |
 | `publish build|verify` | `publication_build`, `publication_verify` |
 
-Every input and output schema SHALL be closed, typed, versioned where persisted data is involved, and reject unknown fields. Every ledger tool SHALL require `file`; selector and structured input fields SHALL match the CLI contract. Side-effecting tools SHALL describe required root classes, built-in network profile use, server modes, confirmation, dry-run behavior, and rollback semantics in discovery metadata.
+Every input and output schema SHALL be closed, typed, versioned where persisted data is involved, and reject unknown fields. Every ledger tool SHALL require `file`; selector and structured input fields SHALL match the CLI contract. Discovery metadata for every tool SHALL describe its static effect as either `read-only` or `mutating`, independently of the server's current mode. It SHALL separately describe applicable root classes, built-in network profile use, current server mode, confirmation, dry-run behavior, and rollback semantics. A read tool MUST NOT be described as mutating merely because the server is write-capable, and a mutating tool MUST NOT be described as read-only because the server started in read-only mode.
 
 #### Scenario: Unknown tool input property
 - **WHEN** a client sends a misspelled or unsupported property
 - **THEN** schema validation rejects the call before executing the application action
 
+#### Scenario: Static tool effect is independent of server mode
+- **WHEN** `ledger_status` is discovered on a write-capable server and `forecast_add` is considered for a read-only server
+- **THEN** `ledger_status` remains labeled `read-only`, while `forecast_add` remains statically `mutating` and is omitted because the current mode disables it
+
 ### Requirement: Discover only completed MCP tools
-An MCP tool SHALL be registered and returned by `tools/list` only after its shared service operation, closed schemas, root/mode behavior, rollback/cancellation tests, CLI parity tests, documentation, and applicable native/conformance gates pass. A planned, partially implemented, or startup-disabled tool, including reveal without `--allow-reveal`, MUST be absent from discovery and direct calls SHALL receive the protocol's unknown-tool response without opening files, reading secrets, or contacting the network. Completed and startup-enabled tools remain usable while later or disabled tools are absent.
+An MCP tool SHALL be registered and returned by `tools/list` only after its shared service operation, closed schemas, root/mode behavior, rollback/cancellation tests, CLI parity tests, documentation, and applicable native/conformance gates pass. A planned, partially implemented, or startup-disabled tool, including reveal without `--allow-reveal` and every mutating tool in read-only mode, MUST be absent from discovery and direct calls SHALL receive the protocol's unknown-tool response without opening files, reading secrets, or contacting the network. Completed and startup-enabled tools remain usable while later or disabled tools are absent.
 
 #### Scenario: Incremental platform rollout
 - **WHEN** `platform_list` is complete but `platform_add` is not

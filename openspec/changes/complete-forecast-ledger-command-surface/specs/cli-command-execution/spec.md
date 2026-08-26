@@ -49,6 +49,8 @@ The command selector contract SHALL be:
 ### Requirement: Bounded typed input documents
 Commands that accept a structured record or secret bundle SHALL use `--input <path>` or `--input -` and SHALL parse a closed JSON or YAML object documented for that command. Unknown fields, duplicate keys, aliases, excessive size/depth, floats where the contract uses exact strings or integers, and a second JSON/YAML document MUST be rejected. Scalar convenience flags MAY exist only when they map unambiguously to the same typed input and MUST NOT accept secrets.
 
+For fields whose input contract is an RFC 3339 timestamp, a YAML plain scalar resolved by a conforming YAML parser as `!!timestamp` SHALL be accepted and normalized to the same RFC 3339 string value accepted from JSON or a quoted YAML scalar. This coercion MUST be limited to timestamp-typed fields; it MUST NOT turn arbitrary typed YAML values into strings. Maintained YAML examples SHALL quote timestamp values so they remain portable across YAML implementations.
+
 #### Scenario: Unknown update field
 - **WHEN** a question update document includes a field outside the documented patch schema
 - **THEN** the command fails as usage or invalid input and does not ignore the field
@@ -57,8 +59,14 @@ Commands that accept a structured record or secret bundle SHALL use `--input <pa
 - **WHEN** `forecast seal --input -` receives one bounded private bundle on stdin
 - **THEN** the bundle is parsed without copying its plaintext into argv, environment variables, diagnostics, or output
 
+#### Scenario: Unquoted YAML timestamp
+- **WHEN** a maintained timestamp-typed input field contains a valid unquoted YAML timestamp scalar
+- **THEN** the command accepts it as the equivalent RFC 3339 string while preserving closed-schema rejection for non-timestamp type mismatches
+
 ### Requirement: Explicit stdin eligibility
 `--file -` SHALL be accepted only by local read-only actions that do not require sibling artifacts: `validate`, `status`, `platform list|show`, `question list|show`, and `forecast list|show`. Every mutation, target, timestamp, layered verification, and publication action MUST require a real ledger path. A command using stdin for its ledger MUST NOT also use `--input -`.
+
+Help and maintained documentation SHALL state next to `--file -` that stdin inspection has no ledger directory from which to resolve targets, receipts, or other sibling artifacts and therefore cannot perform artifact-dependent checks.
 
 #### Scenario: Two stdin consumers
 - **WHEN** a user supplies both `--file -` and `--input -`
@@ -94,7 +102,9 @@ Every action that can contact the network SHALL identify the built-in profile or
 - **THEN** human and JSON results identify its stable profile ID and safe contacted source IDs
 
 ### Requirement: Transactional mutation and format preservation
-Every ledger mutation SHALL acquire the cross-platform ledger lock, parse and fully validate the current document, apply a minimal source-tree patch, fully validate the prospective document, and perform a recoverable same-directory replacement. It MUST preserve JSON versus YAML, newline convention, and untouched YAML comments, order, scalar style, and unknown presentation details allowed by the schema. An error or interruption before commit MUST leave the original ledger byte-for-byte unchanged.
+Every ledger mutation SHALL acquire the cross-platform ledger lock, parse and fully validate the current document, apply a minimal source-tree patch, fully validate the prospective document with access to the same safely resolved target and receipt artifacts required to validate the current document, and perform a recoverable same-directory replacement. A valid retained artifact MUST NOT make an otherwise permitted authoring mutation fail merely because prospective validation omitted its artifact context.
+
+Mutation MUST preserve JSON versus YAML, newline convention, and untouched YAML comments, order, scalar style, and unknown presentation details allowed by the schema. Inserted or replaced fragments SHALL follow the host document's indentation, line-break, mapping/sequence, and compact-versus-expanded presentation instead of embedding canonical/minified JSON inside YAML or pretty JSON. Canonical serialization remains an evidence/cryptographic byte contract and MUST NOT determine ledger presentation. An error or interruption before commit MUST leave the original ledger byte-for-byte unchanged.
 
 #### Scenario: Invalid prospective state
 - **WHEN** a platform removal would leave a dangling platform reference
@@ -103,6 +113,14 @@ Every ledger mutation SHALL acquire the cross-platform ledger lock, parse and fu
 #### Scenario: Concurrent mutation
 - **WHEN** a CLI or MCP writer already holds the ledger lock
 - **THEN** a second writer returns `conflict` without performing a partial read-modify-write
+
+#### Scenario: Author after timestamping
+- **WHEN** a valid ledger contains a safely resolvable retained target and receipt for one forecast and the user appends an unrelated valid forecast
+- **THEN** prospective validation checks the retained evidence with its artifact context, commits the new forecast, and preserves the existing evidence bytes
+
+#### Scenario: Expanded YAML remains reviewable
+- **WHEN** a mutation appends a structured question or forecast to an expanded YAML ledger
+- **THEN** the new fragment uses the surrounding YAML indentation and line layout rather than one embedded minified JSON line, while untouched source bytes remain unchanged
 
 ### Requirement: Dry-run and confirmation
 Every command that mutates a ledger, creates or replaces an artifact, writes a key, or creates a package SHALL support `--dry-run`. A read-only command does not gain dry-run merely because it can observe the network; `--offline` controls network use for layered `verify` and `publish verify`. Dry-run SHALL perform all local parsing, selection, permission, collision, and prospective validation possible without generating a real secret, writing a file, acquiring a remote result, or changing state; it SHALL return a structured plan that identifies deferred checks. Dry-run success MUST NOT claim that a later network or concurrent write will succeed.
@@ -124,6 +142,10 @@ Commands that disclose previously sealed material, remove a platform, replace te
 ### Requirement: Stable result and error envelopes
 Human output SHALL be concise English. JSON success SHALL be one object with `ok: true`, stable operation `code`, plain `message`, and typed `data`; JSON failure SHALL be one object on stderr with `ok: false`, stable error `code`, plain `message`, and optional redacted `details`. Primary success output belongs only on stdout; errors, warnings, progress, and verbose diagnostics belong only on stderr.
 
+Public JSON data SHALL use the documented schema-compatible wire representation for forecast values, integrity records, resolutions, and other tagged unions. It MUST NOT expose internal language type names, PascalCase branch fields, inactive branches as `null`, reflection metadata, or any other implementation representation. Redaction SHALL preserve this public wire shape.
+
+Expected parsing, closed-schema, and semantic validation failures SHALL preserve a stable ordered `issues` collection when available. Each issue SHALL include its safe code and JSON pointer and SHALL include source line/column for source-backed input when known; an unknown input field SHALL identify that field without echoing its value. Human output SHALL render the same actionable locations, and adapter wrapping MUST NOT collapse them into only a generic parse message.
+
 `--plain` SHALL produce undecorated UTF-8 line-oriented output with no color, animation, border, heading, or progress on stdout; repeated records SHALL use a documented stable tab-separated field order. `--quiet` SHALL suppress all successful primary stdout while preserving warnings and failures on stderr and the process exit. `--json`, `--plain`, and `--quiet` SHALL be mutually exclusive; `--verbose` MAY add redacted diagnostics only to stderr.
 
 The CLI exit mapping SHALL remain: `0` success, `1` unexpected internal failure, `2` usage, `3` invalid or unsupported-schema data, `4` not found, `5` conflict/precondition including read-only or missing-root conditions, `6` cryptographic or evidence verification failure, `7` local I/O including operating-system access denial, `8` network/remote/network-disabled failure, `9` pending/not ready/incomplete verification, `10` unavailable, and `130` interrupted. There is no separate CLI `permission` class.
@@ -143,6 +165,18 @@ The CLI exit mapping SHALL remain: `0` success, `1` unexpected internal failure,
 #### Scenario: Conflicting output modes
 - **WHEN** a user combines any two of `--json`, `--plain`, and `--quiet`
 - **THEN** argument handling returns usage/exit `2` before the action
+
+#### Scenario: Tagged forecast value in JSON output
+- **WHEN** `forecast show --json` returns a binary forecast
+- **THEN** `data` contains the documented binary value shape and contains no inactive numeric/date/multiple-choice branches or Go field names
+
+#### Scenario: Authoring input has an unknown nested field
+- **WHEN** an authoring input document contains an unsupported nested property
+- **THEN** JSON and human failures preserve its safe issue code, pointer, and known line/column without exposing sibling values
+
+#### Scenario: Presented pending result keeps its exit category
+- **WHEN** a verification action successfully emits its available report and its overall state is pending or incomplete
+- **THEN** the process exits `9`, never the internal-failure exit `1`, in human, plain, and JSON modes
 
 ### Requirement: Secret-safe and private-safe output
 Raw keys, salts, nonces before publication, sealed plaintext, credentials, protected file contents, and absolute secret paths MUST NOT appear in help examples, argv values, environment inputs, normal or verbose logs, result/error envelopes, panic text, telemetry, MCP resources, or evidence packages. Ledger validation errors MUST identify locations and rules without echoing private source values. Revealed keys stored by the published schema SHALL remain redacted from CLI/MCP inspection output.

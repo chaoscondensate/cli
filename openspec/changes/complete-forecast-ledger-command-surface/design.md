@@ -30,6 +30,8 @@ Each business action gets a typed request/result contract and one service entry 
 
 CLI actions translate urfave values into requests and present results. MCP handlers translate closed tool schemas into the same requests. Neither adapter performs domain selection, validation, patching, crypto, receipt logic, or package enumeration. `internal/app` remains the lower-level error/contract vocabulary; `internal/service` owns orchestration, avoiding the current storage→app import cycle.
 
+Operation results are converted to explicit public wire DTOs, including schema-compatible tagged-union encodings, before generic redaction or transport serialization. Redaction walks that public representation rather than reflecting over domain structs, so inactive union branches and internal Go field names cannot leak into JSON. Error adapters preserve structured issue collections and safe source locations through every wrapper; presentation chooses human or JSON formatting without replacing the underlying application category.
+
 Alternative considered: implement commands directly in `internal/adapters/cli` and later copy them into MCP. Rejected because it would make parity, locking, cancellation, errors, and secret review diverge.
 
 ### 2. Define versioned closed input schemas next to operations
@@ -37,6 +39,8 @@ Alternative considered: implement commands directly in `internal/adapters/cli` a
 Complex non-secret and private inputs use bounded JSON/YAML documents decoded into dedicated request types. Each action owns a closed schema with explicit null/removal semantics. The CLI accepts a path or stdin; MCP accepts the equivalent typed object or an authorized private-file reference where raw secret values are prohibited. Scalar flags remain only for identifiers and common unambiguous root fields; the already registered required `question add --type` remains the explicit discriminator and is forbidden inside that command's input document. Init instead owns a complete nested initial-question document whose schema includes `type`; both adapters normalize type into the same builder request before validation, so the input schemas intentionally differ without forking domain behavior.
 
 JSON/YAML input is parsed by the existing bounded document layer so duplicate keys and resource exhaustion fail consistently. Input schemas and JSON result schemas are exported as generated reference artifacts and used by CLI/MCP parity tests.
+
+The YAML adapter performs one schema-directed normalization before typed decoding: a YAML `!!timestamp` scalar is converted to its RFC 3339 lexical string only when the operation schema declares that exact field as a timestamp. Other YAML tags retain normal closed-schema type checking. Maintained examples still quote timestamps to avoid parser-dependent behavior outside this binary.
 
 Alternative considered: dozens of scalar flags. Rejected because nested typed forecasts, sources, units, options, accounts, and patches become ambiguous, difficult to quote cross-platform, and unsafe for private bundles.
 
@@ -61,6 +65,10 @@ Alternative considered: generic JSON Patch. Rejected because callers could bypas
 ### 5. Reuse one mutation transaction with prospective validation
 
 Single-ledger mutations use the existing lock and recovery transaction: resolve safe path, lock, parse/validate, build indexes, apply minimal source-tree patch to a copy, re-decode/full-validate, write a same-directory temporary sibling, flush, safe-replace, and clean/recover the journal. Operations return the before/after document digest and changed JSON pointers for audit-friendly output.
+
+Both current and prospective validation receive the same confined artifact filesystem rooted at the selected ledger directory. This allows semantic checks to resolve already referenced targets and receipts after stamping instead of accidentally treating their presence as invalid authoring state. Missing, unsafe, or tampered retained evidence still fails according to its real validation category.
+
+Structural patch rendering is presentation-aware. It derives indentation, newline, collection layout, and JSON/YAML fragment style from the insertion/replacement context, while retaining untouched source slices verbatim. Canonical/JCS serialization is used only where an evidence, manifest, key, or cryptographic profile requires exact bytes; it is not reused to render ledger fragments.
 
 Dry-run is attached to persistent mutation or resource creation, executes through prospective validation, and substitutes a recorder for file/secret/network effects used by that operation. Its result explicitly distinguishes checks performed now from entropy, remote, race, and commit checks deferred to execution. Pure verification does not gain a dry-run mode solely because it observes remote evidence; online/offline selection is its network control.
 
@@ -108,6 +116,8 @@ Alternatives considered: require every user to configure calendars/explorers, fo
 
 Each verifier returns `{state, reason_codes, evidence, limitations}` for one layer. A deterministic aggregator applies dependency and exit precedence without erasing partial evidence. Ledger verification supplies the embedded invocation-wide Bitcoin observer automatically unless offline or replaced by CLI Bitcoin Core; package verification remains offline unless its online mode is requested. Budget exhaustion yields explicit not-checked layers and incomplete/exit 9 rather than silently skipping or overrunning public services. Outcome-URL retrieval stays explicitly requested and separate from the pinned protocol profile. Report builders consume the same model for human, JSON, MCP, and package verification.
 
+Human, plain, and JSON presenters all iterate the same ordered layer collection; the human presenter prints the matrix in normal mode rather than reducing it to an overall sentence. Presentation completion is separate from process exit selection: after writing the available report, the adapter returns the original typed pending/incomplete/failure category through an unwrap-compatible path so the central exit mapper cannot turn it into `internal`.
+
 Document failure blocks dependent layers. Content binding precedes OTS proof checks. Reveal authenticates before comparing the mirror. Outcome source checks distinguish metadata/digest/reachability from truth. Limitations are data in every result, not presentation-only prose that adapters can omit.
 
 Alternative considered: one `verified` boolean. Rejected because it conflates distinct claims and cannot express pending/not-checked evidence honestly.
@@ -116,13 +126,17 @@ Alternative considered: one `verified` boolean. Rejected because it conflates di
 
 Publication derives a graph rooted at the exact ledger: each ledger reference resolves to one of three closed public artifact roles. Only graph nodes permitted by the package profile are copied. Key/secret/private/temp/lock/journal roles are impossible to add through the normal API. Before creating output, all source bytes are read through bounded/confined handles, verified, hashed, and mapped to collision-free destinations. Unsafe imported key hints fail with a repair command rather than making the ledger permanently unpackageable.
 
+The graph is reference-driven, not directory-driven. Deterministic targets created independently but not referenced by the selected ledger are deliberately excluded; the builder never scans `proofs` to infer membership. Documentation explains this so users do not mistake every locally built target for published evidence.
+
 Verification parses and validates the manifest before trusting paths or roles, then hashes all entries and checks for unexpected regular files before ledger/evidence verification. Package operations never inspect source-control metadata or upload data.
 
 Alternative considered: recursively copy the ledger directory. Rejected because it can include keys, drafts, unrelated ledgers, credentials, and nondeterministic files.
 
 ### 12. Run MCP as a thin root-confined adapter
 
-The official pinned MCP SDK owns framing and negotiation. A server builder registers closed tool/resource schemas generated from the same operation types only when each tool's availability gate passes. Startup canonicalizes repeatable named ledger/output/secret roots and selects full versus optional read-only mode and online versus optional offline mode. Tool middleware performs schema validation, root-class checks, mode checks, root resolution, limits, context timeout, and error conversion before calling services. The default server exposes applicable write and built-in-network operations without general grants; missing output/secret roots fail only operations that need those roots. Reveal is the sole capability exception: it is absent unless startup explicitly includes `--allow-reveal`, because a secret root confines files but does not express consent for irreversible publication. Request `confirm: true` remains required but is not an authorization boundary. A held ledger writer lock produces the same immediate conflict in CLI and MCP; the server does not queue writers.
+The official pinned MCP SDK owns framing and negotiation. A server builder registers closed tool/resource schemas generated from the same operation types only when each tool's availability gate passes. Each operation definition carries a static `read-only` or `mutating` effect plus required root classes; server mode is separate runtime metadata and never rewrites that effect. Startup canonicalizes repeatable named ledger/output/secret roots and selects full versus optional read-only mode and online versus optional offline mode. Read-only startup omits every mutating tool from registration, so discovery and direct-call behavior match the general startup-disabled rule. Tool middleware performs schema validation, root-class checks, root resolution, limits, context timeout, and error conversion before calling services. Root failures retain the stable root class and safe configured root ID while absolute paths remain redacted.
+
+The default server exposes applicable write and built-in-network operations without general grants; missing output/secret roots fail only operations that need those roots. Reveal is the sole capability exception: it is absent unless startup explicitly includes `--allow-reveal`, because a secret root confines files but does not express consent for irreversible publication. Request `confirm: true` remains required but is not an authorization boundary. A held ledger writer lock produces the same immediate conflict in CLI and MCP; the server does not queue writers.
 
 Protocol stdout is passed directly to the SDK; all application diagnostics use an injected stderr logger. Resource URIs contain a root ID plus encoded relative path, never an absolute path. Tool schemas contain no calendar, explorer, proxy, or Bitcoin endpoint URL. Real-process tests treat any non-protocol stdout byte as a failure.
 
@@ -139,6 +153,8 @@ Alternative considered: unhide the complete tree after the first implementation 
 ### 14. Treat generated reference and conformance as build outputs
 
 Operation definitions drive CLI/MCP input schemas, JSON result schemas, command reference tables, and parity fixtures. CI runs clean-tree regeneration checks. Tests are layered: pure builders/indexes; document patches; transaction fault injection; crypto/target vectors; OTS differential/fuzz; verification matrices; package determinism; CLI goldens; MCP in-memory/real-process; and native filesystem/ACL/replacement tests.
+
+Maintained documentation examples are executable fixtures. CI parses every JSON/YAML input example, including quoted timestamps, and runs representative commands against temporary ledgers so prose cannot advertise syntax that the typed input layer rejects. A dogfooding lifecycle fixture additionally exercises authoring before and after retained timestamp evidence with realistic multi-record formatting.
 
 The pinned Python validator parity job compares case verdicts and normalized issue codes/locations against Go rather than merely running the Python harness alone.
 
@@ -161,6 +177,8 @@ Alternative considered: hand-maintain separate reference pages and schema copies
 - **[MCP expands side-effect reach and reveal is irreversible]** → Confine every file class to explicit roots, provide optional whole-server read-only/offline modes, reject arbitrary protocol endpoint URLs, keep reveal default-off behind its sole explicit gate plus confirmation, enforce limits, and share application transactions.
 - **[Two active OpenSpec changes overlap]** → Treat this change as the sole replacement contract, map already completed foundation evidence into its tasks, and retire the older change without syncing or archiving its delta specs.
 - **[Stable result schemas can freeze mistakes]** → Version persisted/transport schemas, keep human prose flexible, and require compatibility review for field removal or semantic change.
+- **[Presentation-aware patches can still produce large diffs on unfamiliar source styles]** → Preserve untouched slices, constrain style inference to the local container, and gate realistic expanded JSON/YAML ledgers with diff/readability assertions.
+- **[Hiding mutating MCP tools changes discovery across server modes]** → Publish static effect metadata, document mode-dependent discovery, and test `tools/list` plus direct-call unknown-tool behavior for every mode.
 
 ## Migration Plan
 

@@ -26,11 +26,17 @@ The package root SHALL contain `manifest.json`, one ledger at `ledger/<original-
 
 No other entry role is valid in v1. Supporting another public evidence file SHALL require a new reviewed manifest profile rather than accepting an unknown role.
 
+The allowlist SHALL be derived from the selected ledger's validated evidence references. A standalone deterministic target produced by `target build --all` but not referenced by ledger integrity metadata SHALL remain outside the package; build MUST NOT scan the surrounding `proofs` directory or infer that every neighboring target belongs to the selected evidence set. Help and maintained publication documentation SHALL explain this distinction.
+
 The manifest SHALL use a versioned closed schema and contain at least: manifest profile, embedded ledger schema version/commit/digest, packaged ledger path, and sorted file entries with role, path, byte length, SHA-256 algorithm, and lowercase digest. It MUST NOT contain creation time, host/user name, absolute path, source-control data, random ID, or platform separator so identical evidence produces byte-identical canonical manifest bytes across platforms.
 
 #### Scenario: Cross-platform repeat build
 - **WHEN** identical evidence is packaged on supported macOS, Linux, and Windows systems
 - **THEN** every copied content file, manifest byte, and manifest SHA-256 is identical
+
+#### Scenario: Unreferenced standalone target is adjacent
+- **WHEN** a valid target artifact exists under `proofs/targets` but the selected ledger contains no integrity reference to it
+- **THEN** package build excludes it deterministically and does not discover it by directory scanning
 
 ### Requirement: Exclude secrets and undisclosed material
 Build MUST exclude key files, actual `--key-file` locations, secret roots and paths, credentials, lock/journal/temp files, raw private seal input, decrypted sealed plaintext, and any file not required by the public ledger evidence. A sealed forecast MAY contribute only public note, commitment, ciphertext, safe logical key hint, target, receipt, and other data already allowed by the ledger contract. A revealed forecast MAY contribute only disclosed material already represented in the validated ledger; the manifest and command output SHALL still redact raw key values and machine-local key locations.
@@ -99,7 +105,7 @@ This intentional default differs from layered `forecast-ledger verify`, which is
 - **THEN** manifest, ledger, target, receipt syntax/binding, and reveal checks complete without contacting the original author or publication location
 
 ### Requirement: Use verification exit semantics without hiding the report
-Manifest/path/digest failure SHALL return verification exit `6`; invalid ledger data exit `3`; a missing CLI-selected `--file` or `--manifest` SHALL return not-found exit `4`; after a manifest parses successfully, any listed entry that is absent, replaced, or unreadable SHALL be a package-integrity verification failure with exit `6`; pending or budget-incomplete evidence without failure SHALL return exit `9`; requested network failure SHALL return exit `8`; a complete applicable pass SHALL return exit `0`. JSON mode SHALL emit the safely available package/evidence matrix on non-zero verification outcomes.
+Manifest/path/digest failure SHALL return verification exit `6`; invalid ledger data exit `3`; a missing CLI-selected `--file` or `--manifest` SHALL return not-found exit `4`; after a manifest parses successfully, any listed entry that is absent, replaced, or unreadable SHALL be a package-integrity verification failure with exit `6`; pending or budget-incomplete evidence without failure SHALL return exit `9`; requested network failure SHALL return exit `8`; a complete applicable pass SHALL return exit `0`. Human, plain, and JSON modes SHALL emit the safely available package/evidence matrix on non-zero verification outcomes. Successfully presenting that matrix MUST NOT remap its pending/incomplete application category to internal failure.
 
 #### Scenario: Selected manifest does not exist
 - **WHEN** the path passed to `--manifest` is absent
@@ -112,3 +118,7 @@ Manifest/path/digest failure SHALL return verification exit `6`; invalid ledger 
 #### Scenario: One tampered target among valid files
 - **WHEN** one listed target digest differs while other files match
 - **THEN** package verification fails overall, identifies that entry, and still reports independently established manifest observations without claiming package validity
+
+#### Scenario: Pending package report is presented successfully
+- **WHEN** package integrity passes, retained evidence remains pending, and the available report is written successfully
+- **THEN** `publish verify` exits `9`, not `1`, in human, plain, and JSON modes

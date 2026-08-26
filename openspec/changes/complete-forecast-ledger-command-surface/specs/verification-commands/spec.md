@@ -14,9 +14,15 @@ Defines a layered, non-mutating verification command that reports exactly which 
 ### Requirement: Return a stable evidence matrix
 Human and JSON output SHALL contain overall status plus independently named layers: `document`, `content_binding`, `existence_timing`, `reveal`, `outcome_evidence`, and optional `package_integrity`. Each layer SHALL use exactly one state from `pass`, `fail`, `pending`, `not_applicable`, or `not_checked` and include stable reason codes, evidence summaries, limitations, and safe paths/identifiers. Overall success MUST NOT convert `not_checked` into `pass`.
 
+Normal human output SHALL render every applicable layer and its state in a stable scannable matrix; it MUST NOT collapse the report to only one overall status line. `--verbose` MAY add safe diagnostic evidence but MUST NOT be required to see the independent layer states. Plain output SHALL expose the same layers in its documented stable field order.
+
 #### Scenario: Mixed evidence states
 - **WHEN** document and target checks pass while a receipt remains pending and reveal is inapplicable
 - **THEN** the matrix reports those states separately and overall does not claim full verification
+
+#### Scenario: Human report shows every layer
+- **WHEN** a user runs layered verification in normal human mode
+- **THEN** output shows the overall state and one independently labeled state for every applicable layer without requiring `--json` or `--verbose`
 
 ### Requirement: Verify document validity first
 The document layer SHALL run bounded parsing, exact embedded schema validation, format checks, domain decoding, semantic checks, and artifact-path confinement. A document failure SHALL prevent dependent layers from claiming pass, but the report MAY continue with safely computable independent observations. Source values and secrets MUST NOT be echoed in issues.
@@ -81,7 +87,7 @@ Every human and JSON report SHALL explicitly state that Forecast Ledger v1 does 
 - **THEN** human, JSON, and MCP results identify the contacted source IDs and disclose block-height interest without exposing target plaintext
 
 ### Requirement: Apply deterministic overall status and exit precedence
-Overall SHALL be `fail` when any required applicable layer fails, `pending` when none fail and at least one is pending, `incomplete` when none fail/pending but a requested required layer is not checked, including request-budget exhaustion, and `pass` only when every requested applicable layer passes. Document invalidity SHALL use exit `3`; cryptographic/evidence failure exit `6`; pending or incomplete exit `9`; required automatic or explicitly selected network failure exit `8`; only a complete pass exits `0`. JSON output SHALL still contain the full safely available matrix for non-zero evidence outcomes.
+Overall SHALL be `fail` when any required applicable layer fails, `pending` when none fail and at least one is pending, `incomplete` when none fail/pending but a requested required layer is not checked, including request-budget exhaustion, and `pass` only when every requested applicable layer passes. Document invalidity SHALL use exit `3`; cryptographic/evidence failure exit `6`; pending or incomplete exit `9`; required automatic or explicitly selected network failure exit `8`; only a complete pass exits `0`. JSON output SHALL still contain the full safely available matrix for non-zero evidence outcomes. Presenting a successful result envelope or human report before returning a pending/incomplete outcome MUST NOT erase or remap that outcome to internal failure; exit selection SHALL use the report's final application category in every output mode.
 
 #### Scenario: Failure plus pending
 - **WHEN** content binding fails and another receipt is pending
@@ -90,6 +96,10 @@ Overall SHALL be `fail` when any required applicable layer fails, `pending` when
 #### Scenario: Required layer not checked
 - **WHEN** no layer fails or remains pending but an applicable requested layer cannot be checked
 - **THEN** overall is incomplete and the command exits `9`, never `0`
+
+#### Scenario: Pending report is presented successfully
+- **WHEN** the complete available human, plain, or JSON matrix is written successfully and overall remains pending
+- **THEN** the command exits `9`, not `1`, while preserving the emitted report
 
 ### Requirement: Produce deterministic verification results
 Given identical local bytes, captured built-in/Core source responses, and an explicit observation time, repeated verification SHALL produce semantically identical JSON ordered by ledger question/forecast order and stable layer order. Volatile duration/progress fields MUST stay outside the stable result or be clearly separated as diagnostics.

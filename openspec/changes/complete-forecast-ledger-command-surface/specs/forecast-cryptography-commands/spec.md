@@ -123,6 +123,8 @@ After reveal publishes the key, anyone with the retained ciphertext can recover 
 ### Requirement: Protect key files before ledger publication
 The key destination SHALL be explicit, new, outside package-output roots, and not a symlink/junction/reparse-point escape. POSIX creation SHALL use owner-only mode `0600`; Windows creation SHALL apply an owner-only ACL and reject a destination whose protection cannot be established. The file SHALL contain only the documented key-file format and SHALL be flushed before ledger commit.
 
+Protection failures SHALL identify the selected file role without ambiguity: a private bundle permission failure SHALL name `--input`, while a key destination or existing key permission failure SHALL name `--key-file`. Messages MAY include a safe display path but MUST NOT mislabel a private input as a key file or disclose an absolute protected path when redaction policy forbids it.
+
 The `forecast-key/v1` file bytes SHALL be RFC 8785/JCS canonical UTF-8 for a closed object containing exactly `schema: forecast-key/v1`, `question_id`, `forecast_id`, and `key_hex` as 64 lowercase hexadecimal characters, followed by exactly one LF byte. It SHALL contain no ledger ID, salt, nonce, ciphertext, key hint, timestamp, path, or additional field. On read, schema, IDs, hex form, and decoded 32-byte length MUST match the selected operation before decryption begins.
 
 Seal SHALL write and secure the key first, then commit the ledger. If key creation fails, the ledger remains unchanged. If ledger commit fails after the key is durable, the command SHALL preserve the key, report its safe display path and recovery action without revealing it, and MUST NOT silently delete the only copy.
@@ -138,6 +140,10 @@ Seal SHALL write and secure the key first, then commit the ledger. If key creati
 #### Scenario: Ledger commit fails after key write
 - **WHEN** the key is durable but post-validation or safe replacement fails
 - **THEN** the original ledger remains unchanged and output identifies a retained orphan key file using a redacted/safe path
+
+#### Scenario: Private input has unsafe permissions
+- **WHEN** `forecast seal` receives a private bundle whose protection does not meet the documented input policy
+- **THEN** the failure identifies `--input` as the unsafe file and does not claim that `--key-file` has the wrong mode
 
 ### Requirement: Repair non-authoritative key hints safely
 `forecast-ledger forecast key-hint update` SHALL require `--file`, `--question`, `--forecast`, and scalar `--key-hint`. It SHALL select a sealed or revealed forecast with a supported commitment and change only `commitment.key_hint`; it MUST NOT read, move, create, discover, validate, or disclose any actual key file. The operation SHALL remain available for imported `unanchored`, `pending`, `verified`, or `failed` integrity because the hint is outside seal authentication and `forecast-envelope/v1`; every target, receipt, disclosed key, commitment digest, ciphertext, and integrity byte SHALL remain unchanged. Identical input SHALL be idempotent.

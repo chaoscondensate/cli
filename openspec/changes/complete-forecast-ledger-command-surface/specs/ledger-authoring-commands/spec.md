@@ -108,11 +108,15 @@ Once any forecast under the question has a retained deterministic target or targ
 - **THEN** help identifies annul-plus-new-question as the supported workflow and does not offer an overwrite or target-rebuild escape hatch
 
 ### Requirement: List and show questions
-`question list` SHALL return questions sorted by stable ID with type, status, forecast count, forecast window, expected resolution time, and integrity counts. `question show` SHALL return the selected question, its public metadata, resolution if present, and forecast summaries without exposing sealed plaintext or revealed key material. Neither action SHALL fetch outcome URLs, verify timestamps, or mutate state.
+`question list` SHALL return questions sorted by stable ID with title, type, status, forecast count, forecast window, expected resolution time, and integrity counts. `question show` SHALL return the selected question's ID, title, type, status, resolution criteria, complete forecast window, expected resolution time, options or unit where applicable, platform references, tags, notes, current resolution if present, and forecast summaries without exposing sealed plaintext or revealed key material. Human output SHALL render these distinguishing business fields rather than repeating only the compact list row. Neither action SHALL fetch outcome URLs, verify timestamps, or mutate state.
 
 #### Scenario: Show sealed question
 - **WHEN** the selected question contains sealed forecasts
 - **THEN** output includes public notes and commitment/target state but contains no decrypted bundle, raw key, or absolute secret path
+
+#### Scenario: Human question detail
+- **WHEN** a user runs `question show` without a machine-output mode
+- **THEN** output includes the question title, resolution criteria, forecast window, expected resolution time, applicable type details, and current resolution instead of only ID/count/status summary fields
 
 ### Requirement: Resolve a question with typed evidence
 `question resolve` SHALL require approval, a selected question in `closed`, `awaiting_resolution`, or `disputed`, and a closed `--input` object containing `outcome`, `outcome_known_at`, optional `recorded_at`, one or more evidence sources, and optional notes. Outcome type SHALL match the question: boolean for binary, existing option ID for multiple-choice, exact decimal string for numeric, and full date for date. Each source SHALL include non-empty title, absolute URL, and `retrieved_at`, with optional publisher, published time, and SHA-256 content digest. `recorded_at` MUST NOT precede `outcome_known_at`.
@@ -130,6 +134,10 @@ The command SHALL set both question and resolution status to `resolved`, retain 
 #### Scenario: Resolve after dispute review
 - **WHEN** a disputed question receives a new valid typed outcome and evidence with confirmation
 - **THEN** the dispute object is replaced by the current resolved object, prior status is reported, and forecasts remain unchanged
+
+#### Scenario: Resolve a timestamped question
+- **WHEN** a question with valid retained target and receipt artifacts is closed and then receives a valid typed resolution
+- **THEN** both lifecycle mutations validate and commit while preserving every retained forecast, target, receipt, and integrity reference
 
 ### Requirement: Annul a question
 `question annul` SHALL require approval and `--input` containing a non-empty reason, optional `recorded_at`, and optional evidence sources. It SHALL accept unresolved, resolved, or disputed questions, replace any current resolution only after explicit confirmation, set question/resolution status to `annulled`, and retain all forecast records and integrity evidence unchanged. When replacing a disputed or resolved object it SHALL report prior status and the absence of internal v1 resolution history. The result SHALL make clear that annulment is a recorded claim, not deletion.
@@ -172,12 +180,20 @@ A superseded ID MUST identify an earlier forecast in the same question. Adding a
 - **WHEN** input omits an option or totals 9,999 basis points
 - **THEN** validation identifies coverage and/or sum errors and leaves the ledger unchanged
 
+#### Scenario: Append after another forecast was stamped
+- **WHEN** one forecast in an open question has valid retained target and receipt artifacts and a new globally unique forecast is added
+- **THEN** the new forecast is appended and the existing forecast and evidence remain unchanged and valid
+
 ### Requirement: List and show forecasts
-`forecast list` SHALL return the selected question's forecasts in recorded order with stable ID, times, visibility, supersession link, and integrity status. `forecast show` SHALL return the exact selected public/revealed forecast or a redacted sealed summary. Revealed keys SHALL remain redacted even though the v1 ledger stores the disclosed key. Neither action SHALL decrypt, contact the network, or change integrity metadata.
+`forecast list` SHALL return the selected question's forecasts in recorded order with stable ID, times, visibility, a concise type-aware value summary when public or revealed, supersession link, and integrity status. `forecast show` SHALL return the exact selected public/revealed forecast including its type-aware value, rationale, key factors, comment, public note, supersession link, and integrity metadata, or a redacted sealed summary containing only fields already public in the ledger. Human output SHALL render these record details rather than repeating only the compact list row. Revealed keys SHALL remain redacted even though the v1 ledger stores the disclosed key. Neither action SHALL decrypt, contact the network, or change integrity metadata.
 
 #### Scenario: List append-only history
 - **WHEN** three forecasts form a supersession chain
 - **THEN** list returns all three records in recorded order and exposes each link without collapsing them into a current value
+
+#### Scenario: Human public forecast detail
+- **WHEN** a user runs `forecast show` for a public forecast without a machine-output mode
+- **THEN** output includes its value, rationale, key factors, comment, supersession relationship, and integrity state instead of only ID/time/status summary fields
 
 ### Requirement: Preserve imported evidence states outside the authoring surface
 v1 authoring commands SHALL not create or edit schema-supported `external_anchors`; every pending-to-verified transition SHALL preserve them byte-for-byte and verification SHALL report them only as external claims, never as OpenTimestamps proof. v1 commands SHALL not create `integrity.status: failed` automatically. An imported failed integrity state is terminal for that forecast: target, timestamp, seal, and integrity mutation commands SHALL refuse to replace it, while list/show/status/verify remain available. Recovery SHALL append a new forecast revision with a new globally unique ID and optional supersession link, preserving the failed record as history.
