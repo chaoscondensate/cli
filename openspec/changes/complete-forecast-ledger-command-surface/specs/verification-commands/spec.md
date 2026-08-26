@@ -32,14 +32,20 @@ For every forecast with integrity target metadata, content binding SHALL rebuild
 - **WHEN** forecast fields rebuild to bytes different from the retained target
 - **THEN** content binding fails even if the receipt remains a valid proof for the old artifact
 
-### Requirement: Verify existence timing with explicit network policy
-Verification SHALL be offline by default. Offline mode SHALL parse and inspect retained receipts but report confirmed attestations as `not_checked` or pending unless ledger metadata already contains internally consistent previously verified evidence. A user MAY provide the same explicit Bitcoin source options as `timestamp verify`; only then may the command perform bounded network checks and independently pass existence timing.
+### Requirement: Verify existence timing with the built-in network profile
+When an applicable retained OTS receipt contains a supported Bitcoin attestation, verification SHALL automatically use `opentimestamps-public-v1` and the same dual-public-source agreement and local header/proof checks as `timestamp verify`; users SHALL not need to choose or configure an explorer. An advanced user MAY select the same optional Bitcoin Core mode as `timestamp verify` for independently operated verification.
+
+`--offline` SHALL disable every network request. Offline mode SHALL parse and inspect retained receipts but report attestations as `not_checked` or pending unless ledger metadata already contains internally consistent previously verified evidence. Because v1 does not retain the prior Bitcoin source identity, an offline report relying on stored verified metadata SHALL disclose that limitation and MUST NOT present the prior source as independently rechecked.
 
 Existence timing SHALL report target/receipt binding, proof validity, Bitcoin source and trust boundary, block evidence, conservative `anchored_before`, and whether that bound predates a resolved question's `outcome_known_at`. A cryptographically valid late anchor SHALL fail pre-outcome sufficiency while retaining proof-valid evidence.
 
 #### Scenario: Offline pending proof
-- **WHEN** a receipt is pending and no Bitcoin source is selected
+- **WHEN** a receipt is pending and `--offline` is selected
 - **THEN** existence timing is pending with no network access
+
+#### Scenario: Zero-config online verification
+- **WHEN** a supported receipt is checked without `--offline` or Bitcoin Core options
+- **THEN** existence timing uses the built-in dual-public-source profile and reports its third-party trust boundary
 
 #### Scenario: Valid late anchor
 - **WHEN** a verified proof's conservative bound is not earlier than the known outcome
@@ -53,7 +59,7 @@ For a revealed forecast, the reveal layer SHALL authenticate/decrypt retained ci
 - **THEN** reveal fails even if the ciphertext and timestamp receipt are otherwise valid
 
 ### Requirement: Observe outcome evidence without asserting truth
-For resolved questions, outcome evidence SHALL validate resolution type, chronology, non-empty sources, optional content digests, and source metadata. By default it SHALL make no network request. With explicit `--check-sources`, it MAY perform bounded retrieval to report reachability, final approved URL, response time, and digest match, but MUST NOT infer that a reachable page is authoritative or that the outcome is substantively true. Annulled/disputed states SHALL report their recorded reason/evidence without converting them to resolved truth.
+For resolved questions, outcome evidence SHALL validate resolution type, chronology, non-empty sources, optional content digests, and source metadata. By default it SHALL make no request to outcome URLs; automatic OTS Bitcoin checks do not enable arbitrary source retrieval. With explicit `--check-sources`, it MAY perform bounded retrieval of public HTTPS URLs to report reachability, final approved URL, response time, and digest match, but MUST reject private/link-local/reserved destinations and MUST NOT infer that a reachable page is authoritative or that the outcome is substantively true. `--offline` SHALL override `--check-sources`. Annulled/disputed states SHALL report their recorded reason/evidence without converting them to resolved truth.
 
 #### Scenario: Reachable outcome URL
 - **WHEN** an explicitly checked source returns successfully and matches its stored digest
@@ -67,16 +73,19 @@ Every human and JSON report SHALL explicitly state that Forecast Ledger v1 does 
 - **THEN** overall reports verified technical evidence and still includes every required limitation
 
 ### Requirement: Apply deterministic overall status and exit precedence
-Overall SHALL be `fail` when any required applicable layer fails, `pending` when none fail and at least one is pending, `incomplete` when none fail/pending but a requested required layer is not checked, and `pass` only when every requested applicable layer passes. Document invalidity SHALL use exit `3`; cryptographic/evidence failure exit `6`; pending exit `9`; explicitly requested network failure exit `8`; otherwise a complete pass exits `0`. JSON output SHALL still contain the full safely available matrix for non-zero evidence outcomes.
+Overall SHALL be `fail` when any required applicable layer fails, `pending` when none fail and at least one is pending, `incomplete` when none fail/pending but a requested required layer is not checked, and `pass` only when every requested applicable layer passes. Document invalidity SHALL use exit `3`; cryptographic/evidence failure exit `6`; pending or incomplete exit `9`; required automatic or explicitly selected network failure exit `8`; only a complete pass exits `0`. JSON output SHALL still contain the full safely available matrix for non-zero evidence outcomes.
 
 #### Scenario: Failure plus pending
 - **WHEN** content binding fails and another receipt is pending
 - **THEN** overall is fail and exit `6`, while the pending layer remains visible in the matrix
 
+#### Scenario: Required layer not checked
+- **WHEN** no layer fails or remains pending but an applicable requested layer cannot be checked
+- **THEN** overall is incomplete and the command exits `9`, never `0`
+
 ### Requirement: Produce deterministic verification results
-Given identical local bytes, explicit source responses, and an explicit observation time, repeated verification SHALL produce semantically identical JSON ordered by ledger question/forecast order and stable layer order. Volatile duration/progress fields MUST stay outside the stable result or be clearly separated as diagnostics.
+Given identical local bytes, captured built-in/Core source responses, and an explicit observation time, repeated verification SHALL produce semantically identical JSON ordered by ledger question/forecast order and stable layer order. Volatile duration/progress fields MUST stay outside the stable result or be clearly separated as diagnostics.
 
 #### Scenario: Repeat offline verification
 - **WHEN** the same package is verified twice offline
 - **THEN** normalized JSON evidence, states, codes, paths, and limitations are identical
-

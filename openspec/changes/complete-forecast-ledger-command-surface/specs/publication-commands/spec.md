@@ -25,13 +25,19 @@ The manifest SHALL use a versioned closed schema and contain at least: manifest 
 - **THEN** every copied content file, manifest byte, and manifest SHA-256 is identical
 
 ### Requirement: Exclude secrets and undisclosed material
-Build MUST exclude key files, secret roots and paths, credentials, lock/journal/temp files, raw private seal input, decrypted sealed plaintext, and any file not required by the public ledger evidence. A sealed forecast MAY contribute only public note, commitment, ciphertext, target, receipt, and other data already allowed by the ledger contract. A revealed forecast MAY contribute only disclosed material already represented in the validated ledger; the manifest and command output SHALL still redact raw key values and machine-local key locations.
+Build MUST exclude key files, actual `--key-file` locations, secret roots and paths, credentials, lock/journal/temp files, raw private seal input, decrypted sealed plaintext, and any file not required by the public ledger evidence. A sealed forecast MAY contribute only public note, commitment, ciphertext, safe logical key hint, target, receipt, and other data already allowed by the ledger contract. A revealed forecast MAY contribute only disclosed material already represented in the validated ledger; the manifest and command output SHALL still redact raw key values and machine-local key locations.
+
+Because the complete ledger is copied byte-for-byte, its schema-required `key_hint` remains present. Package build SHALL accept it only as a non-authoritative logical identifier and SHALL reject an absolute/relative filesystem path, file URI, drive/UNC/device form, secret-root name, credential-bearing URI, or value equal to a known protected path. CLI-created hints use `forecast-key:<forecast-id>` and never record the actual key-file path.
 
 Before writing, build SHALL scan the prospective manifest and generated/copy set for protected-root membership, known secret file roles/names, absolute paths, and secret canaries used by acceptance tests. Detection SHALL fail the operation rather than merely warn.
 
 #### Scenario: Key located under output source tree
 - **WHEN** a key file is adjacent to a target or otherwise discoverable during package enumeration
 - **THEN** it is not included, and any attempt to include it explicitly is rejected
+
+#### Scenario: Imported machine-local key hint
+- **WHEN** the exact ledger contains a key hint that exposes an absolute or relative key-file path
+- **THEN** package build fails secret-path validation rather than rewriting the ledger or copying the key
 
 #### Scenario: Unrevealed plaintext found
 - **WHEN** prospective package content contains a sealed forecast's private bundle outside ciphertext
@@ -76,7 +82,7 @@ It SHALL fail if a listed file is missing, a digest/size/role differs, the ledge
 - **THEN** package integrity fails and the unexpected safe relative path is reported without reading secret contents
 
 ### Requirement: Keep package verification offline by default
-Package verification SHALL require no original authoring location, source-control repository, hosting service, calendar, or network. If the user explicitly supplies a Bitcoin source, existence timing MAY be independently checked using the same policy as layered verification; package integrity and content/reveal results MUST remain independently visible if the source fails.
+Package verification SHALL require no original authoring location, source-control repository, hosting service, calendar, or network. `--online` MAY enable existence-timing revalidation through the built-in dual-public-source profile without requiring endpoint configuration; optional Bitcoin Core options MAY replace that profile for independently operated verification. Package integrity and content/reveal results MUST remain independently visible if an online source fails. `--offline` and `--online` MUST be mutually exclusive, and omission of both SHALL remain offline for portable-package verification.
 
 #### Scenario: Package copied to removable media
 - **WHEN** a verifier receives only the retained package and runs offline verification

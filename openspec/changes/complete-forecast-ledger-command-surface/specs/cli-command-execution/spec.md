@@ -23,6 +23,7 @@ The command selector contract SHALL be:
 | Commands | Required selection |
 | --- | --- |
 | `init` | `--file` names a new ledger |
+| `ledger update` | `--file` |
 | `platform add|update|show|remove` | `--file --platform` |
 | `platform list` | `--file` |
 | `question add|update|show|resolve|annul|dispute` | `--file --question` |
@@ -66,12 +67,30 @@ Commands that accept a structured record or secret bundle SHALL use `--input <pa
 - **WHEN** a user invokes `verify --file -`
 - **THEN** the command rejects stdin because target and receipt paths require a real ledger directory
 
+### Requirement: Refuse unsupported ledger contracts
+Every action that reads an existing ledger SHALL inspect the bounded root and require `schema_version` exactly `1.0.0` before domain mutation, artifact creation, crypto, network, or MCP resource publication. An absent, unknown, or future version SHALL return stable code `unsupported_schema_version` in the invalid-data category with exit `3`, identify the supported version, and MUST NOT coerce, migrate, fetch, or validate against a floating remote contract.
+
+#### Scenario: Future schema version
+- **WHEN** a ledger declares `schema_version: 2.0.0`
+- **THEN** the action returns `unsupported_schema_version`/exit `3` before any side effect and reports that only `1.0.0` is supported
+
 ### Requirement: Stable time input
 Persisted timestamps SHALL be RFC 3339 values with seconds and an explicit offset. Commands MAY default a write-time field such as `created_at`, `recorded_at`, or `revealed_at` to the current clock, but MUST report the exact stored value and MUST accept an explicit value for reproducible use and testing. The CLI MUST NOT present a self-reported timestamp or local clock as cryptographic evidence.
 
 #### Scenario: Default recorded time
 - **WHEN** a forecast input omits `recorded_at`
 - **THEN** the command captures one clock value, validates it against `forecasted_at`, stores it unchanged, and returns it in the result
+
+### Requirement: Consistent zero-config and offline network behavior
+Every action that can contact the network SHALL identify the built-in profile or explicit advanced source mode it will use and SHALL support `--offline`. Offline mode SHALL override automatic protocol-source use and explicit outcome-source checking, open no socket, and either continue with documented local-only results or fail before side effects when the action inherently requires a network response. Ordinary OpenTimestamps and Bitcoin public verification MUST NOT require calendar/explorer configuration; only the documented CLI Bitcoin Core override may accept an explicit protocol endpoint in v1.
+
+#### Scenario: Offline layered verification
+- **WHEN** a user runs `verify --offline`
+- **THEN** all local layers run, network-dependent layers remain pending or not checked, and no source URL is contacted
+
+#### Scenario: Visible automatic profile
+- **WHEN** a network-capable command uses the embedded public profile
+- **THEN** human and JSON results identify its stable profile ID and safe contacted source IDs
 
 ### Requirement: Transactional mutation and format preservation
 Every ledger mutation SHALL acquire the cross-platform ledger lock, parse and fully validate the current document, apply a minimal source-tree patch, fully validate the prospective document, and perform a recoverable same-directory replacement. It MUST preserve JSON versus YAML, newline convention, and untouched YAML comments, order, scalar style, and unknown presentation details allowed by the schema. An error or interruption before commit MUST leave the original ledger byte-for-byte unchanged.
@@ -100,7 +119,9 @@ Commands that disclose previously sealed material, remove a platform, replace te
 ### Requirement: Stable result and error envelopes
 Human output SHALL be concise English. JSON success SHALL be one object with `ok: true`, stable operation `code`, plain `message`, and typed `data`; JSON failure SHALL be one object on stderr with `ok: false`, stable error `code`, plain `message`, and optional redacted `details`. Primary success output belongs only on stdout; errors, warnings, progress, and verbose diagnostics belong only on stderr.
 
-The CLI exit mapping SHALL remain: `0` success, `1` unexpected internal failure, `2` usage, `3` invalid data, `4` not found, `5` conflict/precondition, `6` cryptographic or evidence verification failure, `7` local I/O, `8` network/remote failure, `9` pending/not ready, `10` unavailable, and `130` interrupted.
+`--plain` SHALL produce undecorated UTF-8 line-oriented output with no color, animation, border, heading, or progress on stdout; repeated records SHALL use a documented stable tab-separated field order. `--quiet` SHALL suppress all successful primary stdout while preserving warnings and failures on stderr and the process exit. `--json`, `--plain`, and `--quiet` SHALL be mutually exclusive; `--verbose` MAY add redacted diagnostics only to stderr.
+
+The CLI exit mapping SHALL remain: `0` success, `1` unexpected internal failure, `2` usage, `3` invalid or unsupported-schema data, `4` not found, `5` conflict/precondition including read-only or missing-root conditions, `6` cryptographic or evidence verification failure, `7` local I/O including operating-system access denial, `8` network/remote/network-disabled failure, `9` pending/not ready/incomplete verification, `10` unavailable, and `130` interrupted. There is no separate CLI `permission` class.
 
 #### Scenario: JSON mutation success
 - **WHEN** `platform add --json` succeeds
@@ -110,6 +131,14 @@ The CLI exit mapping SHALL remain: `0` success, `1` unexpected internal failure,
 - **WHEN** an add command receives an existing ID
 - **THEN** it returns `conflict`/exit `5`, not `internal`, with the conflicting stable ID in redacted details
 
+#### Scenario: Quiet success
+- **WHEN** a successful mutation runs with `--quiet`
+- **THEN** stdout is empty, warnings remain on stderr, and the process exits `0`
+
+#### Scenario: Conflicting output modes
+- **WHEN** a user combines any two of `--json`, `--plain`, and `--quiet`
+- **THEN** argument handling returns usage/exit `2` before the action
+
 ### Requirement: Secret-safe and private-safe output
 Raw keys, salts, nonces before publication, sealed plaintext, credentials, protected file contents, and absolute secret paths MUST NOT appear in help examples, argv values, environment inputs, normal or verbose logs, result/error envelopes, panic text, telemetry, MCP resources, or evidence packages. Ledger validation errors MUST identify locations and rules without echoing private source values. Revealed keys stored by the published schema SHALL remain redacted from CLI/MCP inspection output.
 
@@ -118,7 +147,7 @@ Raw keys, salts, nonces before publication, sealed plaintext, credentials, prote
 - **THEN** fallback diagnostics contain no generated key, private bundle field, or absolute key path
 
 ### Requirement: Cancellation and bounded external work
-Every action SHALL honor inherited cancellation and `--timeout`. File and cryptographic loops SHALL check cancellation at bounded intervals; network requests SHALL use the operation context, response-size limits, redirect policy, and explicit endpoints. Interruption SHALL return exit `130` and preserve or recover the last committed coherent state.
+Every action SHALL honor inherited cancellation and `--timeout`. File and cryptographic loops SHALL check cancellation at bounded intervals; network requests SHALL use the operation context, response-size limits, redirect policy, and the built-in profile or documented CLI Core endpoint. Interruption SHALL return exit `130` and preserve or recover the last committed coherent state.
 
 #### Scenario: Interrupt during calendar request
 - **WHEN** the operation context is canceled while stamping
@@ -131,3 +160,9 @@ The same ledger and explicit inputs SHALL produce equivalent domain results, JSO
 - **WHEN** a relative artifact path resolves through a junction or drive/UNC escape outside its allowed root
 - **THEN** the operation rejects the path before opening or creating the target
 
+### Requirement: Correct the registered preview tree before availability
+The existing hidden/unavailable urfave tree is a preview scaffold, not a compatibility promise for completed actions. Before the affected leaf becomes visible, implementation and help goldens SHALL change `target check`, all timestamp actions, and layered `verify` to reject `--file -`; SHALL make `timestamp verify` a mutating/network-capable action with `--dry-run`; SHALL keep the already registered required scalar `question add --type`; and SHALL make MCP root flags repeatable. Release notes SHALL identify these preview corrections, and no command may be advertised with the old contradictory contract.
+
+#### Scenario: Preview timestamp verify becomes available
+- **WHEN** `timestamp verify` passes its implementation gate
+- **THEN** its visible help requires a real file, includes dry-run/offline behavior, and no golden or completion advertises the old read-only stdin form

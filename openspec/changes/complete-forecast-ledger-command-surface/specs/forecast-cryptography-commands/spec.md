@@ -5,7 +5,19 @@ Defines deterministic target construction and the complete secret-safe sealed fo
 ## ADDED Requirements
 
 ### Requirement: Construct the exact forecast target projection
-The system SHALL construct `forecast-envelope/v1` from the selected question and forecast using the published typed allowlist and bounded RFC 8785/JCS profile. It SHALL reject floats and values outside I-JSON limits, sort object properties by UTF-16 code units, emit UTF-8 canonical bytes without insignificant whitespace, and calculate SHA-256 over those exact bytes. Integrity metadata and `key_hint` MUST be excluded.
+The system SHALL construct a closed `forecast-envelope/v1` object with exactly four root properties: `schema` equal to `forecast-envelope/v1`, `ledger_id`, `question`, and `forecast`. The projection SHALL use this complete allowlist:
+
+| Object | Included fields |
+| --- | --- |
+| `question` for every forecast | `id`, `title`, `type`, `resolution_criteria`, `created_at`, `forecast_window`, `expected_resolution_at`; `options` only for multiple-choice; `unit` only for numeric |
+| `forecast` common | `id`, `forecasted_at`, `recorded_at`, normalized `visibility`; include `public_note` and `supersedes_forecast_id` only when present |
+| public forecast extension | `value`; include `rationale`, `key_factors`, and `comment` exactly when present |
+| sealed forecast extension | `commitment` containing exactly `scheme`, `commitment_hash`, and `encryption` (`algorithm`, `nonce`, `ciphertext`) |
+| revealed forecast extension | the same sealed extension and normalized `visibility: sealed`, rebuilding the forecast as it existed before reveal |
+
+Every other ledger, question, forecast, resolution, integrity, publication, platform, forecaster, and presentation field MUST be excluded. In particular, `question.status`, `platform_refs`, `tags`, `notes`, `forecasts`, and `resolution`; forecast `integrity`; commitment `key_hint`, `revealed_at`, and `revealed_key`; and the revealed public mirror MUST be excluded. The target therefore binds the ledger ID and listed question meaning, but does not prove forecaster authorship or bind omitted mutable metadata.
+
+The complete closed projection SHALL be encoded with the bounded RFC 8785/JCS profile. It SHALL reject floats and values outside I-JSON limits, sort object properties by UTF-16 code units, emit UTF-8 canonical bytes without insignificant whitespace, and calculate SHA-256 over those exact bytes.
 
 A public forecast target SHALL bind the public value and public explanatory fields. A sealed forecast target SHALL bind the sealed commitment and encryption fields while excluding private plaintext. A revealed forecast SHALL continue to rebuild the original sealed-envelope target, not a new public target, so reveal cannot change the bytes covered by an existing timestamp.
 
@@ -16,6 +28,14 @@ A public forecast target SHALL bind the public value and public explanatory fiel
 #### Scenario: Revealed target continuity
 - **WHEN** a previously targeted sealed forecast is revealed correctly
 - **THEN** rebuilding its target produces the exact original sealed target bytes and digest
+
+#### Scenario: Target changes across ledgers
+- **WHEN** the same valid sealed commitment is placed under the same question and forecast IDs in a ledger with a different `ledger_id`
+- **THEN** seal authentication can still succeed but the `forecast-envelope/v1` bytes and digest differ
+
+#### Scenario: Excluded status change
+- **WHEN** only question status or resolution changes
+- **THEN** the forecast target bytes remain unchanged because lifecycle outcome is not part of the prediction target
 
 ### Requirement: Build target artifacts deterministically
 `forecast-ledger target build` SHALL require `--all` or one question/forecast pair and a real ledger path. The default artifact path SHALL be `proofs/targets/<forecast-id>.json` relative to the ledger directory; forecast IDs are globally unique. The operation SHALL validate the ledger and selected forecast before writing, confine the resolved path to the ledger artifact root, and write through exclusive creation or recoverable replacement.
@@ -46,16 +66,34 @@ Target build SHALL NOT change ledger integrity state by itself; `timestamp stamp
 ### Requirement: Accept sealed forecast input only through a private channel
 `forecast-ledger forecast seal` SHALL require `--file`, `--question`, a globally unique new `--forecast`, `--input <protected-file|->`, and a new `--key-file` path. The private input SHALL contain the same typed value, forecast times, rationale, key factors, and comment fields used by a public forecast, plus optional public note and supersession ID. Those private fields MUST NOT be accepted as scalar argv flags or environment variables.
 
-The selected question SHALL be open, the forecast time SHALL be inside its window, type/value/chronology rules SHALL match public forecast add, and a supersession link SHALL target an earlier forecast in the same question.
+After input parsing and time defaulting, `forecasted_at`, `recorded_at`, `value`, `rationale`, `key_factors`, and `comment` SHALL all be present because the revealed schema requires all six mirror fields. `rationale` and `comment` MAY be empty strings where the schema permits; `key_factors` MAY be an empty array but every included item MUST be non-empty. `public_note` and `supersedes_forecast_id` remain public record fields outside the private bundle.
+
+The selected question SHALL be open, the forecast time SHALL be inside its window, type/value/chronology rules SHALL match public forecast add, and a supersession link SHALL target an earlier forecast in the same question. Seal MUST create a new append-only forecast and MUST NOT accept an existing public, sealed, or revealed forecast ID for in-place hiding or resealing.
 
 #### Scenario: Private plaintext supplied as flag
 - **WHEN** a user attempts to pass a raw value, rationale, key, or salt flag to seal
 - **THEN** argument parsing rejects it because no such secret-bearing option exists
 
-### Requirement: Seal with the published cryptographic profile
-Seal SHALL generate a fresh 32-byte salt, 32-byte key, and 12-byte nonce from the operating-system CSPRNG. It SHALL create the exact published `forecast-seal/v1` canonical plaintext bundle and associated data bound to ledger, question, forecast, and protocol identifiers; compute the required SHA-256 commitment; and encrypt with ChaCha20-Poly1305. It MUST reproduce the pinned upstream vector exactly when deterministic test entropy is injected by conformance tests.
+#### Scenario: Missing reveal mirror field
+- **WHEN** private input omits rationale, key factors, or comment after defaults are applied
+- **THEN** seal rejects the bundle before entropy or file creation because a future schema-valid reveal would be impossible
 
-The appended forecast SHALL have visibility `sealed`, integrity `unanchored`, optional safe public note and supersession link, and a commitment containing the published scheme, SHA-256 commitment, `chacha20-poly1305` nonce/ciphertext, and a safe relative key hint. It MUST NOT contain plaintext value, rationale, key factors, or comment.
+#### Scenario: Attempt to hide a public forecast
+- **WHEN** seal receives a forecast ID already used by a public forecast
+- **THEN** it returns conflict and does not encrypt, create a key, or change the published record
+
+### Requirement: Seal with the published cryptographic profile
+Seal SHALL generate a fresh 32-byte salt, 32-byte key, and 12-byte nonce from the operating-system CSPRNG. It SHALL create this exact closed canonical plaintext object:
+
+- `schema`: `forecast-seal/v1`;
+- `question_id`: the selected question ID;
+- `forecast_id`: the new forecast ID;
+- `salt`: the 32-byte salt as 64 lowercase hexadecimal characters;
+- `bundle`: exactly `forecasted_at`, `recorded_at`, `value`, `rationale`, `key_factors`, and `comment`.
+
+The commitment value SHALL be SHA-256 of the RFC 8785/JCS canonical UTF-8 plaintext bytes. ChaCha20-Poly1305 associated data SHALL be the RFC 8785/JCS canonical encoding of exactly `scheme: forecast-seal/v1`, `question_id`, `forecast_id`, and `commitment_sha256` containing that lowercase digest. The encryption output SHALL use the fresh 32-byte key and 12-byte nonce. Neither plaintext nor AAD contains `ledger_id`, `public_note`, `supersedes_forecast_id`, or `key_hint`. The implementation MUST reproduce the pinned upstream plaintext, commitment, nonce/ciphertext, and complete commitment vector exactly when deterministic test entropy and fixture key hint are injected by conformance tests.
+
+The appended forecast SHALL have visibility `sealed`, integrity `unanchored`, optional safe public note and supersession link, and a commitment containing the published scheme, SHA-256 commitment, `chacha20-poly1305` nonce/ciphertext, and a safe logical key hint. Production CLI creation SHALL use `forecast-key:<forecast-id>` unless a separately reviewed future profile adds another safe logical form. `key_hint` MUST NOT contain the `--key-file` path, an absolute path, a file URI, a secret-root name, or credential material. The sealed forecast MUST NOT contain plaintext value, rationale, key factors, or comment.
 
 #### Scenario: Successful seal
 - **WHEN** private input is valid and secure key storage succeeds
@@ -65,8 +103,27 @@ The appended forecast SHALL have visibility `sealed`, integrity `unanchored`, op
 - **WHEN** the operating-system random source cannot return every required byte
 - **THEN** seal returns an internal or I/O failure before creating a key file or ledger mutation
 
+### Requirement: State the seal profile's exact security boundaries
+Documentation and every machine-readable crypto profile description SHALL state that `forecast-seal/v1` authenticates the exact question ID, forecast ID, salt, private bundle, scheme, and commitment digest described above. It does not authenticate `ledger_id`, `public_note`, `supersedes_forecast_id`, `key_hint`, forecaster identity, question wording, or any other ledger metadata. A sealed commitment can therefore authenticate after transfer to another ledger when its question and forecast IDs are unchanged; a `forecast-envelope/v1` target created in that ledger separately binds the ledger ID and listed question fields.
+
+After reveal publishes the key, anyone with the retained ciphertext can recover the salt and private bundle. `public_note` and `supersedes_forecast_id` are not protected by the seal commitment but are included in the sealed target if target evidence is created. `key_hint` is deliberately excluded from both seal authentication and target bytes and is non-authoritative; reveal always requires an explicit protected key file, so moving a key file does not require changing the ledger.
+
+#### Scenario: Public metadata tampered before targeting
+- **WHEN** only `public_note`, `supersedes_forecast_id`, or `key_hint` changes on an otherwise authentic sealed record before a target exists
+- **THEN** seal authentication alone does not detect that change and verification reports the documented limitation
+
+#### Scenario: Public metadata tampered after targeting
+- **WHEN** `public_note` or `supersedes_forecast_id` changes after a matching target is retained
+- **THEN** content-binding verification fails even though seal authentication can still succeed
+
+#### Scenario: Key file moved intentionally
+- **WHEN** an operator securely moves a valid key file and later supplies its new explicit path to reveal
+- **THEN** reveal uses the key file's bound question/forecast IDs, requires no ledger or `key_hint` mutation, and the logical hint remains non-authoritative
+
 ### Requirement: Protect key files before ledger publication
 The key destination SHALL be explicit, new, outside package-output roots, and not a symlink/junction/reparse-point escape. POSIX creation SHALL use owner-only mode `0600`; Windows creation SHALL apply an owner-only ACL and reject a destination whose protection cannot be established. The file SHALL contain only the documented key-file format and SHALL be flushed before ledger commit.
+
+The `forecast-key/v1` file bytes SHALL be RFC 8785/JCS canonical UTF-8 for a closed object containing exactly `schema: forecast-key/v1`, `question_id`, `forecast_id`, and `key_hex` as 64 lowercase hexadecimal characters, followed by exactly one LF byte. It SHALL contain no ledger ID, salt, nonce, ciphertext, key hint, timestamp, path, or additional field. On read, schema, IDs, hex form, and decoded 32-byte length MUST match the selected operation before decryption begins.
 
 Seal SHALL write and secure the key first, then commit the ledger. If key creation fails, the ledger remains unchanged. If ledger commit fails after the key is durable, the command SHALL preserve the key, report its safe display path and recovery action without revealing it, and MUST NOT silently delete the only copy.
 
@@ -74,12 +131,16 @@ Seal SHALL write and secure the key first, then commit the ledger. If key creati
 - **WHEN** `--key-file` already exists
 - **THEN** seal returns `conflict` without reading, truncating, chmodding, or replacing that entry
 
+#### Scenario: Key file bound to another forecast
+- **WHEN** reveal receives a valid `forecast-key/v1` file naming another question or forecast
+- **THEN** it returns verification failure before decryption and does not expose the key or mutate the ledger
+
 #### Scenario: Ledger commit fails after key write
 - **WHEN** the key is durable but post-validation or safe replacement fails
 - **THEN** the original ledger remains unchanged and output identifies a retained orphan key file using a redacted/safe path
 
 ### Requirement: Reveal only after complete authentication
-`forecast-ledger forecast reveal` SHALL require approval, a selected sealed forecast, and an explicit protected `--key-file`. Before opening a ledger write transaction it SHALL read the bounded key file, authenticate/decrypt the original ciphertext, verify the commitment hash, associated data, ledger/question/forecast IDs, protocol identifiers, and canonical private bundle, and validate the derived public mirror against the question type and chronology.
+`forecast-ledger forecast reveal` SHALL require approval, a selected sealed forecast, and an explicit protected `--key-file`. Before opening a ledger write transaction it SHALL read the bounded key file, authenticate/decrypt the original ciphertext, verify the commitment hash, exact associated data, question/forecast IDs, protocol identifiers, and exact canonical private bundle, and validate the six derived public mirror fields against the question type and chronology. It MUST NOT claim or attempt a ledger-ID binding that does not exist in `forecast-seal/v1`.
 
 Only after every check succeeds SHALL reveal set visibility to `revealed`, add `revealed_at` and the disclosed key required by v1, and derive value/rationale/key factors/comment from authenticated plaintext. It SHALL retain the original commitment hash, nonce, ciphertext, key hint, supersession link, integrity object, target relationship, and public note.
 
@@ -88,7 +149,7 @@ Only after every check succeeds SHALL reveal set visibility to `revealed`, add `
 - **THEN** reveal returns verification failure and the ledger remains byte-for-byte unchanged
 
 #### Scenario: Bound ID mismatch
-- **WHEN** decrypted plaintext authenticates but names a different ledger, question, or forecast
+- **WHEN** decrypted plaintext authenticates but names a different question or forecast
 - **THEN** reveal fails before mutation and reports a binding failure without exposing plaintext
 
 #### Scenario: Successful reveal of timestamped forecast
@@ -103,9 +164,8 @@ Revealing an already revealed forecast with a key that exactly matches the store
 - **THEN** no bytes change and the command reports that the forecast is already revealed
 
 ### Requirement: Prove cryptographic interoperability and non-disclosure
-Release gates SHALL include the pinned positive seal vector, negative mutations for every bound field, wrong-key and tampered-ciphertext cases, Go/Python cross-language seal/reveal fixtures, property tests, fuzzing of bounded key/ciphertext inputs, cross-platform target bytes, crash points across key/artifact/ledger writes, and canary assertions through implemented seal/reveal paths. No crypto command SHALL become visible while its vector, rollback, permission, and redaction gates are incomplete.
+Release gates SHALL include the pinned positive seal vector, a checked-in cross-language `forecast-envelope/v1` vector for public/sealed/revealed continuity, exact `forecast-key/v1` bytes, negative mutations for every actually bound field, explicit non-binding tests for ledger ID/public note/supersession/key hint, wrong-key and tampered-ciphertext cases, Go/Python cross-language seal/reveal fixtures, property tests, fuzzing of bounded key/ciphertext inputs, cross-platform target bytes, crash points across key/artifact/ledger writes, and canary assertions through implemented seal/reveal paths. No crypto command SHALL become visible while its vector, rollback, native key-protection, and redaction gates are incomplete.
 
 #### Scenario: Pinned vector regression
 - **WHEN** canonicalization or crypto output differs by one byte from the published vector
 - **THEN** conformance and release checks fail before a binary is published
-
