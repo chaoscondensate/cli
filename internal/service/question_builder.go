@@ -23,6 +23,13 @@ func BuildInitialPublicLedger(root *ledger.Ledger, input InitialQuestionInput) (
 	return BuildQuestionWithInitialPublicForecast(root, NormalizeInitialQuestion(input), root.CreatedAt)
 }
 
+func BuildInitialPublicLedgerAt(root *ledger.Ledger, input InitialQuestionInput, observedAt ledger.Timestamp) (*ledger.Ledger, error) {
+	if root == nil {
+		return nil, app.NewError(app.CodeInternal, "ledger root is nil", nil)
+	}
+	return BuildQuestionWithInitialPublicForecast(root, NormalizeInitialQuestion(input), observedAt)
+}
+
 func BuildQuestionWithInitialPublicForecast(model *ledger.Ledger, input NormalizedQuestionCreate, observedAt ledger.Timestamp) (*ledger.Ledger, error) {
 	question, index, err := buildQuestionShell(model, input, observedAt)
 	if err != nil {

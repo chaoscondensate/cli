@@ -40,10 +40,10 @@ type Server struct {
 
 func New(config Config) (*Server, error) {
 	if config.Mode.AllowReveal && config.Mode.ReadOnly {
-		return nil, app.NewError(app.CodeUsage, "--allow-reveal cannot be combined with --read-only", nil)
+		return nil, app.WithDetails(app.NewError(app.CodeUsage, "--allow-reveal cannot be combined with --read-only", nil), map[string]any{"flags": []string{"--allow-reveal", "--read-only"}})
 	}
 	if config.Mode.AllowReveal && len(config.SecretRoots) == 0 {
-		return nil, app.NewError(app.CodeUsage, "--allow-reveal requires at least one --secret-root", nil)
+		return nil, app.WithDetails(app.NewError(app.CodeUsage, "--allow-reveal requires at least one secret root", nil), map[string]any{"class": service.RootSecret, "flag": "--secret-root"})
 	}
 	roots, err := NewRootSet(config.LedgerRoots, config.OutputRoots, config.SecretRoots)
 	if err != nil {

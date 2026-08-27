@@ -5,6 +5,33 @@ tags and downloadable files are published on GitHub Releases.
 
 ## Unreleased
 
+## 0.2.3 - 2026-08-27
+
+### Fixed
+
+- Report never-built targets as ordered `not_applicable` results and continue
+  `target check --all`, while retaining hard failures for missing referenced or
+  mismatched evidence.
+- Default initial recorded times from one operation-clock observation instead
+  of copying an explicit historical ledger creation time; inclusive time
+  boundaries now use inclusive wording.
+- Omit unknown diagnostic positions instead of printing line/column zero, and
+  keep semantic field order when JSON or YAML records are inserted or replaced.
+- Make MCP root errors identify safe root classes, flags, and route IDs without
+  exposing configured absolute paths.
+- Show retained target, receipt, Bitcoin height, anchored-before, and
+  verification-time evidence in forecast and layered verification output while
+  keeping offline values clearly labeled as stored.
+- Keep writer locking fail-fast even when a long `--timeout` is supplied; callers
+  that intentionally contend remain responsible for serialization or bounded
+  retry with backoff.
+
+### Testing
+
+- Add regressions derived from the v0.2.2 dogfooding findings across CLI modes,
+  MCP, JSON/YAML structural edits, fixed clocks, concurrent writers, and stored
+  OpenTimestamps evidence.
+
 ## 0.2.2 - 2026-08-26
 
 ### Fixed

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/chaoscondensate/cli/internal/app"
 	"github.com/chaoscondensate/cli/internal/buildinfo"
@@ -357,9 +358,18 @@ func TestTargetBuildAndCheckCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	selector := []string{"--file", path, "--question", "q-election-coalition", "--forecast", "f-election-coalition-001"}
+	initialCheck := append([]string{"forecast-ledger", "--json", "target", "check"}, selector...)
+	code, stdout, stderr := runCLI(initialCheck...)
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"code":"target.checked"`) || !strings.Contains(stdout, `"state":"not_applicable"`) || !strings.Contains(stdout, `"content.no_retained_target"`) || !strings.Contains(stdout, `"guidance"`) {
+		t.Fatalf("unretained target check code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	code, stdout, stderr = runCLI(append([]string{"forecast-ledger", "--plain", "target", "check"}, selector...)...)
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "q-election-coalition\tf-election-coalition-001\tnot_applicable\tcontent.no_retained_target\tproofs/targets/f-election-coalition-001.json") {
+		t.Fatalf("plain unretained target check code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
 	dryArgs := append([]string{"forecast-ledger", "target", "build"}, selector...)
 	dryArgs = append(dryArgs, "--dry-run")
-	code, stdout, stderr := runCLI(dryArgs...)
+	code, stdout, stderr = runCLI(dryArgs...)
 	if code != 0 || stderr != "" || !strings.Contains(stdout, "no files were written") {
 		t.Fatalf("target dry-run code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -375,6 +385,13 @@ func TestTargetBuildAndCheckCommands(t *testing.T) {
 	code, stdout, stderr = runCLI(checkArgs...)
 	if code != 0 || stderr != "" || !strings.Contains(stdout, `"code":"target.valid"`) || !strings.Contains(stdout, `"valid":true`) {
 		t.Fatalf("target check code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "proofs", "targets", "f-election-coalition-001.json"), []byte("tampered"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr = runCLI("forecast-ledger", "--json", "target", "check", "--file", path, "--all")
+	if code != 6 || stderr != "" || !strings.Contains(stdout, `"code":"target.failed"`) || !strings.Contains(stdout, `"state":"fail"`) || !strings.Contains(stdout, `"actual_sha256"`) || !strings.Contains(stdout, `"state":"not_applicable"`) {
+		t.Fatalf("aggregated target failure code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	code, _, stderr = runCLI("forecast-ledger", "target", "check", "--file", "-", "--question", "q", "--forecast", "f")
 	if code != 2 || !strings.Contains(stderr, "only available for eligible read-only commands") {
@@ -531,7 +548,7 @@ func TestTimestampStatusOfflineFailureAndPublicationCLI(t *testing.T) {
 }
 
 func TestInitCreatesValidPublicLedgerAndSupportsDryRun(t *testing.T) {
-	input := `{"created_at":"2026-01-01T00:00:00Z","question":{"id":"q-one","title":"Will it happen?","type":"binary","resolution_criteria":"Resolve from the named source.","forecast_window":{"closes_at":"2026-12-31T00:00:00Z"},"expected_resolution_at":"2027-01-01T00:00:00Z","initial_forecast":{"id":"f-one","visibility":"public","forecasted_at":"2026-01-01T00:00:00Z","value":{"kind":"binary","probability_bp":5000}}}}`
+	input := `{"created_at":"2026-01-01T00:00:00Z","question":{"id":"q-one","title":"Will it happen?","type":"binary","resolution_criteria":"Resolve from the named source.","created_at":"2026-01-01T00:00:00Z","forecast_window":{"closes_at":"2026-12-31T00:00:00Z"},"expected_resolution_at":"2027-01-01T00:00:00Z","initial_forecast":{"id":"f-one","visibility":"public","forecasted_at":"2026-01-01T00:00:00Z","recorded_at":"2026-01-01T00:00:00Z","value":{"kind":"binary","probability_bp":5000}}}}`
 	directory := t.TempDir()
 	path := filepath.Join(directory, "ledger.json")
 	args := []string{"forecast-ledger", "--json", "init", "--file", path, "--ledger-id", "research", "--timezone", "UTC", "--forecaster-id", "andrey", "--forecaster-name", "Andrey", "--input", "-"}
@@ -569,7 +586,7 @@ func TestInitCreatesValidPublicLedgerAndSupportsDryRun(t *testing.T) {
 
 func TestInitSealedCreatesProtectedKeyWithoutLeakingPrivateInput(t *testing.T) {
 	const secret = "PRIVATE-CANARY-DO-NOT-PRINT"
-	input := `{"created_at":"2026-01-01T00:00:00Z","question":{"id":"q-one","title":"Will it happen?","type":"binary","resolution_criteria":"Resolve from the named source.","forecast_window":{"closes_at":"2026-12-31T00:00:00Z"},"expected_resolution_at":"2027-01-01T00:00:00Z","initial_forecast":{"id":"f-one","visibility":"sealed","forecasted_at":"2026-01-01T00:00:00Z","value":{"kind":"binary","probability_bp":5000},"rationale":"` + secret + `","key_factors":[],"comment":"private"}}}`
+	input := `{"created_at":"2026-01-01T00:00:00Z","question":{"id":"q-one","title":"Will it happen?","type":"binary","resolution_criteria":"Resolve from the named source.","created_at":"2026-01-01T00:00:00Z","forecast_window":{"closes_at":"2026-12-31T00:00:00Z"},"expected_resolution_at":"2027-01-01T00:00:00Z","initial_forecast":{"id":"f-one","visibility":"sealed","forecasted_at":"2026-01-01T00:00:00Z","recorded_at":"2026-01-01T00:00:00Z","value":{"kind":"binary","probability_bp":5000},"rationale":"` + secret + `","key_factors":[],"comment":"private"}}}`
 	directory := t.TempDir()
 	ledgerPath := filepath.Join(directory, "ledger.yaml")
 	keyPath := filepath.Join(directory, "f-one.key")
@@ -649,9 +666,13 @@ func TestLedgerUpdateReturnsConflictWhenLedgerIsLocked(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer lock.Release()
-	code, stdout, stderr := runCLIWithStdin(`{"title":"Blocked"}`, "forecast-ledger", "ledger", "update", "--file", path, "--input", "-")
+	started := time.Now()
+	code, stdout, stderr := runCLIWithStdin(`{"title":"Blocked"}`, "forecast-ledger", "--timeout", "1m", "ledger", "update", "--file", path, "--input", "-")
 	if code != 5 || stdout != "" || !strings.Contains(stderr, "locked by another operation") {
 		t.Fatalf("locked update code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("timeout queued lock acquisition for %s", elapsed)
 	}
 }
 

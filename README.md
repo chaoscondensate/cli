@@ -189,7 +189,9 @@ forecast-ledger target check \
 
 See [Build and check forecast targets](docs/how-to/build-targets.md) for the
 projection, deterministic paths, `--all`, collision behavior, and evidence
-limits.
+limits. Checking a forecast whose target was never retained succeeds with
+`not_applicable` and guidance to run `target build`; it does not pretend that
+missing bytes passed verification.
 
 Create an experimental OpenTimestamps receipt and later verify its Bitcoin
 evidence:

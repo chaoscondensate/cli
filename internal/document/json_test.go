@@ -1,10 +1,22 @@
 package document
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
 )
+
+func TestSourceRefOmitsUnknownSpanAndKeepsKnownOneBasedSpan(t *testing.T) {
+	unknown, err := json.Marshal(SourceRef{Pointer: "/value"})
+	if err != nil || strings.Contains(string(unknown), "start") || strings.Contains(string(unknown), `"line":0`) {
+		t.Fatalf("unknown source = %s, %v", unknown, err)
+	}
+	known, err := json.Marshal(SourceRef{Pointer: "/value", Start: Position{Offset: 4, Line: 2, Column: 3}})
+	if err != nil || !strings.Contains(string(known), `"line":2`) || !strings.Contains(string(known), `"column":3`) {
+		t.Fatalf("known source = %s, %v", known, err)
+	}
+}
 
 func TestParseJSONBuildsTypedTreeAndLocations(t *testing.T) {
 	input := "{\r\n  \"name\": \"прогноз\",\r\n  \"values\": [1, true, null]\r\n}\r\n"

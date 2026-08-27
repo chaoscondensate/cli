@@ -2,6 +2,7 @@ package document
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 )
@@ -102,6 +103,39 @@ func TestApplyPatchKeepsLargeExpandedYAMLLedgerReviewable(t *testing.T) {
 		if len(line) > 200 {
 			t.Fatalf("line %d has %d bytes; document is not reviewable", lineNumber+1, len(line))
 		}
+	}
+}
+
+func TestOrderedPatchValueKeepsDeclaredOrderInJSONAndYAML(t *testing.T) {
+	valueDocument, err := ParseJSON(strings.NewReader(`{"id":"f-new","forecasted_at":"2026-08-26T12:00:00Z","recorded_at":"2026-08-26T12:01:00Z","visibility":"public","value":{"kind":"binary","probability_bp":5100},"integrity":{"status":"unanchored"}}`), DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name  string
+		input string
+		parse func(io.Reader, Limits) (*Document, error)
+	}{
+		{name: "json", input: `{"forecasts": []}`, parse: ParseJSON},
+		{name: "yaml", input: "forecasts: []\n", parse: ParseYAML},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			doc, err := test.parse(strings.NewReader(test.input), DefaultLimits)
+			if err != nil {
+				t.Fatal(err)
+			}
+			output, err := ApplyPatch(doc, []PatchOperation{{Kind: PatchAdd, Pointer: "/forecasts/-", Value: Ordered(valueDocument.Root)}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			text := string(output)
+			positions := []int{strings.Index(text, "id"), strings.Index(text, "forecasted_at"), strings.Index(text, "recorded_at"), strings.Index(text, "visibility"), strings.Index(text, "value"), strings.Index(text, "integrity")}
+			for index := 1; index < len(positions); index++ {
+				if positions[index-1] < 0 || positions[index] <= positions[index-1] {
+					t.Fatalf("semantic order changed: %s", text)
+				}
+			}
+		})
 	}
 }
 

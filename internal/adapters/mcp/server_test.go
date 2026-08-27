@@ -100,6 +100,18 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	if !strings.Contains(string(encoded), `"code":"ledger.valid"`) {
 		t.Fatalf("unexpected result: %s", encoded)
 	}
+	targetCheck, err := client.CallTool(ctx, &sdk.CallToolParams{Name: "target_check", Arguments: map[string]any{"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-001"}})
+	if err != nil || targetCheck.IsError || !strings.Contains(toolText(targetCheck), `"state":"not_applicable"`) || !strings.Contains(toolText(targetCheck), "content.no_retained_target") {
+		t.Fatalf("MCP unretained target result=%s err=%v", toolText(targetCheck), err)
+	}
+	forecastShow, err := client.CallTool(ctx, &sdk.CallToolParams{Name: "forecast_show", Arguments: map[string]any{"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-001"}})
+	if err != nil || forecastShow.IsError || !strings.Contains(toolText(forecastShow), `"integrity":{"status":"unanchored"}`) {
+		t.Fatalf("MCP forecast integrity result=%s err=%v", toolText(forecastShow), err)
+	}
+	semanticFailure, err := client.CallTool(ctx, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{"file": "main:ledger.json", "platform": "invalid-semantic", "input": map[string]any{"name": "   ", "kind": "informal"}}})
+	if err != nil || !semanticFailure.IsError || strings.Contains(toolText(semanticFailure), `"line":0`) || strings.Contains(toolText(semanticFailure), `"column":0`) {
+		t.Fatalf("MCP semantic diagnostic fabricated a span: %s, %v", toolText(semanticFailure), err)
+	}
 
 	lock, err := storage.AcquireLedgerLock(ctx, filepath.Join(ledgerRoot, "ledger.json"), 0)
 	if err != nil {
@@ -136,8 +148,9 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !escape.IsError {
-		t.Fatal("root traversal was accepted")
+	escapeText := toolText(escape)
+	if !escape.IsError || !strings.Contains(escapeText, `"route":"ledger:main"`) || !strings.Contains(escapeText, `"flag":"--ledger-root"`) || strings.Contains(escapeText, ledgerRoot) {
+		t.Fatalf("root traversal diagnostic is incomplete or unsafe: %s", escapeText)
 	}
 	missingRoot, err := client.CallTool(ctx, &sdk.CallToolParams{Name: "ledger_validate", Arguments: map[string]any{"file": "missing:ledger.json"}})
 	if err != nil {
@@ -162,6 +175,8 @@ func TestMCPRevealDiscoveryReadOnlyOfflineAndRootValidation(t *testing.T) {
 	ledgerRoot, secretRoot := t.TempDir(), t.TempDir()
 	if _, err := New(Config{LedgerRoots: []string{ledgerRoot}}); err == nil {
 		t.Fatal("unnamed ledger root succeeded")
+	} else if applicationErr, ok := err.(*app.Error); !ok || applicationErr.Details["class"] != service.RootLedger || applicationErr.Details["flag"] != "--ledger-root" {
+		t.Fatalf("unnamed root diagnostic = %#v", err)
 	}
 	reveal, err := New(Config{LedgerRoots: []string{"main=" + ledgerRoot}, SecretRoots: []string{"keys=" + secretRoot}, Mode: service.AccessMode{AllowReveal: true}})
 	if err != nil {
@@ -195,6 +210,8 @@ func TestMCPRevealDiscoveryReadOnlyOfflineAndRootValidation(t *testing.T) {
 	}
 	if _, err := New(Config{LedgerRoots: []string{"main=" + ledgerRoot}, OutputRoots: []string{"packages=" + inside}}); err == nil {
 		t.Fatal("overlapping roots succeeded")
+	} else if applicationErr, ok := err.(*app.Error); !ok || applicationErr.Details["first_route"] != "ledger:main" || applicationErr.Details["second_route"] != "output:packages" {
+		t.Fatalf("overlap diagnostic = %#v", err)
 	}
 
 	readOnly, err := New(Config{LedgerRoots: []string{"main=" + ledgerRoot}, Mode: service.AccessMode{ReadOnly: true, Offline: true}})

@@ -23,6 +23,17 @@ trap cleanup EXIT
 ledger="$work/ledger.json"
 key="$work/f-two.key"
 package="$work/package"
+backdated_ledger="$work/backdated-ledger.json"
+
+# A historical ledger creation time must not become the default initial
+# recorded_at. The omitted recorded_at below comes from this init operation.
+printf '%s\n' '{"created_at":"2020-01-01T00:00:00Z","question":{"id":"q-backdated","title":"Will the event happen?","type":"binary","resolution_criteria":"Resolve from the named source.","created_at":"2020-01-01T00:00:00Z","forecast_window":{"opens_at":"2020-01-01T00:00:00Z","closes_at":"2099-01-01T00:00:00Z"},"expected_resolution_at":"2099-01-02T00:00:00Z","initial_forecast":{"id":"f-backdated-001","visibility":"public","forecasted_at":"2020-01-01T00:00:00Z","value":{"kind":"binary","probability_bp":5000}}}}' |
+  "$binary" --json init --file "$backdated_ledger" --ledger-id backdated --timezone UTC --forecaster-id dogfood --forecaster-name Dogfood --input - >/dev/null
+backdated_show=$("$binary" --json forecast show --file "$backdated_ledger" --question q-backdated --forecast f-backdated-001)
+if grep -F '"recorded_at":"2020-01-01T00:00:00Z"' <<<"$backdated_show" >/dev/null; then
+  echo "init copied historical created_at into recorded_at" >&2
+  exit 1
+fi
 
 "$binary" --json init \
   --file "$ledger" \
@@ -43,6 +54,16 @@ printf '%s\n' '{"name":"Updated dogfood platform"}' |
 "$binary" --json platform show --file "$ledger" --platform dogfood | grep -F 'Updated dogfood platform' >/dev/null
 "$binary" --json platform remove --file "$ledger" --platform dogfood --yes >/dev/null
 
+set +e
+printf '%s\n' '{"name":"   ","kind":"informal"}' |
+  "$binary" --json platform add --file "$ledger" --platform invalid-diagnostic --input - >"$work/diagnostic.out" 2>"$work/diagnostic.err"
+diagnostic_exit=$?
+set -e
+if [[ $diagnostic_exit -ne 3 ]] || grep -E '"(line|column)":0' "$work/diagnostic.err" >/dev/null; then
+  echo "semantic diagnostic returned a fabricated zero position" >&2
+  exit 1
+fi
+
 printf '%s\n' '{"title":"Will the second event happen?","resolution_criteria":"Resolve from the named source.","created_at":"2026-02-01T00:00:00Z","forecast_window":{"closes_at":"2026-12-31T00:00:00Z"},"expected_resolution_at":"2027-01-02T00:00:00Z","initial_forecast":{"id":"f-second-001","visibility":"public","forecasted_at":"2026-02-01T00:00:00Z","recorded_at":"2026-02-01T00:01:00Z","value":{"kind":"binary","probability_bp":4000}}}' |
   "$binary" --json question add --file "$ledger" --question q-second --type binary --input - >/dev/null
 
@@ -62,6 +83,19 @@ fi
 "$binary" --json forecast reveal --file "$ledger" --question q-one --forecast f-sealed-003 --key-file "$key" --revealed-at 2026-04-02T00:00:00Z --yes >/dev/null
 "$binary" --plain forecast list --file "$ledger" --question q-one | grep -F 'f-sealed-003' >/dev/null
 "$binary" --plain question show --file "$ledger" --question q-one | grep -F 'Will it happen?' >/dev/null
+
+unbuilt_check=$("$binary" --json target check --file "$ledger" --question q-one --forecast f-one)
+if ! grep -F '"code":"target.checked"' <<<"$unbuilt_check" >/dev/null ||
+   ! grep -F '"state":"not_applicable"' <<<"$unbuilt_check" >/dev/null ||
+   ! grep -F 'content.no_retained_target' <<<"$unbuilt_check" >/dev/null; then
+  echo "never-built target was not reported as not_applicable" >&2
+  exit 1
+fi
+all_unbuilt=$("$binary" --json target check --file "$ledger" --all)
+if ! grep -F 'f-sealed-003' <<<"$all_unbuilt" >/dev/null || ! grep -F 'content.no_retained_target' <<<"$all_unbuilt" >/dev/null; then
+  echo "target check --all did not aggregate never-built forecasts" >&2
+  exit 1
+fi
 
 "$binary" --json target build --file "$ledger" --question q-one --forecast f-one >/dev/null
 "$binary" --json target check --file "$ledger" --question q-one --forecast f-one >/dev/null
@@ -123,5 +157,15 @@ fi
 
 "$binary" mcp serve --ledger-root "main=$work" --read-only </dev/null
 "$binary" mcp serve --ledger-root "main=$work" --offline </dev/null
+
+mkdir -p "$work/overlap"
+set +e
+"$binary" --json mcp serve --ledger-root "main=$work" --output-root "packages=$work/overlap" </dev/null >"$work/mcp-overlap.out" 2>"$work/mcp-overlap.err"
+overlap_exit=$?
+set -e
+if [[ $overlap_exit -ne 5 ]] || ! grep -F '"first_route":"ledger:main"' "$work/mcp-overlap.err" >/dev/null || ! grep -F '"second_route":"output:packages"' "$work/mcp-overlap.err" >/dev/null || grep -F "$work" "$work/mcp-overlap.err" >/dev/null; then
+  echo "MCP overlap diagnostic is incomplete or exposes an absolute path" >&2
+  exit 1
+fi
 
 echo "dogfood lifecycle passed"

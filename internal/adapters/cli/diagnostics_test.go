@@ -59,4 +59,11 @@ func TestSemanticInputDiagnosticUsesSafePointer(t *testing.T) {
 	if code != 3 || stdout != "" || !strings.Contains(stderr, "/platform/name") || !strings.Contains(stderr, "semantic.invalid_field") {
 		t.Fatalf("semantic diagnostic code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
+	if strings.Contains(stderr, "line 0") || strings.Contains(stderr, "column 0") {
+		t.Fatalf("semantic diagnostic fabricated a position: %s", stderr)
+	}
+	code, stdout, stderr = runCLIWithStdin(input, "forecast-ledger", "--json", "platform", "add", "--file", path, "--platform", "example", "--input", "-")
+	if code != 3 || stdout != "" || strings.Contains(stderr, `"start"`) || strings.Contains(stderr, `"line":0`) {
+		t.Fatalf("unknown semantic span was not omitted: %s", stderr)
+	}
 }

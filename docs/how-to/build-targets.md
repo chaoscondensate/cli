@@ -48,6 +48,15 @@ Check reconstructs the exact bytes from the ledger and compares the file and
 SHA-256 digest. If integrity metadata already names a target, scope,
 canonicalization, relative path, algorithm, and digest must also match.
 
+If neither integrity metadata nor the deterministic file exists, check returns
+one `not_applicable` row with reason `content.no_retained_target`, the expected
+safe path, and guidance to run `target build`. That is a successful observation
+that no evidence was retained, not a claim that target bytes passed. A retained
+but missing, unreadable, unsafe, or mismatched target remains an error.
+`target check --all` reports every forecast in ledger order and continues past
+never-built rows. Plain rows use question ID, forecast ID, state, reason codes,
+path, expected SHA-256, actual SHA-256 when available, and optional guidance.
+
 The `forecast-envelope/v1` target contains the ledger ID, selected question
 meaning and timing fields, and the selected public forecast or original sealed
 commitment. It excludes forecaster identity, question status and resolution,

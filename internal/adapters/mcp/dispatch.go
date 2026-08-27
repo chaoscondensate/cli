@@ -129,7 +129,7 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 
 	switch def.Name {
 	case service.OperationLedgerInit:
-		return s.dispatchInit(ctx, file, input)
+		return s.dispatchInit(ctx, file, input, now)
 	case service.OperationLedgerUpdate:
 		var value service.RootMetadataPatchInput
 		if err := decodeInline(ctx, input.Input, service.InputSchemaRootMetadata, &value); err != nil {
@@ -226,8 +226,21 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 		result, err := service.CommitTargetBuild(ctx, file, input.All, ledger.Slug(input.Question), ledger.Slug(input.Forecast))
 		return result, "target.built", "Target artifacts were built", err
 	case service.OperationTargetCheck:
-		result, err := service.CheckTargets(ctx, file, input.All, ledger.Slug(input.Question), ledger.Slug(input.Forecast))
-		return result, "target.valid", "Target artifacts match the ledger", err
+		result, err := service.InspectTargets(ctx, file, input.All, ledger.Slug(input.Question), ledger.Slug(input.Forecast))
+		if err != nil {
+			return nil, "", "", err
+		}
+		if result.FailureCode != "" {
+			return nil, "", "", app.WithDetails(app.NewError(result.FailureCode, "one or more forecast targets could not be verified", nil), map[string]any{"ledger_id": result.LedgerID, "targets": result.Targets})
+		}
+		code, message := "target.valid", "Target artifacts match the ledger"
+		for _, target := range result.Targets {
+			if string(target.State) == string(service.LayerNotApplicable) {
+				code, message = "target.checked", "Target inspection completed; some forecasts have no retained target"
+				break
+			}
+		}
+		return result, code, message, nil
 	case service.OperationTimestampStamp:
 		result, err := service.CommitTimestampStamp(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), service.TimestampStampOptions{DryRun: input.DryRun, Offline: s.config.Mode.Offline, Effects: s.effects})
 		return result, "timestamp.pending", "OpenTimestamps receipt was stored as pending", err
@@ -269,7 +282,7 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 	}
 }
 
-func (s *Server) dispatchInit(ctx context.Context, file string, input toolInput) (any, string, string, error) {
+func (s *Server) dispatchInit(ctx context.Context, file string, input toolInput, operationAt ledger.Timestamp) (any, string, string, error) {
 	if input.InputFile == "" && inlineVisibility(input.Input, true) == ledger.VisibilitySealed {
 		return nil, "", "", app.NewError(app.CodeUsage, "sealed initialization must use a protected input_file reference", nil)
 	}
@@ -277,7 +290,7 @@ func (s *Server) dispatchInit(ctx context.Context, file string, input toolInput)
 	if err := s.decodePublicOrProtected(ctx, input, service.InputSchemaInit, &value); err != nil {
 		return nil, "", "", err
 	}
-	root, err := service.BuildLedgerRoot(service.InitRootRequest{LedgerID: ledger.Slug(input.LedgerID), Timezone: input.Timezone, ForecasterID: ledger.Slug(input.ForecasterID), ForecasterName: input.ForecasterName, ForecasterKind: ledger.ForecasterKind(input.ForecasterKind), Input: value}, s.effects.Clock)
+	root, err := service.BuildLedgerRootAt(service.InitRootRequest{LedgerID: ledger.Slug(input.LedgerID), Timezone: input.Timezone, ForecasterID: ledger.Slug(input.ForecasterID), ForecasterName: input.ForecasterName, ForecasterKind: ledger.ForecasterKind(input.ForecasterKind), Input: value}, operationAt)
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -296,15 +309,15 @@ func (s *Server) dispatchInit(ctx context.Context, file string, input toolInput)
 		if input.InputFile != "" || keyPath != "" {
 			return nil, "", "", app.NewError(app.CodeUsage, "public initialization uses inline input and no key file", nil)
 		}
-		model, err = service.BuildInitialPublicLedger(root, value.Question)
+		model, err = service.BuildInitialPublicLedgerAt(root, value.Question, operationAt)
 	case ledger.VisibilitySealed:
 		if input.InputFile == "" || keyPath == "" {
 			return nil, "", "", app.NewError(app.CodeUsage, "sealed initialization requires input_file and key_file in a secret root", nil)
 		}
 		if input.DryRun {
-			model, err = service.PlanInitialSealedLedger(root, value.Question)
+			model, err = service.PlanInitialSealedLedgerAt(root, value.Question, operationAt)
 		} else {
-			sealed, err = service.BuildInitialSealedLedger(ctx, root, value.Question, s.effects)
+			sealed, err = service.BuildInitialSealedLedgerAt(ctx, root, value.Question, operationAt, s.effects)
 			model = sealed.Ledger
 		}
 	default:

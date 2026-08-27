@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/chaoscondensate/cli/internal/ledger"
 	"github.com/chaoscondensate/cli/internal/presentation"
 	"github.com/chaoscondensate/cli/internal/service"
 	"github.com/chaoscondensate/cli/internal/timestamp/ots"
@@ -64,6 +65,35 @@ func TestHumanVerificationFormatterIncludesCompleteMatrix(t *testing.T) {
 	for _, expected := range []string{"Overall: pending", "Document: pass", "Forecast: q-election-coalition / f-election-coalition-001", "content_binding: pass", "existence_timing: pending"} {
 		if !strings.Contains(output, expected) {
 			t.Errorf("human output missing %q:\n%s", expected, output)
+		}
+	}
+}
+
+func TestStoredTimingEvidenceIsVisibleInHumanAndPlainOutput(t *testing.T) {
+	report := service.VerificationReport{Overall: service.VerificationPass, Document: service.VerificationLayer{Name: "document", State: service.LayerPass}, Forecasts: []service.ForecastVerification{{
+		QuestionID: "q-one", ForecastID: "f-one", Layers: []service.VerificationLayer{{Name: "existence_timing", State: service.LayerPass, ReasonCodes: []string{"timing.stored_verification_consistent"}, Evidence: map[string]any{
+			"bitcoin_block_height": uint64(800000), "anchored_before": "2026-08-01T00:00:00Z", "verified_at": "2026-08-02T00:00:00Z", "evidence_source": "stored_verification", "freshly_checked": false,
+		}}},
+	}}}
+	for _, mode := range []presentation.Mode{presentation.ModeHuman, presentation.ModePlain} {
+		output := formatVerificationReport(mode, report)
+		for _, expected := range []string{"800000", "2026-08-01T00:00:00Z", "2026-08-02T00:00:00Z", "stored_verification", "freshly_checked"} {
+			if !strings.Contains(output, expected) {
+				t.Errorf("%s output missing %q: %s", mode, expected, output)
+			}
+		}
+	}
+	anchored := ledger.Timestamp("2026-08-01T00:00:00Z")
+	height := int64(800000)
+	verifiedAt := ledger.Timestamp("2026-08-02T00:00:00Z")
+	fresh, retained := false, false
+	view := service.ForecastView{Summary: service.ForecastSummary{ID: "f-one", ForecastedAt: "2026-07-01T00:00:00Z", RecordedAt: "2026-07-01T00:01:00Z", Visibility: ledger.VisibilityPublic, IntegrityStatus: ledger.IntegrityVerified}, Integrity: service.ForecastIntegrityView{
+		Status: ledger.IntegrityVerified, Timestamps: []ledger.OTSTimestamp{{Type: "opentimestamps", ProofPath: "proofs/receipts/f-one.json.ots", State: ledger.OTSConfirmed, AnchoredBefore: &anchored, BitcoinBlockHeight: &height}}, VerifiedAt: &verifiedAt, EvidenceSource: "stored_verification", FreshlyChecked: &fresh, PriorSourceRetained: &retained,
+	}}
+	formatted := formatForecastView(presentation.ModePlain, view)
+	for _, expected := range []string{"proofs/receipts/f-one.json.ots", "800000", "2026-08-01T00:00:00Z", "2026-08-02T00:00:00Z", "stored_verification"} {
+		if !strings.Contains(formatted, expected) {
+			t.Errorf("forecast output missing %q: %s", expected, formatted)
 		}
 	}
 }

@@ -44,6 +44,14 @@ wins aggregation. Pending work returns overall `pending`; unavailable required
 checks return `incomplete`. Exit 0 is reserved for a complete pass. Verification
 failure uses exit 6, network failure exit 8, and pending or incomplete exit 9.
 
+Human, plain, JSON, and MCP reports expose safely available timing evidence,
+including the receipt and target paths, binding/proof state, Bitcoin block
+height, conservative `anchored_before`, and `verified_at`. Offline reports can
+reuse internally consistent confirmed metadata already stored in the ledger;
+they label it `stored_verification`, set `freshly_checked` to false, and explain
+that v1 retained no prior Bitcoin source identity. Displaying this data never
+opens a network connection.
+
 Every report states the boundaries: it does not prove authorship, ledger
 completeness, calibration, substantive outcome truth, or exact self-reported
 time. Network reports also disclose the calendar request-timing/blinded-

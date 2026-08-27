@@ -160,6 +160,24 @@ The pinned Python validator parity job compares case verdicts and normalized iss
 
 Alternative considered: hand-maintain separate reference pages and schema copies. Rejected because drift would be likely across 30 actions and MCP equivalents.
 
+### 15. Make boundary results explicit and consistent across creation, inspection, and presentation
+
+One operation observation time is captured before building new records. Whenever an authored forecast omits `recorded_at`, including the initial forecast accepted by `init`, that operation time supplies the value. If `created_at` is also omitted, the same captured time may supply both fields; an explicit or defaulted `created_at` is otherwise independent and is never copied into `recorded_at`. Builders retain the origin of a defaulted field long enough for safe diagnostics to say that the value came from the operation clock.
+
+Validation locations are modeled as a pointer plus an optional valid one-based source span. A presenter never manufactures line or column zero. Semantic issues against structured input resolve the pointer through the parsed source tree when possible; otherwise human output omits the position and JSON omits the span while retaining the pointer and code. Temporal messages describe the actual inclusive relation, using `must not be before` or `must not be after` rather than implying that equality is rejected.
+
+Source-tree insertions use a declarative semantic field order shared with full-document initialization and generated input/result references. The patcher preserves untouched source bytes and local layout but does not alphabetically sort a newly inserted question, forecast, resolution, or nested business object. Canonical property ordering remains confined to evidence and cryptographic formats.
+
+Target checking produces one result per selected forecast. A forecast with neither retained target metadata nor a deterministic target artifact is `not_applicable` with reason `content.no_retained_target`, its stable IDs, safe expected relative path, and a `target build` next action. `--all` continues after that result and reports every selected forecast; retained-but-missing, unreadable, or mismatched evidence remains an error. A report containing only `pass` and `not_applicable` results succeeds without claiming that absent targets were checked.
+
+Read-only forecast presentation maps retained integrity into an explicit safe public DTO. Confirmed Bitcoin evidence includes receipt state, `bitcoin_block_height`, `anchored_before`, and `verified_at` in human, plain, JSON, and MCP results. Offline output labels these values as stored evidence whose prior verification-source identity is not retained, while online verification may add fresh source observations.
+
+MCP root configuration is represented internally by root class, safe route ID, originating flag, and canonical private path. Startup and tool errors expose only the first three. A missing root names the responsible route; an overlap names both conflicting class/ID descriptors, never their absolute paths.
+
+Ledger locking remains fail-fast. A second writer receives immediate conflict and is never queued by the application. `--timeout` bounds work after an operation begins and bounded network/wait effects; it is not a ledger-lock wait duration. CLI callers that intentionally contend must serialize work or implement bounded retry/backoff, and maintained help and documentation state this contract.
+
+Alternatives considered: retain init-specific clock semantics, emit placeholder coordinates, treat absent targets as filesystem failures, queue lock contenders, or require another network verification to see stored block evidence. Rejected because each hides an observable distinction already available to the application and makes ordinary automation or diagnosis less reliable.
+
 ## Risks / Trade-offs
 
 - **[The scope is large and cross-cutting]** → Deliver in dependency-ordered vertical slices and keep unavailable gates per action; do not merge placeholder completion.
@@ -179,6 +197,8 @@ Alternative considered: hand-maintain separate reference pages and schema copies
 - **[Stable result schemas can freeze mistakes]** → Version persisted/transport schemas, keep human prose flexible, and require compatibility review for field removal or semantic change.
 - **[Presentation-aware patches can still produce large diffs on unfamiliar source styles]** → Preserve untouched slices, constrain style inference to the local container, and gate realistic expanded JSON/YAML ledgers with diff/readability assertions.
 - **[Hiding mutating MCP tools changes discovery across server modes]** → Publish static effect metadata, document mode-dependent discovery, and test `tools/list` plus direct-call unknown-tool behavior for every mode.
+- **[Changing init's omitted `recorded_at` source changes newly created bytes]** → Treat it as an explicit patch-release behavior correction, report the stored value, add fixed-clock compatibility fixtures, and do not rewrite existing ledgers.
+- **[`not_applicable` target results could be mistaken for retained evidence]** → Keep the state and `content.no_retained_target` reason explicit in every output mode, provide the safe build command, and never aggregate it into a claim that a target passed.
 
 ## Migration Plan
 
@@ -191,5 +211,6 @@ Alternative considered: hand-maintain separate reference pages and schema copies
 7. Implement layered verification and deterministic package build/verify.
 8. Implement MCP roots, read-only/offline/reveal modes, incrementally discovered tools, and resources over the same operations and pass real-process parity/framing tests.
 9. Run full native, race, fuzz, validator/crypto/OTS conformance, documentation-generation, package, and release gates; assert no product leaf remains unavailable.
+10. Ship the v0.2.2 dogfooding corrections in a new patch release after CLI/MCP parity, executable documentation, and packaged macOS/Linux/Windows regressions pass; no existing ledger or evidence bytes require migration.
 
 Existing v1 ledgers require no data migration. New actions refuse unsupported schema versions rather than rewriting them. Rollback of an implementation slice re-hides its command/tool and restores the previous known-good binary; it does not downgrade or rewrite ledgers. Any newly persisted artifact/profile schema receives an explicit version and compatibility test before release.

@@ -53,10 +53,18 @@ Global result modes are normal human output, `--json`, `--plain`, or `--quiet`.
 The last three are mutually exclusive. `--no-color` and `TERM=dumb` disable
 decoration. `--timeout` bounds network/wait operations.
 
+It does not turn ledger-lock conflicts into a wait queue. A second writer fails
+immediately with exit 5. Callers that intentionally contend must serialize
+mutations or implement a bounded retry with backoff.
+
 Question and forecast show output includes business fields and type-aware public
-values in normal human and plain modes. Layered verification prints its complete
-ordered evidence matrix without requiring `--verbose`. Quote RFC 3339 values in
-maintained YAML input, such as `recorded_at: "2026-09-01T09:01:00Z"`.
+values in normal human and plain modes. Forecast show also exposes safe stored
+target/receipt/timing metadata without network access. Layered verification
+prints its complete ordered evidence matrix, including safe evidence values,
+without requiring `--verbose`. Plain verification rows are ordered as question
+ID, forecast ID, layer, state, comma-separated reason codes, and compact JSON
+evidence. Quote RFC 3339 values in maintained YAML input, such as
+`recorded_at: "2026-09-01T09:01:00Z"`.
 
 `mcp serve` also accepts repeatable named `--output-root` and `--secret-root`,
 whole-server `--read-only` and `--offline`, default-off `--allow-reveal`, and

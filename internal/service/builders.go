@@ -27,6 +27,27 @@ type InitRootRequest struct {
 }
 
 func BuildLedgerRoot(request InitRootRequest, clock ObservationClock) (*ledger.Ledger, error) {
+	observedAt, err := CaptureOperationTime(clock)
+	if err != nil {
+		return nil, err
+	}
+	return BuildLedgerRootAt(request, observedAt)
+}
+
+// CaptureOperationTime observes the clock exactly once for one operation.
+// Callers can then apply the same observation to independent defaulted fields
+// without deriving those fields from explicit business timestamps.
+func CaptureOperationTime(clock ObservationClock) (ledger.Timestamp, error) {
+	if clock == nil {
+		return "", app.NewError(app.CodeInternal, "observation clock is not configured", nil)
+	}
+	return ledger.Timestamp(clock.Now().Format(time.RFC3339)), nil
+}
+
+func BuildLedgerRootAt(request InitRootRequest, observedAt ledger.Timestamp) (*ledger.Ledger, error) {
+	if _, err := ParseTimestamp(observedAt, "operation_clock"); err != nil {
+		return nil, err
+	}
 	if err := ValidateSlug(request.LedgerID, "ledger_id"); err != nil {
 		return nil, err
 	}
@@ -55,7 +76,7 @@ func BuildLedgerRoot(request InitRootRequest, clock ObservationClock) (*ledger.L
 	if err != nil {
 		return nil, err
 	}
-	createdAt, err := initialTimestamp(request.Input.CreatedAt, clock)
+	createdAt, err := initialTimestamp(request.Input.CreatedAt, observedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +136,9 @@ func ValidateChronology(earlier ledger.Timestamp, earlierField string, later led
 		return err
 	}
 	if left.After(right) || (!allowEqual && left.Equal(right)) {
+		if allowEqual {
+			return invalidField(laterField, fmt.Sprintf("%s must not be before %s", laterField, earlierField))
+		}
 		return invalidField(laterField, fmt.Sprintf("%s must be after %s", laterField, earlierField))
 	}
 	return nil
@@ -153,17 +177,17 @@ func ValidatePlatform(platform ledger.Platform) error {
 	return nil
 }
 
-func initialTimestamp(explicit *ledger.Timestamp, clock ObservationClock) (ledger.Timestamp, error) {
+func initialTimestamp(explicit *ledger.Timestamp, observedAt ledger.Timestamp) (ledger.Timestamp, error) {
 	if explicit != nil {
 		if _, err := ParseTimestamp(*explicit, "created_at"); err != nil {
 			return "", err
 		}
 		return *explicit, nil
 	}
-	if clock == nil {
-		return "", app.NewError(app.CodeInternal, "observation clock is not configured", nil)
+	if _, err := ParseTimestamp(observedAt, "operation_clock"); err != nil {
+		return "", err
 	}
-	return ledger.Timestamp(clock.Now().Format(time.RFC3339)), nil
+	return observedAt, nil
 }
 
 func validateForecasterMembers(kind ledger.ForecasterKind, input *[]ledger.Member) (*[]ledger.Member, error) {

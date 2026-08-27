@@ -25,11 +25,18 @@ type SealedQuestionBuild struct {
 // and the separate protected key bytes without performing filesystem effects.
 // Callers must persist KeyFile before publishing Ledger.
 func BuildInitialSealedLedger(ctx context.Context, root *ledger.Ledger, input InitialQuestionInput, effects Effects) (SealedInitialBuild, error) {
+	if root == nil {
+		return SealedInitialBuild{}, app.NewError(app.CodeInternal, "ledger root is nil", nil)
+	}
+	return BuildInitialSealedLedgerAt(ctx, root, input, root.CreatedAt, effects)
+}
+
+func BuildInitialSealedLedgerAt(ctx context.Context, root *ledger.Ledger, input InitialQuestionInput, observedAt ledger.Timestamp, effects Effects) (SealedInitialBuild, error) {
 	var result SealedInitialBuild
 	if err := effects.Validate(); err != nil {
 		return result, app.NewError(app.CodeInternal, "sealing effects are not configured", err)
 	}
-	question, private, recordedAt, err := prepareInitialSealedLedger(root, input)
+	question, private, recordedAt, err := prepareInitialSealedLedger(root, input, observedAt)
 	if err != nil {
 		return result, err
 	}
@@ -54,7 +61,14 @@ func BuildInitialSealedLedger(ctx context.Context, root *ledger.Ledger, input In
 // reading entropy or returning cryptographic bytes. The placeholder commitment
 // exists only in memory to exercise the pinned ledger schema during dry-run.
 func PlanInitialSealedLedger(root *ledger.Ledger, input InitialQuestionInput) (*ledger.Ledger, error) {
-	question, private, recordedAt, err := prepareInitialSealedLedger(root, input)
+	if root == nil {
+		return nil, app.NewError(app.CodeInternal, "ledger root is nil", nil)
+	}
+	return PlanInitialSealedLedgerAt(root, input, root.CreatedAt)
+}
+
+func PlanInitialSealedLedgerAt(root *ledger.Ledger, input InitialQuestionInput, observedAt ledger.Timestamp) (*ledger.Ledger, error) {
+	question, private, recordedAt, err := prepareInitialSealedLedger(root, input, observedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -161,12 +175,12 @@ func prepareQuestionAddSealed(model *ledger.Ledger, input NormalizedQuestionCrea
 	return question, private, recordedAt, nil
 }
 
-func prepareInitialSealedLedger(root *ledger.Ledger, input InitialQuestionInput) (ledger.Question, InitialForecastInput, ledger.Timestamp, error) {
+func prepareInitialSealedLedger(root *ledger.Ledger, input InitialQuestionInput, observedAt ledger.Timestamp) (ledger.Question, InitialForecastInput, ledger.Timestamp, error) {
 	if root == nil {
 		return ledger.Question{}, InitialForecastInput{}, "", app.NewError(app.CodeInternal, "ledger root is nil", nil)
 	}
 	normalized := NormalizeInitialQuestion(input)
-	question, index, err := buildQuestionShell(root, normalized, root.CreatedAt)
+	question, index, err := buildQuestionShell(root, normalized, observedAt)
 	if err != nil {
 		return ledger.Question{}, InitialForecastInput{}, "", err
 	}
@@ -194,7 +208,7 @@ func prepareInitialSealedLedger(root *ledger.Ledger, input InitialQuestionInput)
 	if err := ValidateForecastValue(input.Type, input.Options, &private.Value); err != nil {
 		return ledger.Question{}, InitialForecastInput{}, "", err
 	}
-	recordedAt := root.CreatedAt
+	recordedAt := observedAt
 	if private.RecordedAt != nil {
 		recordedAt = *private.RecordedAt
 	}

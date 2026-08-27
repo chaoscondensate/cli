@@ -70,6 +70,12 @@ the conservative Bitcoin block time is not before the recorded
 timing layer with `timing.not_before_outcome`; offline verification reaches the
 same conclusion from the stored checked bound.
 
+After successful verification, `forecast show` and layered `verify --offline`
+display the retained receipt state, Bitcoin block height, conservative
+`anchored_before`, and `verified_at`. These views open no network connection.
+They label the evidence as stored and disclose that schema v1 does not retain
+the identity of the Bitcoin source used by the earlier check.
+
 An advanced CLI user may replace the two public observers with an independently
 operated Bitcoin Core RPC endpoint:
 

@@ -24,6 +24,7 @@ question:
   title: Will the named event happen by the deadline?
   type: binary
   resolution_criteria: Resolve from the named public source.
+  created_at: "2026-08-26T12:00:00+01:00"
   forecast_window:
     closes_at: "2026-12-31T23:59:59Z"
   expected_resolution_at: "2027-01-15T12:00:00Z"
@@ -51,6 +52,13 @@ forecast-ledger init \
 Use `--dry-run` to validate the input and both destinations without writing.
 The input may be JSON or YAML; `--input -` reads it from stdin. The ledger
 destination itself never accepts `-`.
+
+Init observes the local operation clock once. An omitted ledger, question, or
+initial-forecast time uses that observation where the schema allows a default.
+An explicit ledger `created_at` is never copied into an omitted question
+`created_at` or initial `recorded_at`; those remain independent facts. If you
+need reproducible historical import times, provide each timestamp explicitly.
+Equality at inclusive forecast-window and recorded-time boundaries is valid.
 
 For a sealed initial forecast, set `visibility: sealed`, include `rationale`,
 `key_factors`, and `comment`, and add an explicit unused key destination:

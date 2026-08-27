@@ -274,7 +274,7 @@ func inputLocation(parsed *document.Document, pointer string) document.SourceRef
 			}
 		}
 	}
-	return document.SourceRef{Pointer: pointer, Start: document.Position{Line: 1, Column: 1}}
+	return document.SourceRef{Pointer: pointer}
 }
 
 func rootInputLocation(parsed *document.Document) document.SourceRef {

@@ -25,7 +25,7 @@ type RootSet struct {
 
 func NewRootSet(ledgerSpecs, outputSpecs, secretSpecs []string) (*RootSet, error) {
 	if len(ledgerSpecs) == 0 {
-		return nil, app.NewError(app.CodeUsage, "at least one --ledger-root is required", nil)
+		return nil, app.WithDetails(app.NewError(app.CodeUsage, "at least one ledger root is required", nil), map[string]any{"class": service.RootLedger, "flag": rootFlag(service.RootLedger)})
 	}
 	set := &RootSet{byClass: map[service.RootClass]map[string]*storage.PathResolver{}}
 	classes := []struct {
@@ -38,16 +38,16 @@ func NewRootSet(ledgerSpecs, outputSpecs, secretSpecs []string) (*RootSet, error
 	for _, group := range classes {
 		set.byClass[group.class] = map[string]*storage.PathResolver{}
 		for _, raw := range group.items {
-			spec, err := parseRootSpec(raw)
+			spec, err := parseRootSpec(raw, group.class)
 			if err != nil {
 				return nil, err
 			}
 			if _, duplicate := set.byClass[group.class][spec.Name]; duplicate {
-				return nil, app.NewError(app.CodeConflict, "root names must be unique within each root class", nil)
+				return nil, app.WithDetails(app.NewError(app.CodeConflict, "root names must be unique within each root class", nil), map[string]any{"class": group.class, "flag": rootFlag(group.class), "route": routeID(group.class, spec.Name)})
 			}
 			resolver, err := storage.NewPathResolver(spec.Path)
 			if err != nil {
-				return nil, err
+				return nil, rootConfigurationError(group.class, spec.Name, err)
 			}
 			root := service.Root{Name: spec.Name, Class: group.class, Path: resolver.Root()}
 			set.byClass[group.class][spec.Name] = resolver
@@ -66,8 +66,8 @@ func NewRootSet(ledgerSpecs, outputSpecs, secretSpecs []string) (*RootSet, error
 		for right := left + 1; right < len(all); right++ {
 			if pathsOverlap(all[left].Path, all[right].Path) {
 				return nil, app.WithDetails(app.NewError(app.CodeConflict, "configured roots must not overlap", nil), map[string]any{
-					"first": all[left].Name, "first_class": all[left].Class,
-					"second": all[right].Name, "second_class": all[right].Class,
+					"first_route": routeID(all[left].Class, all[left].Name), "first_class": all[left].Class, "first_flag": rootFlag(all[left].Class),
+					"second_route": routeID(all[right].Class, all[right].Name), "second_class": all[right].Class, "second_flag": rootFlag(all[right].Class),
 				})
 			}
 		}
@@ -75,18 +75,22 @@ func NewRootSet(ledgerSpecs, outputSpecs, secretSpecs []string) (*RootSet, error
 	return set, nil
 }
 
-func parseRootSpec(raw string) (RootSpec, error) {
+func parseRootSpec(raw string, class service.RootClass) (RootSpec, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return RootSpec{}, app.NewError(app.CodeUsage, "root value is empty", nil)
+		return RootSpec{}, app.WithDetails(app.NewError(app.CodeUsage, "root value is empty", nil), map[string]any{"class": class, "flag": rootFlag(class)})
 	}
 	before, after, found := strings.Cut(raw, "=")
 	if !found {
-		return RootSpec{}, app.NewError(app.CodeUsage, "roots must use explicit name=path syntax", nil)
+		return RootSpec{}, app.WithDetails(app.NewError(app.CodeUsage, "roots must use explicit name=path syntax", nil), map[string]any{"class": class, "flag": rootFlag(class)})
 	}
 	name, path := strings.TrimSpace(before), strings.TrimSpace(after)
 	if !validRootName(name) || path == "" {
-		return RootSpec{}, app.NewError(app.CodeUsage, "roots must use a safe name=path value", nil)
+		details := map[string]any{"class": class, "flag": rootFlag(class)}
+		if validRootName(name) {
+			details["route"] = routeID(class, name)
+		}
+		return RootSpec{}, app.WithDetails(app.NewError(app.CodeUsage, "roots must use a safe name=path value", nil), details)
 	}
 	return RootSpec{Name: name, Path: path}, nil
 }
@@ -123,13 +127,42 @@ func (r *RootSet) Resolve(class service.RootClass, reference string, mustExist b
 	}
 	name, relative, found := strings.Cut(reference, ":")
 	if !found || name == "" || relative == "" {
-		return "", app.NewError(app.CodeUsage, "path references must use root-name:relative/path", nil)
+		return "", app.WithDetails(app.NewError(app.CodeUsage, "path references must use root-name:relative/path", nil), map[string]any{"class": class, "flag": rootFlag(class)})
 	}
 	resolver := r.byClass[class][name]
 	if resolver == nil {
-		return "", app.WithDetails(app.NewError(app.CodeNotFound, "requested root is not configured", nil), map[string]any{"root": name, "class": class})
+		return "", app.WithDetails(app.NewError(app.CodeNotFound, "requested root is not configured", nil), map[string]any{"root": name, "class": class, "flag": rootFlag(class), "route": routeID(class, name)})
 	}
-	return resolver.Resolve(relative, mustExist)
+	resolved, err := resolver.Resolve(relative, mustExist)
+	if err != nil {
+		return "", app.WithDetails(app.NewError(app.ErrorCodeOf(err), "path reference is not allowed for the configured root", err), map[string]any{"root": name, "class": class, "flag": rootFlag(class), "route": routeID(class, name)})
+	}
+	return resolved, nil
+}
+
+func rootFlag(class service.RootClass) string {
+	switch class {
+	case service.RootLedger:
+		return "--ledger-root"
+	case service.RootOutput:
+		return "--output-root"
+	case service.RootSecret:
+		return "--secret-root"
+	default:
+		return "--root"
+	}
+}
+
+func routeID(class service.RootClass, name string) string {
+	return string(class) + ":" + name
+}
+
+func rootConfigurationError(class service.RootClass, name string, cause error) error {
+	code := app.ErrorCodeOf(cause)
+	if code == app.CodeInternal {
+		code = app.CodeIO
+	}
+	return app.WithDetails(app.NewError(code, "configured root cannot be opened safely", cause), map[string]any{"class": class, "flag": rootFlag(class), "route": routeID(class, name)})
 }
 
 func (r *RootSet) Has(class service.RootClass) bool {

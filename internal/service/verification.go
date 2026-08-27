@@ -186,6 +186,7 @@ func verifyTimingLayer(ctx context.Context, loaded *LoadedLedger, question ledge
 		return layer
 	}
 	receiptPath := filepath.Join(filepath.Dir(loaded.Path), filepath.FromSlash(string(ReceiptRelativePath(forecast.ID))))
+	safeReceiptPath := ReceiptRelativePath(forecast.ID)
 	data, err := readBoundedFile(receiptPath, maxReceiptBytes)
 	if err != nil {
 		return failedLayer(layer.Name, "timing.receipt_missing", err)
@@ -217,6 +218,7 @@ func verifyTimingLayer(ctx context.Context, loaded *LoadedLedger, question ledge
 	}
 	if offline {
 		if forecast.Integrity.Verified != nil {
+			layer.Evidence = storedTimingEvidence(forecast, safeReceiptPath, artifact.RelativePath)
 			if question.Resolution != nil && question.Resolution.Resolved != nil {
 				known, _ := ParseTimestamp(question.Resolution.Resolved.OutcomeKnownAt, "outcome_known_at")
 				for _, timestamp := range forecast.Integrity.Verified.Timestamps {
@@ -225,7 +227,7 @@ func verifyTimingLayer(ctx context.Context, loaded *LoadedLedger, question ledge
 					}
 					bound, parseErr := ParseTimestamp(*timestamp.AnchoredBefore, "anchored_before")
 					if parseErr != nil || !bound.Before(known) {
-						evidence := map[string]any{"anchored_before": timestamp.AnchoredBefore, "bitcoin_block_height": timestamp.BitcoinBlockHeight, "source": "stored_verification"}
+						evidence := storedTimingEvidence(forecast, safeReceiptPath, artifact.RelativePath)
 						return failedLayerWithEvidence(layer.Name, "timing.not_before_outcome", evidence)
 					}
 				}
@@ -250,7 +252,10 @@ func verifyTimingLayer(ctx context.Context, loaded *LoadedLedger, question ledge
 		}
 		bound := ledger.Timestamp(observation.BlockTime.Format(time.RFC3339))
 		layer.State, layer.ReasonCodes = LayerPass, []string{"timing.bitcoin_verified"}
-		layer.Evidence = map[string]any{"height": item.Attestation.Height, "block_hash": observation.Hash, "anchored_before": bound, "source_ids": observation.SourceIDs}
+		layer.Evidence = map[string]any{"receipt_path": safeReceiptPath, "target_path": artifact.RelativePath, "target_binding": "pass", "proof_valid": true, "bitcoin_block_height": item.Attestation.Height, "block_hash": observation.Hash, "anchored_before": bound, "source_ids": observation.SourceIDs, "evidence_source": "fresh_observation", "freshly_checked": true}
+		if forecast.Integrity.Verified != nil {
+			layer.Evidence["verified_at"] = forecast.Integrity.Verified.VerifiedAt
+		}
 		if question.Resolution != nil && question.Resolution.Resolved != nil {
 			known, _ := ParseTimestamp(question.Resolution.Resolved.OutcomeKnownAt, "outcome_known_at")
 			if !observation.BlockTime.Before(known) {
@@ -261,6 +266,41 @@ func verifyTimingLayer(ctx context.Context, loaded *LoadedLedger, question ledge
 	}
 	layer.State, layer.ReasonCodes = LayerNotChecked, []string{"timing.no_supported_attestation"}
 	return layer
+}
+
+func storedTimingEvidence(forecast ledger.Forecast, receiptPath, targetPath ledger.RelativePath) map[string]any {
+	evidence := map[string]any{
+		"receipt_path": receiptPath, "target_path": targetPath, "target_binding": "pass", "proof_valid": true,
+		"evidence_source": "stored_verification", "freshly_checked": false, "prior_source_retained": false,
+	}
+	if forecast.Integrity.Verified == nil {
+		return evidence
+	}
+	evidence["verified_at"] = forecast.Integrity.Verified.VerifiedAt
+	confirmed := make([]map[string]any, 0)
+	for _, timestamp := range forecast.Integrity.Verified.Timestamps {
+		if timestamp.Type != "opentimestamps" || timestamp.State != ledger.OTSConfirmed {
+			continue
+		}
+		item := map[string]any{"proof_path": timestamp.ProofPath, "state": timestamp.State}
+		if timestamp.BitcoinBlockHeight != nil {
+			item["bitcoin_block_height"] = *timestamp.BitcoinBlockHeight
+		}
+		if timestamp.AnchoredBefore != nil {
+			item["anchored_before"] = *timestamp.AnchoredBefore
+		}
+		confirmed = append(confirmed, item)
+	}
+	evidence["timestamps"] = confirmed
+	if len(confirmed) == 1 {
+		for key, value := range confirmed[0] {
+			if key == "proof_path" || key == "state" {
+				continue
+			}
+			evidence[key] = value
+		}
+	}
+	return evidence
 }
 
 func verifyRevealLayer(question ledger.Question, forecast ledger.Forecast, content VerificationLayer) VerificationLayer {

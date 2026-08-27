@@ -8,7 +8,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/chaoscondensate/cli/internal/app"
@@ -19,20 +18,26 @@ import (
 const maxTargetBytes = 16 << 20
 
 type TargetResult struct {
-	QuestionID ledger.Slug                `json:"question_id"`
-	ForecastID ledger.Slug                `json:"forecast_id"`
-	Path       ledger.RelativePath        `json:"path"`
-	SHA256     string                     `json:"sha256"`
-	Size       int                        `json:"size"`
-	State      storage.DeterministicState `json:"state,omitempty"`
-	Valid      *bool                      `json:"valid,omitempty"`
+	QuestionID   ledger.Slug                `json:"question_id"`
+	ForecastID   ledger.Slug                `json:"forecast_id"`
+	Path         ledger.RelativePath        `json:"path"`
+	SHA256       string                     `json:"sha256"`
+	ActualSHA256 string                     `json:"actual_sha256,omitempty"`
+	Size         int                        `json:"size"`
+	State        storage.DeterministicState `json:"state,omitempty"`
+	Valid        *bool                      `json:"valid,omitempty"`
+	ReasonCodes  []string                   `json:"reason_codes,omitempty"`
+	Guidance     string                     `json:"guidance,omitempty"`
+	ErrorCode    app.ErrorCode              `json:"error_code,omitempty"`
+	Message      string                     `json:"message,omitempty"`
 }
 
 type TargetOperationResult struct {
-	LedgerID ledger.Slug    `json:"ledger_id"`
-	Targets  []TargetResult `json:"targets"`
-	Effects  []SideEffect   `json:"effects,omitempty"`
-	Recovery Recovery       `json:"recovery,omitempty"`
+	LedgerID    ledger.Slug    `json:"ledger_id"`
+	Targets     []TargetResult `json:"targets"`
+	Effects     []SideEffect   `json:"effects,omitempty"`
+	Recovery    Recovery       `json:"recovery,omitempty"`
+	FailureCode app.ErrorCode  `json:"-"`
 }
 
 func PlanTargetBuild(ctx context.Context, path string, all bool, questionID, forecastID ledger.Slug) (TargetOperationResult, error) {
@@ -172,6 +177,25 @@ func CommitTargetBuild(ctx context.Context, path string, all bool, questionID, f
 }
 
 func CheckTargets(ctx context.Context, path string, all bool, questionID, forecastID ledger.Slug) (TargetOperationResult, error) {
+	result, err := InspectTargets(ctx, path, all, questionID, forecastID)
+	if err != nil {
+		return result, err
+	}
+	if result.FailureCode != "" {
+		return result, targetInspectionError(result)
+	}
+	for _, target := range result.Targets {
+		if target.State == storage.DeterministicState(LayerNotApplicable) {
+			return result, app.WithDetails(app.NewError(app.CodeNotFound, "forecast target has not been retained", nil), map[string]any{"targets": result.Targets})
+		}
+	}
+	return result, nil
+}
+
+// InspectTargets produces a complete, ordered report. Missing evidence that
+// was never retained is a successful not_applicable observation; independently
+// inspectable failures are collected so --all never stops at the first row.
+func InspectTargets(ctx context.Context, path string, all bool, questionID, forecastID ledger.Slug) (TargetOperationResult, error) {
 	loaded, artifacts, err := loadSelectedTargets(ctx, path, all, questionID, forecastID)
 	if err != nil {
 		return TargetOperationResult{}, err
@@ -183,25 +207,76 @@ func CheckTargets(ctx context.Context, path string, all bool, questionID, foreca
 	}
 	result := TargetOperationResult{LedgerID: loaded.Model.LedgerID, Targets: make([]TargetResult, len(artifacts))}
 	for index, artifact := range artifacts {
+		if ctx != nil && ctx.Err() != nil {
+			return result, app.NewError(app.CodeInterrupted, "target inspection was interrupted", ctx.Err())
+		}
+		row := targetResult(artifact, storage.DeterministicState(LayerPass), nil)
+		metadata := recordedForecastTarget(loaded.Model, artifact.QuestionID, artifact.ForecastID)
+		candidate := filepath.Join(root, filepath.FromSlash(string(artifact.RelativePath)))
+		info, statErr := os.Lstat(candidate)
+		if errors.Is(statErr, fs.ErrNotExist) && metadata == nil {
+			row.State = storage.DeterministicState(LayerNotApplicable)
+			row.ReasonCodes = []string{"content.no_retained_target"}
+			row.Guidance = "Run target build for this forecast."
+			result.Targets[index] = row
+			continue
+		}
+		if errors.Is(statErr, fs.ErrNotExist) {
+			err = app.NewError(app.CodeVerification, "retained forecast target file is missing", statErr)
+			result.Targets[index] = failedTargetResult(row, "content.target_missing", err)
+			result.FailureCode = strongerTargetFailure(result.FailureCode, app.CodeVerification)
+			continue
+		}
+		if statErr != nil {
+			err = app.NewError(app.CodeIO, "target path cannot be inspected", statErr)
+			result.Targets[index] = failedTargetResult(row, "content.target_unreadable", err)
+			result.FailureCode = strongerTargetFailure(result.FailureCode, app.CodeIO)
+			continue
+		}
 		absolute, err := resolver.Resolve(string(artifact.RelativePath), true)
 		if err != nil {
-			return TargetOperationResult{}, err
+			result.Targets[index] = failedTargetResult(row, "content.target_path_unsafe", err)
+			result.FailureCode = strongerTargetFailure(result.FailureCode, app.ErrorCodeOf(err))
+			continue
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			err = app.NewError(app.CodeVerification, "retained target is not a regular file", nil)
+			result.Targets[index] = failedTargetResult(row, "content.target_not_regular", err)
+			result.FailureCode = strongerTargetFailure(result.FailureCode, app.CodeVerification)
+			continue
 		}
 		actual, err := readBoundedFile(absolute, maxTargetBytes)
 		if err != nil {
-			return TargetOperationResult{}, err
+			result.Targets[index] = failedTargetResult(row, "content.target_unreadable", err)
+			result.FailureCode = strongerTargetFailure(result.FailureCode, app.ErrorCodeOf(err))
+			continue
 		}
 		if !bytes.Equal(actual, artifact.Bytes) {
-			return TargetOperationResult{}, app.WithDetails(app.NewError(app.CodeVerification, "forecast target bytes do not match the ledger", nil), map[string]any{"forecast_id": artifact.ForecastID, "path": artifact.RelativePath, "expected_sha256": artifact.SHA256, "actual_sha256": storage.ResourceDigest(actual)})
+			row.SHA256 = artifact.SHA256
+			row.ActualSHA256 = storage.ResourceDigest(actual)
+			row.State = storage.DeterministicState(LayerFail)
+			row.Valid = boolPointer(false)
+			row.ReasonCodes = []string{"content.target_mismatch"}
+			row.ErrorCode = app.CodeVerification
+			row.Message = "forecast target bytes do not match the ledger"
+			row.Guidance = "Restore the retained target or review the ledger change; target build will not overwrite different bytes."
+			result.Targets[index] = row
+			result.FailureCode = strongerTargetFailure(result.FailureCode, app.CodeVerification)
+			continue
 		}
-		if target := recordedForecastTarget(loaded.Model, artifact.QuestionID, artifact.ForecastID); target != nil {
+		if target := metadata; target != nil {
 			expected := TargetMetadataFor(artifact)
 			if *target != expected {
-				return TargetOperationResult{}, app.WithDetails(app.NewError(app.CodeVerification, "recorded target metadata does not match the deterministic target", nil), map[string]any{"forecast_id": artifact.ForecastID})
+				err = app.NewError(app.CodeVerification, "recorded target metadata does not match the deterministic target", nil)
+				result.Targets[index] = failedTargetResult(row, "content.target_metadata_mismatch", err)
+				result.FailureCode = strongerTargetFailure(result.FailureCode, app.CodeVerification)
+				continue
 			}
 		}
 		valid := true
-		result.Targets[index] = targetResult(artifact, storage.DeterministicUnchanged, &valid)
+		row.Valid = &valid
+		row.ReasonCodes = []string{"content.target_matches"}
+		result.Targets[index] = row
 	}
 	return result, nil
 }
@@ -327,6 +402,47 @@ func targetResult(artifact TargetArtifact, state storage.DeterministicState, val
 	return TargetResult{QuestionID: artifact.QuestionID, ForecastID: artifact.ForecastID, Path: artifact.RelativePath, SHA256: artifact.SHA256, Size: artifact.Size, State: state, Valid: valid}
 }
 
+func failedTargetResult(row TargetResult, reason string, err error) TargetResult {
+	row.State = storage.DeterministicState(LayerFail)
+	row.Valid = boolPointer(false)
+	row.ReasonCodes = []string{reason}
+	row.ErrorCode = app.ErrorCodeOf(err)
+	var applicationErr *app.Error
+	if errors.As(err, &applicationErr) {
+		row.Message = applicationErr.Message
+	}
+	return row
+}
+
+func boolPointer(value bool) *bool { return &value }
+
+func strongerTargetFailure(current, candidate app.ErrorCode) app.ErrorCode {
+	priority := func(code app.ErrorCode) int {
+		switch code {
+		case "":
+			return 0
+		case app.CodeInterrupted:
+			return 5
+		case app.CodeIO:
+			return 4
+		case app.CodeConflict:
+			return 3
+		case app.CodeVerification:
+			return 2
+		default:
+			return 1
+		}
+	}
+	if priority(candidate) > priority(current) {
+		return candidate
+	}
+	return current
+}
+
+func targetInspectionError(result TargetOperationResult) error {
+	return app.WithDetails(app.NewError(result.FailureCode, "one or more forecast targets could not be verified", nil), map[string]any{"ledger_id": result.LedgerID, "targets": result.Targets})
+}
+
 func caseFoldName(directory, requested string) (string, error) {
 	entries, err := os.ReadDir(directory)
 	if err != nil {
@@ -338,8 +454,4 @@ func caseFoldName(directory, requested string) (string, error) {
 		}
 	}
 	return "", nil
-}
-
-func sortTargetResults(items []TargetResult) {
-	sort.Slice(items, func(i, j int) bool { return items[i].ForecastID < items[j].ForecastID })
 }

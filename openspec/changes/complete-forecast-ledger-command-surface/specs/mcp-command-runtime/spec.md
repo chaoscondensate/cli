@@ -20,7 +20,7 @@ Serve SHALL require one or more `--ledger-root` values. Repeatable `--output-roo
 
 Every tool path SHALL be resolved against the appropriate root and reject absolute paths outside it, `..`, symlink/junction/reparse escape, Windows drive/UNC escape, case-folding collision, device paths, NUL, and path changes between validation and open. The server MUST NOT expand shell syntax or infer a default ledger.
 
-A missing-root or confinement error SHALL identify the applicable stable root class (`ledger`, `output`, or `secret`) and, when configured roots are numbered or named, its safe root identifier. It MUST NOT reduce every root failure to an indistinguishable generic message or expose the configured absolute path.
+A startup, missing-root, overlap, or confinement error SHALL identify the applicable stable root class (`ledger`, `output`, or `secret`), the originating flag, and, when configured roots are numbered or named, its safe root identifier. A missing or invalid configured route SHALL name that one safe class/identifier. An overlap SHALL name both conflicting class/identifier descriptors so the operator can correct the right pair. These failures MUST NOT be reduced to indistinguishable generic messages or expose configured absolute paths.
 
 #### Scenario: Ledger tool traversal
 - **WHEN** a tool supplies a file path that escapes through a symlink or junction
@@ -28,7 +28,11 @@ A missing-root or confinement error SHALL identify the applicable stable root cl
 
 #### Scenario: Secret root overlap
 - **WHEN** startup config places a secret root beneath an output root
-- **THEN** server startup fails before protocol readiness
+- **THEN** server startup fails before protocol readiness and identifies both the `secret` and `output` route IDs without displaying either absolute path
+
+#### Scenario: Configured ledger route does not exist
+- **WHEN** `--ledger-root main=<path>` names a path that cannot be opened as a root
+- **THEN** startup identifies `--ledger-root`, root class `ledger`, and safe route ID `main` rather than only saying that an artifact root does not exist
 
 #### Scenario: Tool requires an output root
 - **WHEN** a package-building call has no configured output root
@@ -116,7 +120,7 @@ The server SHALL expose redacted resources for explicitly addressed ledgers, que
 - **THEN** it receives public note, commitment and evidence state without plaintext, raw key, credential, or protected path
 
 ### Requirement: Support cancellation and concurrent clients safely
-Every tool call SHALL use its MCP request context and operation timeout. Cancellation SHALL stop bounded file/network work promptly and return interruption without partial mutation. Concurrent read calls MAY proceed; if one writer holds a ledger lock, every second CLI or MCP writer for that ledger SHALL return immediate deterministic `conflict` without waiting or partially reading/modifying state. Different ledgers MAY mutate concurrently within global resource limits.
+Every tool call SHALL use its MCP request context and operation timeout. Cancellation SHALL stop bounded file/network work promptly and return interruption without partial mutation. Concurrent read calls MAY proceed; if one writer holds a ledger lock, every second CLI or MCP writer for that ledger SHALL return immediate deterministic `conflict` without waiting or partially reading/modifying state. Request timeout does not create a ledger-writer queue or define a lock-wait duration; callers that intentionally contend SHALL serialize calls or use bounded retry/backoff. Different ledgers MAY mutate concurrently within global resource limits.
 
 #### Scenario: Cancel package build
 - **WHEN** the client cancels after some package files are staged

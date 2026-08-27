@@ -45,7 +45,7 @@ func NewCommand(stdin io.Reader, stdout, stderr io.Writer) *urfavecli.Command {
 			&urfavecli.BoolFlag{Name: "no-color", Usage: "Disable color and interactive decoration"},
 			&urfavecli.BoolFlag{Name: "no-input", Usage: "Never prompt; fail when input is missing"},
 			&urfavecli.BoolFlag{Name: "yes", Aliases: []string{"y"}, Usage: "Approve a change that requires confirmation"},
-			&urfavecli.DurationFlag{Name: "timeout", Value: 30 * time.Second, Usage: "Limit network or wait operations"},
+			&urfavecli.DurationFlag{Name: "timeout", Value: 30 * time.Second, Usage: "Limit operation work; ledger lock conflicts remain immediate"},
 		},
 		Commands: []*urfavecli.Command{
 			initCommand(),
@@ -132,6 +132,7 @@ func initCommand() *urfavecli.Command {
 			inputFlag(),
 			&urfavecli.StringFlag{Name: "key-file", OnlyOnce: true, TakesFile: true, Usage: "New protected key file; required only for a sealed first forecast"}})
 	command.Action = initAction
+	command.Description += "\n\nOmitted initial times use one operation-clock observation; an explicit ledger created_at is not copied into recorded_at."
 	return command
 }
 
@@ -144,11 +145,15 @@ func initAction(ctx context.Context, command *urfavecli.Command) error {
 		return err
 	}
 	effects := service.ProductionEffects()
-	root, err := service.BuildLedgerRoot(service.InitRootRequest{
+	operationAt, err := service.CaptureOperationTime(effects.Clock)
+	if err != nil {
+		return err
+	}
+	root, err := service.BuildLedgerRootAt(service.InitRootRequest{
 		LedgerID: ledger.Slug(command.String("ledger-id")), Timezone: command.String("timezone"),
 		ForecasterID: ledger.Slug(command.String("forecaster-id")), ForecasterName: command.String("forecaster-name"),
 		ForecasterKind: ledger.ForecasterKind(command.String("forecaster-kind")), Input: input,
-	}, effects.Clock)
+	}, operationAt)
 	if err != nil {
 		return err
 	}
@@ -161,7 +166,7 @@ func initAction(ctx context.Context, command *urfavecli.Command) error {
 		if keyPath != "" {
 			return app.NewError(app.CodeUsage, "--key-file is only valid for a sealed initial forecast", nil)
 		}
-		model, err = service.BuildInitialPublicLedger(root, input.Question)
+		model, err = service.BuildInitialPublicLedgerAt(root, input.Question, operationAt)
 	case ledger.VisibilitySealed:
 		if command.String("input") != "-" {
 			if err := storage.CheckProtectedFile(command.String("input")); err != nil {
@@ -172,9 +177,9 @@ func initAction(ctx context.Context, command *urfavecli.Command) error {
 			return app.NewError(app.CodeUsage, "--key-file is required for a sealed initial forecast", nil)
 		}
 		if runtime.DryRun {
-			model, err = service.PlanInitialSealedLedger(root, input.Question)
+			model, err = service.PlanInitialSealedLedgerAt(root, input.Question, operationAt)
 		} else {
-			sealed, err = service.BuildInitialSealedLedger(operationContext, root, input.Question, effects)
+			sealed, err = service.BuildInitialSealedLedgerAt(operationContext, root, input.Question, operationAt, effects)
 			model = sealed.Ledger
 		}
 	default:
@@ -602,7 +607,7 @@ func forecastCommand() *urfavecli.Command {
 	list := leaf("list", "List forecasts", "forecast-ledger forecast list --file ledger.yaml --question q-launch", true, []urfavecli.Flag{fileFlag(true), questionFlag()})
 	list.Action = forecastListAction
 	show := leaf("show", "Show a forecast", "forecast-ledger forecast show --file ledger.yaml --question q-launch --forecast f-001", true, []urfavecli.Flag{fileFlag(true), questionFlag(), forecastFlag()})
-	show.Description += "\n\nNormal human and plain output includes type-aware public values; sealed private fields stay redacted."
+	show.Description += "\n\nNormal human and plain output includes type-aware public values and safe stored integrity evidence; sealed private fields stay redacted. No network check is performed."
 	show.Action = forecastShowAction
 	seal := leaf("seal", "Create and append a sealed forecast", "forecast-ledger forecast seal --file ledger.yaml --question q-launch --forecast f-002 --input private.yaml --key-file secret.key", false, []urfavecli.Flag{fileFlag(false), questionFlag(), forecastFlag(), inputFlag(), secretOutputFlag()})
 	seal.Action = forecastSealAction
@@ -793,6 +798,7 @@ func targetCommand() *urfavecli.Command {
 	build := targetLeaf("build", "Build target artifacts", false)
 	build.Action = targetBuildAction
 	check := targetLeaf("check", "Check target bytes and digests", true)
+	check.Description += "\n\nA never-built target is reported as not_applicable with build guidance; --all continues in ledger order."
 	check.Action = targetCheckAction
 	return group("target", "Build or check canonical forecast targets", build, check)
 }
@@ -829,11 +835,60 @@ func targetCheckAction(ctx context.Context, command *urfavecli.Command) error {
 	runtime := RuntimeFromCommand(command)
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
-	result, err := service.CheckTargets(operationContext, command.String("file"), command.Bool("all"), ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast")))
+	result, err := service.InspectTargets(operationContext, command.String("file"), command.Bool("all"), ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast")))
 	if err != nil {
 		return err
 	}
-	return presenterFor(command).Success("target.valid", "Forecast target artifacts match the ledger", result)
+	code, message := "target.valid", "Forecast target artifacts match the ledger"
+	if result.FailureCode != "" {
+		code, message = "target.failed", "Target inspection completed with failures"
+	} else {
+		for _, target := range result.Targets {
+			if string(target.State) == string(service.LayerNotApplicable) {
+				code, message = "target.checked", "Target inspection completed; some forecasts have no retained target"
+				break
+			}
+		}
+	}
+	presenter := presenterFor(command)
+	if presenter.Mode() != presentation.ModeJSON && presenter.Mode() != presentation.ModeQuiet {
+		message = formatTargetInspection(presenter.Mode(), result)
+	}
+	if err := presenter.Success(code, message, result); err != nil {
+		return err
+	}
+	if result.FailureCode != "" {
+		return presentedApplicationError{app.NewError(result.FailureCode, "target inspection found failures", nil)}
+	}
+	return nil
+}
+
+func formatTargetInspection(mode presentation.Mode, result service.TargetOperationResult) string {
+	var output strings.Builder
+	for index, target := range result.Targets {
+		if index > 0 {
+			output.WriteByte('\n')
+		}
+		reasons := strings.Join(target.ReasonCodes, ",")
+		if mode == presentation.ModePlain {
+			fmt.Fprintf(&output, "%s\t%s\t%s\t%s\t%s\t%s\t%s", target.QuestionID, target.ForecastID, target.State, reasons, target.Path, target.SHA256, target.ActualSHA256)
+			if target.Guidance != "" {
+				fmt.Fprintf(&output, "\t%s", target.Guidance)
+			}
+			continue
+		}
+		fmt.Fprintf(&output, "Target: %s / %s\n  State: %s\n  Path: %s\n  Expected SHA-256: %s", target.QuestionID, target.ForecastID, target.State, target.Path, target.SHA256)
+		if target.ActualSHA256 != "" {
+			fmt.Fprintf(&output, "\n  Actual SHA-256: %s", target.ActualSHA256)
+		}
+		if reasons != "" {
+			fmt.Fprintf(&output, "\n  Reason: %s", reasons)
+		}
+		if target.Guidance != "" {
+			fmt.Fprintf(&output, "\n  Next: %s", target.Guidance)
+		}
+	}
+	return output.String()
 }
 
 func timestampCommand() *urfavecli.Command {
@@ -974,7 +1029,7 @@ func verifyCommand() *urfavecli.Command {
 		return ctx, nil
 	}
 	command.Action = verificationAction
-	command.Description += "\n\nNormal human and plain output includes the complete ordered evidence matrix."
+	command.Description += "\n\nNormal human and plain output includes the complete ordered evidence matrix and safe retained timing values. Offline stored values are not freshly rechecked."
 	return command
 }
 
@@ -1086,6 +1141,7 @@ func mcpCommand() *urfavecli.Command {
 		&urfavecli.IntFlag{Name: "max-tool-bytes", Value: 8 << 20, Usage: "Maximum decoded tool argument bytes"},
 	})
 	serve.Description += "\n\nRead-only mode omits mutating tools from discovery; direct calls to omitted names return unknown-tool."
+	serve.Description += " Ledger writers fail immediately on lock conflict; clients must serialize or use bounded retry with backoff."
 	serve.Action = mcpServeAction
 	return group("mcp", "Run the MCP adapter", serve)
 }
@@ -1171,6 +1227,7 @@ func formatForecastView(mode presentation.Mode, view service.ForecastView) strin
 	fields := [][2]string{
 		{"id", string(view.Summary.ID)}, {"forecasted_at", string(view.Summary.ForecastedAt)}, {"recorded_at", string(view.Summary.RecordedAt)},
 		{"visibility", string(view.Summary.Visibility)}, {"integrity_status", string(view.Summary.IntegrityStatus)},
+		{"integrity", compactPublicJSON(view.Integrity)},
 	}
 	if view.Value != nil {
 		fields = append(fields, [2]string{"value", compactPublicJSON(view.Value)})
@@ -1204,7 +1261,7 @@ func formatVerificationReport(mode presentation.Mode, report service.Verificatio
 		fmt.Fprintf(&output, "overall\t%s\ndocument\t%s", report.Overall, report.Document.State)
 		for _, forecast := range report.Forecasts {
 			for _, layer := range forecast.Layers {
-				fmt.Fprintf(&output, "\n%s\t%s\t%s\t%s", forecast.QuestionID, forecast.ForecastID, layer.Name, layer.State)
+				fmt.Fprintf(&output, "\n%s\t%s\t%s\t%s\t%s\t%s", forecast.QuestionID, forecast.ForecastID, layer.Name, layer.State, strings.Join(layer.ReasonCodes, ","), compactPublicJSON(layer.Evidence))
 			}
 		}
 		return output.String()
@@ -1216,6 +1273,12 @@ func formatVerificationReport(mode presentation.Mode, report service.Verificatio
 			fmt.Fprintf(&output, "\n  %s: %s", layer.Name, layer.State)
 			if len(layer.ReasonCodes) > 0 {
 				fmt.Fprintf(&output, " (%s)", strings.Join(layer.ReasonCodes, ", "))
+			}
+			if len(layer.Evidence) > 0 {
+				fmt.Fprintf(&output, "\n    Evidence: %s", compactPublicJSON(layer.Evidence))
+			}
+			if len(layer.Limitations) > 0 {
+				fmt.Fprintf(&output, "\n    Limits: %s", strings.Join(layer.Limitations, " "))
 			}
 		}
 	}

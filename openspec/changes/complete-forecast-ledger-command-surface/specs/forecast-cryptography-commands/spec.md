@@ -57,11 +57,23 @@ Target build SHALL NOT change ledger integrity state by itself; `timestamp stamp
 - **THEN** no target file is created or replaced for any forecast
 
 ### Requirement: Check target artifacts without mutation
-`forecast-ledger target check` SHALL reconstruct each selected target in memory, read the deterministic artifact, and compare both bytes and SHA-256. When ledger integrity contains target metadata, it SHALL also require exact scope `forecast-envelope/v1`, canonicalization identifier, relative path, algorithm, and digest agreement. It MUST NOT repair, rewrite, or update either ledger or artifact.
+`forecast-ledger target check` SHALL reconstruct each selected target in memory, inspect its deterministic artifact path, and compare both bytes and SHA-256 when the artifact exists. When ledger integrity contains target metadata, it SHALL also require exact scope `forecast-envelope/v1`, canonicalization identifier, relative path, algorithm, and digest agreement. It MUST NOT repair, rewrite, or update either ledger or artifact.
+
+The command SHALL return one ordered result for every selected forecast. A forecast with neither retained target metadata nor a deterministic target artifact SHALL produce state `not_applicable`, stable reason `content.no_retained_target`, question and forecast IDs, the safe expected relative path, and guidance to run `target build`; it MUST NOT be reduced to a generic filesystem `not_found` error. This state does not claim that target bytes passed. A report containing only `pass` and `not_applicable` results SHALL succeed, while retained-but-missing, unreadable, unsafe, or mismatched evidence remains an error under its applicable validation or verification category.
+
+With `--all`, an unbuilt forecast SHALL not abort inspection of later forecasts. The command SHALL collect every independently safe result before applying deterministic aggregate status and exit precedence. A single-selector invocation SHALL use the same result shape and reason codes as the corresponding row in `--all`.
 
 #### Scenario: Target bytes changed with same ledger
 - **WHEN** an artifact exists but differs from the reconstructed canonical bytes
 - **THEN** check returns verification failure with expected/actual digest evidence and performs no mutation
+
+#### Scenario: Selected forecast has never retained a target
+- **WHEN** the forecast has no target metadata and its deterministic target path does not exist
+- **THEN** check reports `not_applicable` with reason `content.no_retained_target`, the selected IDs, safe expected path, and a build next action without claiming a filesystem failure
+
+#### Scenario: All-target check continues after an unbuilt forecast
+- **WHEN** `target check --all` selects a mix of matching target files and forecasts whose targets were never built
+- **THEN** it reports every selected forecast in stable ledger order, marks only the latter `not_applicable`, and does not stop at the first absent deterministic path
 
 ### Requirement: Accept sealed forecast input only through a private channel
 `forecast-ledger forecast seal` SHALL require `--file`, `--question`, a globally unique new `--forecast`, `--input <protected-file|->`, and a new `--key-file` path. The private input SHALL contain the same typed value, forecast times, rationale, key factors, and comment fields used by a public forecast, plus optional public note and supersession ID. Those private fields MUST NOT be accepted as scalar argv flags or environment variables.

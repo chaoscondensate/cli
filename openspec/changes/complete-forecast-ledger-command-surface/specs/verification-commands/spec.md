@@ -43,7 +43,9 @@ When an applicable retained OTS receipt contains a supported Bitcoin attestation
 
 `--offline` SHALL disable every network request. Offline mode SHALL parse and inspect retained receipts but report attestations as `not_checked` or pending unless ledger metadata already contains internally consistent previously verified evidence. Because v1 does not retain the prior Bitcoin source identity, an offline report relying on stored verified metadata SHALL disclose that limitation and MUST NOT present the prior source as independently rechecked.
 
-Existence timing SHALL report target/receipt binding, proof validity, Bitcoin source and trust boundary, block evidence, conservative `anchored_before`, and whether that bound predates a resolved question's `outcome_known_at`. A cryptographically valid late anchor SHALL fail pre-outcome sufficiency while retaining proof-valid evidence.
+Existence timing SHALL report target/receipt binding, proof validity, Bitcoin source and trust boundary, block evidence including `bitcoin_block_height`, conservative `anchored_before`, stored or observed `verified_at`, and whether that bound predates a resolved question's `outcome_known_at`. These fields SHALL be present in the layer's human, plain, JSON, and MCP evidence whenever safely available; a one-word `verified` state is insufficient. A cryptographically valid late anchor SHALL fail pre-outcome sufficiency while retaining proof-valid evidence.
+
+When offline verification relies on internally consistent confirmed metadata already stored in the ledger, it SHALL still expose the retained block height and times, label them as stored rather than freshly observed, and state that v1 does not retain the prior Bitcoin verification-source identity. Displaying retained evidence MUST NOT trigger a network request.
 
 #### Scenario: Offline pending proof
 - **WHEN** a receipt is pending and `--offline` is selected
@@ -60,6 +62,10 @@ Existence timing SHALL report target/receipt binding, proof validity, Bitcoin so
 #### Scenario: Valid late anchor
 - **WHEN** a verified proof's conservative bound is not earlier than the known outcome
 - **THEN** proof validity is reported but existence timing for pre-outcome forecasting fails
+
+#### Scenario: Offline report includes stored block evidence
+- **WHEN** confirmed integrity stores a Bitcoin block height, anchored-before time, and verification time and the user runs `verify --offline`
+- **THEN** every output mode includes those retained values in `existence_timing`, performs no network request, and labels the prior source as not retained and not freshly rechecked
 
 ### Requirement: Verify revealed forecasts end to end
 For a revealed forecast, the reveal layer SHALL authenticate/decrypt retained ciphertext using the disclosed v1 key, verify commitment, associated data, protocol and bound IDs, parse the canonical private bundle, compare every public mirror field, and confirm the rebuilt target remains the original sealed target. For sealed and public forecasts, reveal SHALL be `not_applicable` unless a requested check cannot be performed because required evidence is missing, in which case it SHALL be `not_checked` or fail as appropriate. Raw keys and decrypted private values MUST remain absent from output.

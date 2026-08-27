@@ -84,11 +84,21 @@ Every action that reads an existing ledger SHALL inspect the bounded root and re
 - **THEN** the action returns `unsupported_schema_version`/exit `3` before any side effect and reports that only `1.0.0` is supported
 
 ### Requirement: Stable time input
-Persisted timestamps SHALL be RFC 3339 values with seconds and an explicit offset. Commands MAY default a write-time field such as `created_at`, `recorded_at`, or `revealed_at` to the current clock, but MUST report the exact stored value and MUST accept an explicit value for reproducible use and testing. The CLI MUST NOT present a self-reported timestamp or local clock as cryptographic evidence.
+Persisted timestamps SHALL be RFC 3339 values with seconds and an explicit offset. Commands MAY default a write-time field such as `created_at`, `recorded_at`, or `revealed_at` to the operation clock, but MUST report the exact stored value and MUST accept an explicit value for reproducible use and testing. Every command that authors a forecast, including `init`, SHALL use the captured operation clock when that forecast omits `recorded_at`; `init` MUST NOT copy an explicit or defaulted ledger `created_at` into an omitted forecast `recorded_at`. When both fields are omitted, one captured operation time MAY supply both. The CLI MUST NOT present a self-reported timestamp or local clock as cryptographic evidence.
+
+Temporal validation messages SHALL describe the actual inclusive boundary. A value that may equal its lower bound SHALL fail only when it is before that bound and the diagnostic SHALL say `must not be before` or `must not precede`; an upper-bound diagnostic SHALL analogously say `must not be after`. Runtime text MUST NOT say only `must be after` when equality is accepted.
 
 #### Scenario: Default recorded time
 - **WHEN** a forecast input omits `recorded_at`
 - **THEN** the command captures one clock value, validates it against `forecasted_at`, stores it unchanged, and returns it in the result
+
+#### Scenario: Backdated ledger creation does not backdate recording
+- **WHEN** `init` receives an explicit `created_at` before the initial forecast's `forecasted_at` and omits that forecast's `recorded_at`
+- **THEN** `recorded_at` comes from the operation clock rather than `created_at`, and the command validates and reports that independently defaulted value
+
+#### Scenario: Equality at a lower time boundary
+- **WHEN** `recorded_at` equals `forecasted_at`
+- **THEN** validation accepts the inclusive boundary, while a value before it is rejected with wording that says it must not be before `forecasted_at`
 
 ### Requirement: Consistent zero-config and offline network behavior
 Every action that can contact the network SHALL identify the built-in profile or explicit advanced source mode it will use and SHALL support `--offline`. Offline mode SHALL override automatic protocol-source use and explicit outcome-source checking, open no socket, and either continue with documented local-only results or fail before side effects when the action inherently requires a network response. Ordinary OpenTimestamps and Bitcoin public verification MUST NOT require calendar/explorer configuration. Only timestamp stamp/upgrade MAY accept the documented explicit CLI custom-calendar mode, and only timestamp/layered/package verification MAY accept the documented CLI Bitcoin Core override; MCP accepts neither arbitrary calendar nor Bitcoin endpoint URLs in v1.
@@ -106,6 +116,8 @@ Every ledger mutation SHALL acquire the cross-platform ledger lock, parse and fu
 
 Mutation MUST preserve JSON versus YAML, newline convention, and untouched YAML comments, order, scalar style, and unknown presentation details allowed by the schema. Inserted or replaced fragments SHALL follow the host document's indentation, line-break, mapping/sequence, and compact-versus-expanded presentation instead of embedding canonical/minified JSON inside YAML or pretty JSON. Canonical serialization remains an evidence/cryptographic byte contract and MUST NOT determine ledger presentation. An error or interruption before commit MUST leave the original ledger byte-for-byte unchanged.
 
+Newly inserted or replaced business mappings SHALL use the same documented semantic field order as the equivalent records written during `init` and generated in maintained references. They MUST NOT use an alphabetically sorted map order that makes adjacent records of the same type appear structurally different. This ordering rule applies to JSON and YAML fragments and MUST NOT reorder untouched mappings.
+
 #### Scenario: Invalid prospective state
 - **WHEN** a platform removal would leave a dangling platform reference
 - **THEN** post-change validation fails, no replacement occurs, and the original bytes remain unchanged
@@ -121,6 +133,10 @@ Mutation MUST preserve JSON versus YAML, newline convention, and untouched YAML 
 #### Scenario: Expanded YAML remains reviewable
 - **WHEN** a mutation appends a structured question or forecast to an expanded YAML ledger
 - **THEN** the new fragment uses the surrounding YAML indentation and line layout rather than one embedded minified JSON line, while untouched source bytes remain unchanged
+
+#### Scenario: Appended JSON forecast keeps semantic field order
+- **WHEN** `forecast add` appends a record to a JSON ledger created by `init`
+- **THEN** the new forecast uses the same semantic field order as the initial forecast rather than alphabetic key order, while existing source bytes retain their order
 
 ### Requirement: Dry-run and confirmation
 Every command that mutates a ledger, creates or replaces an artifact, writes a key, or creates a package SHALL support `--dry-run`. A read-only command does not gain dry-run merely because it can observe the network; `--offline` controls network use for layered `verify` and `publish verify`. Dry-run SHALL perform all local parsing, selection, permission, collision, and prospective validation possible without generating a real secret, writing a file, acquiring a remote result, or changing state; it SHALL return a structured plan that identifies deferred checks. Dry-run success MUST NOT claim that a later network or concurrent write will succeed.
@@ -144,7 +160,7 @@ Human output SHALL be concise English. JSON success SHALL be one object with `ok
 
 Public JSON data SHALL use the documented schema-compatible wire representation for forecast values, integrity records, resolutions, and other tagged unions. It MUST NOT expose internal language type names, PascalCase branch fields, inactive branches as `null`, reflection metadata, or any other implementation representation. Redaction SHALL preserve this public wire shape.
 
-Expected parsing, closed-schema, and semantic validation failures SHALL preserve a stable ordered `issues` collection when available. Each issue SHALL include its safe code and JSON pointer and SHALL include source line/column for source-backed input when known; an unknown input field SHALL identify that field without echoing its value. Human output SHALL render the same actionable locations, and adapter wrapping MUST NOT collapse them into only a generic parse message.
+Expected parsing, closed-schema, and semantic validation failures SHALL preserve a stable ordered `issues` collection when available. Each issue SHALL include its safe code and JSON pointer and SHALL include a valid one-based source line/column for source-backed input when known; an unknown input field SHALL identify that field without echoing its value. When no source position is known, JSON SHALL omit the source span and human output SHALL omit the position entirely. Neither transport SHALL emit line `0`, column `0`, or another fabricated placeholder. Human output SHALL render the same actionable locations, and adapter wrapping MUST NOT collapse them into only a generic parse message.
 
 `--plain` SHALL produce undecorated UTF-8 line-oriented output with no color, animation, border, heading, or progress on stdout; repeated records SHALL use a documented stable tab-separated field order. `--quiet` SHALL suppress all successful primary stdout while preserving warnings and failures on stderr and the process exit. `--json`, `--plain`, and `--quiet` SHALL be mutually exclusive; `--verbose` MAY add redacted diagnostics only to stderr.
 
@@ -174,6 +190,10 @@ The CLI exit mapping SHALL remain: `0` success, `1` unexpected internal failure,
 - **WHEN** an authoring input document contains an unsupported nested property
 - **THEN** JSON and human failures preserve its safe issue code, pointer, and known line/column without exposing sibling values
 
+#### Scenario: Semantic input location is unknown
+- **WHEN** a semantic issue has a safe JSON pointer but its structured input node has no recoverable source span
+- **THEN** JSON retains the pointer without a `start` position and human output prints no parenthesized line/column placeholder
+
 #### Scenario: Presented pending result keeps its exit category
 - **WHEN** a verification action successfully emits its available report and its overall state is pending or incomplete
 - **THEN** the process exits `9`, never the internal-failure exit `1`, in human, plain, and JSON modes
@@ -186,11 +206,15 @@ Raw keys, salts, nonces before publication, sealed plaintext, credentials, prote
 - **THEN** fallback diagnostics contain no generated key, private bundle field, or absolute key path
 
 ### Requirement: Cancellation and bounded external work
-Every action SHALL honor inherited cancellation and `--timeout`. File and cryptographic loops SHALL check cancellation at bounded intervals; network requests SHALL use the operation context, response-size limits, redirect policy, and the built-in profile or documented CLI Core endpoint. Interruption SHALL return exit `130` and preserve or recover the last committed coherent state.
+Every action SHALL honor inherited cancellation and `--timeout`. File and cryptographic loops SHALL check cancellation at bounded intervals; network requests SHALL use the operation context, response-size limits, redirect policy, and the built-in profile or documented CLI Core endpoint. Ledger lock acquisition SHALL remain fail-fast: a held writer lock returns immediate conflict/exit `5`, and `--timeout` MUST NOT turn that conflict into queued lock waiting. Help and maintained documentation SHALL state that callers which intentionally contend must serialize work or implement bounded retry/backoff. Interruption SHALL return exit `130` and preserve or recover the last committed coherent state.
 
 #### Scenario: Interrupt during calendar request
 - **WHEN** the operation context is canceled while stamping
 - **THEN** outstanding requests stop promptly, no pending ledger state is recorded without a retained valid receipt, and recoverable artifacts are reported
+
+#### Scenario: Timeout does not queue a second writer
+- **WHEN** one writer holds the ledger lock and another mutation supplies a long `--timeout`
+- **THEN** the second mutation still returns immediate conflict without partially reading or changing the ledger, and caller-controlled retry remains outside the command
 
 ### Requirement: Cross-platform observable parity
 The same ledger and explicit inputs SHALL produce equivalent domain results, JSON field names, deterministic target/manifest bytes, error codes, and path-safety decisions on supported macOS, Linux, and Windows systems. Platform-specific locking, ACL, replacement, separators, drive letters, UNC paths, symlinks, junctions, and case folding MUST NOT weaken confinement or change logical identifiers.

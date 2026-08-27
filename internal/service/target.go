@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"sort"
 
 	"github.com/chaoscondensate/cli/internal/app"
 	"github.com/chaoscondensate/cli/internal/canonical"
@@ -120,7 +119,6 @@ func BuildAllForecastTargets(model *ledger.Ledger) ([]TargetArtifact, error) {
 			result = append(result, artifact)
 		}
 	}
-	sort.Slice(result, func(i, j int) bool { return result[i].ForecastID < result[j].ForecastID })
 	paths := make([]string, len(result))
 	for index := range result {
 		paths[index] = string(result[index].RelativePath)

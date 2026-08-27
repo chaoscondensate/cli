@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -48,7 +49,37 @@ func TestTimestampAndChronologyRequireExactRFC3339(t *testing.T) {
 			t.Fatalf("timestamp %q error = %v", value, err)
 		}
 	}
-	if err := ValidateChronology("2026-08-27T00:00:00Z", "later", "2026-08-26T00:00:00Z", "earlier", true); app.ErrorCodeOf(err) != app.CodeInvalidData {
+	if err := ValidateChronology("2026-08-27T00:00:00Z", "later", "2026-08-26T00:00:00Z", "earlier", true); app.ErrorCodeOf(err) != app.CodeInvalidData || !strings.Contains(err.Error(), "must not be before") {
 		t.Fatalf("reverse chronology error = %v", err)
+	}
+	if err := ValidateChronology("2026-08-26T00:00:00Z", "earlier", "2026-08-26T00:00:00Z", "later", true); err != nil {
+		t.Fatalf("inclusive equality failed: %v", err)
+	}
+}
+
+func TestInitDefaultsRecordedAtFromOperationClockNotExplicitCreatedAt(t *testing.T) {
+	createdAt := ledger.Timestamp("2020-01-01T00:00:00Z")
+	operationAt := ledger.Timestamp("2026-08-26T12:34:56Z")
+	request := InitRootRequest{
+		LedgerID: "research", Timezone: "UTC", ForecasterID: "andrey", ForecasterName: "Andrey",
+		Input: InitInput{CreatedAt: &createdAt},
+	}
+	root, err := BuildLedgerRootAt(request, operationAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := binaryInitialQuestion()
+	questionCreated := ledger.Timestamp("2020-01-01T00:00:00Z")
+	input.CreatedAt = &questionCreated
+	input.ForecastWindow.ClosesAt = "2027-01-01T00:00:00Z"
+	input.ExpectedResolutionAt = "2027-01-02T00:00:00Z"
+	input.InitialForecast.ForecastedAt = "2026-08-26T12:00:00Z"
+	input.InitialForecast.RecordedAt = nil
+	model, err := BuildInitialPublicLedgerAt(root, input, operationAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if model.CreatedAt != createdAt || model.Questions[0].Forecasts[0].RecordedAt != operationAt {
+		t.Fatalf("created_at=%s recorded_at=%s", model.CreatedAt, model.Questions[0].Forecasts[0].RecordedAt)
 	}
 }

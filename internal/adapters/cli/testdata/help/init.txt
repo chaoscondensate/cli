@@ -8,6 +8,8 @@ DESCRIPTION:
    Example:
      forecast-ledger init --file ledger.yaml --ledger-id my-forecasts --timezone Europe/London --forecaster-id me --forecaster-name 'My Name' --input initial-question.yaml
 
+   Omitted initial times use one operation-clock observation; an explicit ledger created_at is not copied into recorded_at.
+
 OPTIONS:
    --file string, -f string   Ledger file path
    --ledger-id string         Stable ledger ID
@@ -28,4 +30,4 @@ GLOBAL OPTIONS:
    --no-color          Disable color and interactive decoration
    --no-input          Never prompt; fail when input is missing
    --yes, -y           Approve a change that requires confirmation
-   --timeout duration  Limit network or wait operations (default: 30s)
+   --timeout duration  Limit operation work; ledger lock conflicts remain immediate (default: 30s)

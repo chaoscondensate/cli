@@ -42,6 +42,18 @@ type ForecastView struct {
 	Comment    *string               `json:"comment,omitempty"`
 	PublicNote *string               `json:"public_note,omitempty"`
 	Commitment *CommitmentView       `json:"commitment,omitempty"`
+	Integrity  ForecastIntegrityView `json:"integrity"`
+}
+
+type ForecastIntegrityView struct {
+	Status              ledger.IntegrityStatus `json:"status"`
+	Target              *ledger.ForecastTarget `json:"target,omitempty"`
+	Timestamps          []ledger.OTSTimestamp  `json:"timestamps,omitempty"`
+	VerifiedAt          *ledger.Timestamp      `json:"verified_at,omitempty"`
+	FailureReason       string                 `json:"failure_reason,omitempty"`
+	EvidenceSource      string                 `json:"evidence_source,omitempty"`
+	FreshlyChecked      *bool                  `json:"freshly_checked,omitempty"`
+	PriorSourceRetained *bool                  `json:"prior_source_retained,omitempty"`
 }
 
 func BuildPublicForecastAppend(model *ledger.Ledger, questionID, forecastID ledger.Slug, input ForecastCreateInput, observedAt ledger.Timestamp) (ForecastMutation, error) {
@@ -160,7 +172,7 @@ func ShowForecast(model *ledger.Ledger, questionID, forecastID ledger.Slug) (For
 	if selected == nil {
 		return ForecastView{}, app.WithDetails(app.NewError(app.CodeNotFound, "forecast was not found in the selected question", nil), map[string]any{"question_id": questionID, "forecast_id": forecastID})
 	}
-	view := ForecastView{Summary: summarizeForecast(*selected), PublicNote: cloneString(selected.PublicNote)}
+	view := ForecastView{Summary: summarizeForecast(*selected), PublicNote: cloneString(selected.PublicNote), Integrity: forecastIntegrityView(selected.Integrity)}
 	if selected.Visibility != ledger.VisibilitySealed {
 		view.Value = cloneForecastValue(selected.Value)
 		view.Rationale = cloneString(selected.Rationale)
@@ -175,6 +187,35 @@ func ShowForecast(model *ledger.Ledger, questionID, forecastID ledger.Slug) (For
 		}
 	}
 	return view, nil
+}
+
+func forecastIntegrityView(value ledger.Integrity) ForecastIntegrityView {
+	view := ForecastIntegrityView{Status: integrityStatus(value)}
+	switch {
+	case value.Pending != nil:
+		target := value.Pending.Target
+		view.Target = &target
+		view.Timestamps = append([]ledger.OTSTimestamp(nil), value.Pending.Timestamps...)
+	case value.Verified != nil:
+		target, verifiedAt := value.Verified.Target, value.Verified.VerifiedAt
+		fresh, retained := false, false
+		view.Target = &target
+		view.Timestamps = append([]ledger.OTSTimestamp(nil), value.Verified.Timestamps...)
+		view.VerifiedAt = &verifiedAt
+		view.EvidenceSource = "stored_verification"
+		view.FreshlyChecked = &fresh
+		view.PriorSourceRetained = &retained
+	case value.Failed != nil:
+		view.FailureReason = value.Failed.FailureReason
+		if value.Failed.Target != nil {
+			target := *value.Failed.Target
+			view.Target = &target
+		}
+		if value.Failed.Timestamps != nil {
+			view.Timestamps = append([]ledger.OTSTimestamp(nil), (*value.Failed.Timestamps)...)
+		}
+	}
+	return view
 }
 
 func selectQuestion(model *ledger.Ledger, id ledger.Slug) (int, ledger.Question, error) {

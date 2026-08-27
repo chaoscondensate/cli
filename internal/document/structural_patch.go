@@ -377,7 +377,7 @@ func yamlFlowAdd(document *Document, parent *yaml.Node, token string, value any)
 	if err != nil {
 		return byteEdit{}, err
 	}
-	encoded, err := canonical.Marshal(value)
+	encoded, err := renderYAMLFlowValue(value)
 	if err != nil {
 		return byteEdit{}, err
 	}
@@ -407,6 +407,13 @@ func yamlFlowAdd(document *Document, parent *yaml.Node, token string, value any)
 	}
 	replacement = append(replacement, encoded...)
 	return byteEdit{start: end - 1, end: end - 1, replacement: replacement}, nil
+}
+
+func renderYAMLFlowValue(value any) ([]byte, error) {
+	if marshaler, ok := value.(json.Marshaler); ok {
+		return marshaler.MarshalJSON()
+	}
+	return canonical.Marshal(value)
 }
 
 func yamlRemove(document *Document, parent *yaml.Node, token string) (byteEdit, error) {
@@ -563,7 +570,7 @@ func flowCollectionEnd(raw []byte, start int64, open, close byte) (int64, error)
 
 func renderYAMLValue(value any, existing *yaml.Node, document *Document, start int64) ([]byte, error) {
 	if existing.Style&yaml.FlowStyle != 0 {
-		return canonical.Marshal(value)
+		return renderYAMLFlowValue(value)
 	}
 	encoded, err := yaml.Marshal(value)
 	if err != nil {

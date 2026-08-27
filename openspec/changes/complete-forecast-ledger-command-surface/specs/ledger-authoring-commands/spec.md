@@ -7,6 +7,8 @@ Defines complete business behavior for creating a Forecast Ledger and safely man
 ### Requirement: Initialize a schema-valid ledger with an initial question
 `forecast-ledger init` SHALL create a new `.json`, `.yaml`, or `.yml` file at the explicit `--file` path and MUST refuse an existing destination. It SHALL require `--ledger-id`, `--timezone`, `--forecaster-id`, `--forecaster-name`, and a bounded `--input` document containing exactly one initial question with its required `type` and exactly one initial public or sealed forecast because the pinned Forecast Ledger v1 contract requires non-empty `questions` and `forecasts` arrays. Additional questions and forecasts are added after initialization through their normal commands. Unlike `question add`, init has no separate question-type flag because its input owns the complete initial question. Both paths SHALL normalize the type into the same question builder and validation rules while retaining intentionally distinct closed input schemas. `--forecaster-kind` SHALL default to `individual`; team forecasters SHALL supply at least two uniquely identified members in the input. Optional title, description, contact, profiles, platforms, and explicit `created_at` MAY be supplied in the same input.
 
+Init SHALL capture one operation time before constructing records. An omitted ledger `created_at` MAY use that time. An omitted initial-forecast `recorded_at` SHALL use that operation time independently and MUST NOT be copied from an explicit or defaulted `created_at`. An explicit initial `recorded_at` remains unchanged. If a defaulted time violates chronology, the diagnostic SHALL identify `recorded_at` and state that it was supplied from the operation clock rather than imply that the user wrote the field or that it came from `created_at`.
+
 An initial sealed forecast SHALL use the exact normal seal profile, SHALL require an explicit new `--key-file`, and SHALL cause the complete init input to be treated as private. A public initial forecast MUST reject `--key-file`. Key creation, ledger creation, rollback/recovery, redaction, and dry-run behavior SHALL match `forecast seal`; no incomplete ledger may be committed if either resource fails.
 
 The created document SHALL use schema version `1.0.0`, an empty platform map unless platforms were supplied, no inferred publication/source-control metadata, and the requested initial question. IDs SHALL match the v1 slug grammar, the timezone SHALL be a known IANA name, and the complete prospective document SHALL pass structural and semantic validation before exclusive creation.
@@ -14,6 +16,10 @@ The created document SHALL use schema version `1.0.0`, an empty platform map unl
 #### Scenario: Minimal valid initialization
 - **WHEN** an individual forecaster supplies all root flags and one valid binary question in `--input`
 - **THEN** the command exclusively creates a schema-valid ledger with exact reported timestamps, no publication metadata, and no implicit network or source-control operation
+
+#### Scenario: Import history into a backdated ledger
+- **WHEN** init supplies an earlier explicit `created_at`, a later initial `forecasted_at`, and no initial `recorded_at`
+- **THEN** the operation clock supplies `recorded_at`, the stored ledger creation time remains the explicit value, and neither timestamp is silently copied into the other
 
 #### Scenario: Initialize with a sealed first forecast
 - **WHEN** the single initial forecast is sealed and a safe new `--key-file` is supplied
@@ -164,7 +170,7 @@ The command SHALL set both question and resolution status to `resolved`, retain 
 ### Requirement: Append a public forecast
 `forecast add` SHALL require an open question, a globally unique `--forecast` ID, and a closed `--input` object containing `forecasted_at`, optional `recorded_at`, a typed `value`, and optional rationale, key factors, comment, public note, and `supersedes_forecast_id`. It SHALL set visibility to `public` and integrity to `unanchored` and MUST NOT accept commitment/encryption fields.
 
-Binary probability SHALL be integer basis points from 0 through 10,000. Multiple-choice values SHALL cover every current option exactly once with unique option IDs and total exactly 10,000 basis points. Numeric and date values SHALL provide at least one of point, interval, or quantiles; exact decimals remain strings, interval lower MUST NOT exceed upper, quantile probabilities SHALL be unique and ordered, and quantile values SHALL be non-decreasing. `forecasted_at` SHALL lie within the question window, MUST NOT follow `recorded_at`, and records SHALL remain ordered by recorded time.
+Binary probability SHALL be integer basis points from 0 through 10,000. Multiple-choice values SHALL cover every current option exactly once with unique option IDs and total exactly 10,000 basis points. Numeric and date values SHALL provide at least one of point, interval, or quantiles; exact decimals remain strings, interval lower MUST NOT exceed upper, quantile probabilities SHALL be unique and ordered, and quantile values SHALL be non-decreasing. `forecasted_at` SHALL lie within the question window, MUST NOT follow `recorded_at`, and records SHALL remain ordered by recorded time. Equality with `forecast_window.opens_at`, `forecast_window.closes_at`, or `recorded_at` SHALL remain valid. Rejection text SHALL describe only the violated inclusive relation: before open, after close, or `recorded_at` before `forecasted_at`.
 
 A superseded ID MUST identify an earlier forecast in the same question. Adding a revision SHALL append a new record and MUST NOT modify, delete, or mark the earlier record mutable.
 
@@ -184,8 +190,14 @@ A superseded ID MUST identify an earlier forecast in the same question. Adding a
 - **WHEN** one forecast in an open question has valid retained target and receipt artifacts and a new globally unique forecast is added
 - **THEN** the new forecast is appended and the existing forecast and evidence remain unchanged and valid
 
+#### Scenario: Forecast time equals an inclusive boundary
+- **WHEN** a forecast time equals the question open or close time, or its recording time equals its forecast time
+- **THEN** the forecast is accepted, while an out-of-range value is rejected with wording that does not imply equality is forbidden
+
 ### Requirement: List and show forecasts
-`forecast list` SHALL return the selected question's forecasts in recorded order with stable ID, times, visibility, a concise type-aware value summary when public or revealed, supersession link, and integrity status. `forecast show` SHALL return the exact selected public/revealed forecast including its type-aware value, rationale, key factors, comment, public note, supersession link, and integrity metadata, or a redacted sealed summary containing only fields already public in the ledger. Human output SHALL render these record details rather than repeating only the compact list row. Revealed keys SHALL remain redacted even though the v1 ledger stores the disclosed key. Neither action SHALL decrypt, contact the network, or change integrity metadata.
+`forecast list` SHALL return the selected question's forecasts in recorded order with stable ID, times, visibility, a concise type-aware value summary when public or revealed, supersession link, and integrity status. `forecast show` SHALL return the exact selected public/revealed forecast including its type-aware value, rationale, key factors, comment, public note, supersession link, and a safe redacted integrity projection, or a redacted sealed summary containing only fields already public in the ledger.
+
+The integrity projection SHALL include status and applicable target scope/path/digest metadata plus each retained OpenTimestamps receipt's safe path and state. When the ledger stores confirmed evidence, human, plain, JSON, and MCP show results SHALL expose `bitcoin_block_height`, `anchored_before`, and `verified_at`. These are local retained observations: show MUST NOT contact the network, invent the prior verification source, or imply that it has just reverified the chain. Revealed keys, private bundle fields, and protected paths SHALL remain redacted even though the v1 ledger stores a disclosed key. Human output SHALL render these record and integrity details rather than repeating only the compact list row. Neither list nor show SHALL decrypt, contact the network, or change integrity metadata.
 
 #### Scenario: List append-only history
 - **WHEN** three forecasts form a supersession chain
@@ -194,6 +206,10 @@ A superseded ID MUST identify an earlier forecast in the same question. Adding a
 #### Scenario: Human public forecast detail
 - **WHEN** a user runs `forecast show` for a public forecast without a machine-output mode
 - **THEN** output includes its value, rationale, key factors, comment, supersession relationship, and integrity state instead of only ID/time/status summary fields
+
+#### Scenario: Show retained Bitcoin anchoring details locally
+- **WHEN** a forecast has confirmed OpenTimestamps integrity with stored block height, conservative anchored-before time, and verification time
+- **THEN** `forecast show` exposes those safe values in human, plain, JSON, and MCP forms without a network request and labels them as retained rather than freshly reverified evidence
 
 ### Requirement: Preserve imported evidence states outside the authoring surface
 v1 authoring commands SHALL not create or edit schema-supported `external_anchors`; every pending-to-verified transition SHALL preserve them byte-for-byte and verification SHALL report them only as external claims, never as OpenTimestamps proof. v1 commands SHALL not create `integrity.status: failed` automatically. An imported failed integrity state is terminal for that forecast: target, timestamp, seal, and integrity mutation commands SHALL refuse to replace it, while list/show/status/verify remain available. Recovery SHALL append a new forecast revision with a new globally unique ID and optional supersession link, preserving the failed record as history.

@@ -126,11 +126,64 @@ func TestTargetBuildCheckIdempotencyCollisionAndDryRun(t *testing.T) {
 	if err := os.WriteFile(targetPath, []byte("tampered"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	inspection, inspectErr := InspectTargets(context.Background(), path, true, "", "")
+	if inspectErr != nil || inspection.FailureCode != app.CodeVerification || len(inspection.Targets) < 3 {
+		t.Fatalf("tampered all inspection = %#v, %v", inspection, inspectErr)
+	}
+	var failedRows int
+	for _, row := range inspection.Targets {
+		if row.State == storage.DeterministicState(LayerFail) {
+			failedRows++
+		}
+	}
+	if failedRows != 1 {
+		t.Fatalf("tampered all rows = %#v", inspection.Targets)
+	}
 	if _, err := CheckTargets(context.Background(), path, false, "q-election-coalition", "f-election-coalition-001"); app.ErrorCodeOf(err) != app.CodeVerification {
 		t.Fatalf("tampered check error = %v", err)
 	}
 	if _, err := CommitTargetBuild(context.Background(), path, false, "q-election-coalition", "f-election-coalition-001"); app.ErrorCodeOf(err) != app.CodeConflict {
 		t.Fatalf("tampered build error = %v", err)
+	}
+}
+
+func TestTargetInspectionReportsUnretainedRowsAndKeepsLedgerOrder(t *testing.T) {
+	raw, err := fs.ReadFile(contractschema.Conformance(), "individual-ledger.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := t.TempDir()
+	path := filepath.Join(directory, "ledger.json")
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CommitTargetBuild(context.Background(), path, false, "q-election-coalition", "f-election-coalition-001"); err != nil {
+		t.Fatal(err)
+	}
+	result, err := InspectTargets(context.Background(), path, true, "", "")
+	if err != nil || result.FailureCode != "" || len(result.Targets) < 3 {
+		t.Fatalf("inspection = %#v, %v", result, err)
+	}
+	if result.Targets[0].ForecastID != "f-central-bank-cut-001" || result.Targets[0].State != storage.DeterministicState(LayerNotApplicable) {
+		t.Fatalf("first target = %#v", result.Targets[0])
+	}
+	var built, unretained *TargetResult
+	for index := range result.Targets {
+		if result.Targets[index].ForecastID == "f-election-coalition-001" {
+			built = &result.Targets[index]
+		}
+		if result.Targets[index].State == storage.DeterministicState(LayerNotApplicable) {
+			unretained = &result.Targets[index]
+		}
+	}
+	if built == nil || built.State != storage.DeterministicState(LayerPass) {
+		t.Fatalf("built target row = %#v", built)
+	}
+	if unretained == nil || unretained.ReasonCodes[0] != "content.no_retained_target" || unretained.Guidance == "" {
+		t.Fatalf("unretained target = %#v", unretained)
+	}
+	if _, err := CheckTargets(context.Background(), path, false, "q-quarterly-revenue", "f-quarterly-revenue-001"); app.ErrorCodeOf(err) != app.CodeNotFound {
+		t.Fatalf("strict target check error = %v", err)
 	}
 }
 

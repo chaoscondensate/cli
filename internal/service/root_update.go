@@ -202,7 +202,7 @@ func jsonPatchValue(value any) (any, error) {
 	if err != nil {
 		return nil, app.NewError(app.CodeInternal, "metadata patch value cannot be normalized", err)
 	}
-	return parsed.Root.Any(), nil
+	return document.Ordered(parsed.Root), nil
 }
 
 // Full prospective validation handles equality; this filter keeps identical

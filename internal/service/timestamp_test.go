@@ -347,6 +347,18 @@ func TestTimestampUpgradeVerifyAndVerifiedStatus(t *testing.T) {
 	if err != nil || report.Overall != VerificationFail || report.Forecasts[0].Layers[1].State != LayerFail || report.Forecasts[0].Layers[1].ReasonCodes[0] != "timing.not_before_outcome" {
 		t.Fatalf("late offline verification = %#v, %v", report, err)
 	}
+	evidence := report.Forecasts[0].Layers[1].Evidence
+	if evidence["bitcoin_block_height"] != uint64(1) && evidence["bitcoin_block_height"] != int64(1) || evidence["verified_at"] != verifiedAt || evidence["evidence_source"] != "stored_verification" || evidence["freshly_checked"] != false || evidence["prior_source_retained"] != false {
+		t.Fatalf("stored timing evidence = %#v", evidence)
+	}
+	loaded, err := LoadAndValidateLedger(context.Background(), ledgerPath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	view, err := ShowForecast(loaded.Model, questionID, forecastID)
+	if err != nil || view.Integrity.Target == nil || len(view.Integrity.Timestamps) != 1 || view.Integrity.VerifiedAt == nil || *view.Integrity.VerifiedAt != verifiedAt || view.Integrity.FreshlyChecked == nil || *view.Integrity.FreshlyChecked {
+		t.Fatalf("forecast integrity view = %#v, %v", view.Integrity, err)
+	}
 }
 
 type fixedBitcoinObserver struct {

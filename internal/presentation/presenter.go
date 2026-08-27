@@ -151,7 +151,11 @@ func (p *Presenter) writeIssues(details map[string]any) error {
 			if source, ok := issue["location"].(map[string]any); ok {
 				location = firstString(source, "pointer")
 				if start, ok := source["start"].(map[string]any); ok {
-					location += fmt.Sprintf(" (line %v, column %v)", start["line"], start["column"])
+					line, lineOK := start["line"].(float64)
+					column, columnOK := start["column"].(float64)
+					if lineOK && columnOK && line >= 1 && column >= 1 {
+						location += fmt.Sprintf(" (line %.0f, column %.0f)", line, column)
+					}
 				}
 			}
 		}
