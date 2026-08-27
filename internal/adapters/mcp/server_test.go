@@ -29,8 +29,7 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := t.Context()
 	client := connectClient(t, ctx, server)
 	defer client.Close()
 
@@ -76,7 +75,7 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 		}
 	}
 	for _, tool := range listed.Tools {
-		result, callErr := client.CallTool(ctx, &sdk.CallToolParams{Name: tool.Name, Arguments: minimumToolArguments(tool.Name)})
+		result, callErr := callToolForTest(t, client, &sdk.CallToolParams{Name: tool.Name, Arguments: minimumToolArguments(tool.Name)})
 		if callErr != nil {
 			t.Errorf("registered tool %s returned protocol error: %v", tool.Name, callErr)
 			continue
@@ -85,11 +84,11 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 			t.Errorf("registered tool %s did not return a recoverable application error: %s", tool.Name, toolText(result))
 		}
 	}
-	if _, err := client.CallTool(ctx, &sdk.CallToolParams{Name: "forecast_reveal", Arguments: map[string]any{}}); err == nil {
+	if _, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "forecast_reveal", Arguments: map[string]any{}}); err == nil {
 		t.Fatal("disabled reveal direct call did not return unknown-tool protocol error")
 	}
 
-	result, err := client.CallTool(ctx, &sdk.CallToolParams{Name: "ledger_validate", Arguments: map[string]any{"file": "main:ledger.json"}})
+	result, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "ledger_validate", Arguments: map[string]any{"file": "main:ledger.json"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,15 +99,15 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	if !strings.Contains(string(encoded), `"code":"ledger.valid"`) {
 		t.Fatalf("unexpected result: %s", encoded)
 	}
-	targetCheck, err := client.CallTool(ctx, &sdk.CallToolParams{Name: "target_check", Arguments: map[string]any{"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-001"}})
+	targetCheck, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "target_check", Arguments: map[string]any{"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-001"}})
 	if err != nil || targetCheck.IsError || !strings.Contains(toolText(targetCheck), `"state":"not_applicable"`) || !strings.Contains(toolText(targetCheck), "content.no_retained_target") {
 		t.Fatalf("MCP unretained target result=%s err=%v", toolText(targetCheck), err)
 	}
-	forecastShow, err := client.CallTool(ctx, &sdk.CallToolParams{Name: "forecast_show", Arguments: map[string]any{"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-001"}})
+	forecastShow, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "forecast_show", Arguments: map[string]any{"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-001"}})
 	if err != nil || forecastShow.IsError || !strings.Contains(toolText(forecastShow), `"integrity":{"status":"unanchored"}`) {
 		t.Fatalf("MCP forecast integrity result=%s err=%v", toolText(forecastShow), err)
 	}
-	semanticFailure, err := client.CallTool(ctx, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{"file": "main:ledger.json", "platform": "invalid-semantic", "input": map[string]any{"name": "   ", "kind": "informal"}}})
+	semanticFailure, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{"file": "main:ledger.json", "platform": "invalid-semantic", "input": map[string]any{"name": "   ", "kind": "informal"}}})
 	if err != nil || !semanticFailure.IsError || strings.Contains(toolText(semanticFailure), `"line":0`) || strings.Contains(toolText(semanticFailure), `"column":0`) {
 		t.Fatalf("MCP semantic diagnostic fabricated a span: %s, %v", toolText(semanticFailure), err)
 	}
@@ -118,7 +117,7 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 		t.Fatal(err)
 	}
 	started := time.Now()
-	conflict, err := client.CallTool(ctx, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{
+	conflict, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{
 		"file": "main:ledger.json", "platform": "locked-platform", "input": map[string]any{"name": "Locked", "kind": "internal"},
 	}})
 	if releaseErr := lock.Release(); releaseErr != nil {
@@ -129,14 +128,14 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	}
 
 	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.0.0", "individual-ledger.json"), filepath.Join(ledgerRoot, "second.json"))
-	independent, err := client.CallTool(ctx, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{
+	independent, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{
 		"file": "main:second.json", "platform": "independent-platform", "input": map[string]any{"name": "Independent", "kind": "internal"},
 	}})
 	if err != nil || independent.IsError {
 		t.Fatalf("cross-ledger mutation was blocked: result=%s err=%v", toolText(independent), err)
 	}
 
-	unknown, err := client.CallTool(ctx, &sdk.CallToolParams{Name: "ledger_validate", Arguments: map[string]any{"file": "main:ledger.json", "typo": true}})
+	unknown, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "ledger_validate", Arguments: map[string]any{"file": "main:ledger.json", "typo": true}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +143,7 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 		t.Fatalf("unknown property accepted: %#v", unknown)
 	}
 
-	escape, err := client.CallTool(ctx, &sdk.CallToolParams{Name: "ledger_validate", Arguments: map[string]any{"file": "main:../outside.json"}})
+	escape, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "ledger_validate", Arguments: map[string]any{"file": "main:../outside.json"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +151,7 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	if !escape.IsError || !strings.Contains(escapeText, `"route":"ledger:main"`) || !strings.Contains(escapeText, `"flag":"--ledger-root"`) || strings.Contains(escapeText, ledgerRoot) {
 		t.Fatalf("root traversal diagnostic is incomplete or unsafe: %s", escapeText)
 	}
-	missingRoot, err := client.CallTool(ctx, &sdk.CallToolParams{Name: "ledger_validate", Arguments: map[string]any{"file": "missing:ledger.json"}})
+	missingRoot, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "ledger_validate", Arguments: map[string]any{"file": "missing:ledger.json"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -305,6 +304,13 @@ func FuzzMCPToolArguments(f *testing.F) {
 		}
 		_, _ = decodeToolArguments(data, 64<<10, allowed, []string{"file"})
 	})
+}
+
+func callToolForTest(t *testing.T, client *sdk.ClientSession, params *sdk.CallToolParams) (*sdk.CallToolResult, error) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	return client.CallTool(ctx, params)
 }
 
 func connectClient(t *testing.T, ctx context.Context, server *Server) *sdk.ClientSession {

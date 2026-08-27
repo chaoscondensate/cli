@@ -5,6 +5,13 @@ tags and downloadable files are published on GitHub Releases.
 
 ## Unreleased
 
+## 0.2.4 - 2026-08-27
+
+### Fixed
+
+- Give each MCP parity-test call an independent deadline so slower release
+  runners cannot exhaust one shared test budget before later operations.
+
 ## 0.2.3 - 2026-08-27
 
 ### Fixed
