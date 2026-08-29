@@ -907,7 +907,7 @@ func timestampCommand() *urfavecli.Command {
 	verify.Action = timestampVerifyAction
 	command := group("timestamp", "Manage experimental OpenTimestamps receipts", stamp, upgrade, status, verify)
 	profile := ots.Profile()
-	command.Description = fmt.Sprintf("Experimental profile %s submits to four fixed calendars and needs %d valid responses. Public Bitcoin verification requires both fixed sources to agree; limits are %d heights, %d requests, and %d concurrent requests.", profile.ID, profile.CalendarMinimum, profile.MaximumUniqueHeights, profile.MaximumHTTPRequests, profile.MaximumConcurrentHTTP)
+	command.Description = fmt.Sprintf("Experimental profile %s submits to four fixed calendars and needs %d valid responses. Public Bitcoin verification requires both fixed sources to agree; limits per invocation: %d heights/%d requests/%d concurrent.", profile.ID, profile.CalendarMinimum, profile.MaximumUniqueHeights, profile.MaximumHTTPRequests, profile.MaximumConcurrentHTTP)
 	return command
 }
 
@@ -1176,7 +1176,7 @@ func versionCommand() *urfavecli.Command {
 				encoder.SetEscapeHTML(false)
 				return encoder.Encode(info)
 			}
-			_, err := fmt.Fprintf(command.Root().Writer, "%s %s\nsource revision: %s\ngo: %s\nforecast ledger schema: %s (%s, sha256:%s)\nmcp protocol: %s\ntimestamp profile: %s (experimental; %d-of-%d calendars; %d Bitcoin sources; %d heights/%d requests/%d concurrent)\n", info.Binary, info.Version, info.SourceRevision, info.GoVersion, info.Schema.Version, info.Schema.Commit, info.Schema.SHA256, info.MCPProtocol, info.TimestampProfile.ID, info.TimestampProfile.CalendarMinimum, len(info.TimestampProfile.Calendars), len(info.TimestampProfile.BitcoinSources), info.TimestampProfile.MaximumUniqueHeights, info.TimestampProfile.MaximumHTTPRequests, info.TimestampProfile.MaximumConcurrentHTTP)
+			_, err := fmt.Fprintf(command.Root().Writer, "%s %s\nsource revision: %s\ngo: %s\nforecast ledger schema: %s (%s, sha256:%s)\nmcp protocol: %s\ntimestamp profile: %s (experimental; %d-of-%d calendars; %d Bitcoin sources; limits per invocation: %d heights/%d requests/%d concurrent)\n", info.Binary, info.Version, info.SourceRevision, info.GoVersion, info.Schema.Version, info.Schema.Commit, info.Schema.SHA256, info.MCPProtocol, info.TimestampProfile.ID, info.TimestampProfile.CalendarMinimum, len(info.TimestampProfile.Calendars), len(info.TimestampProfile.BitcoinSources), info.TimestampProfile.MaximumUniqueHeights, info.TimestampProfile.MaximumHTTPRequests, info.TimestampProfile.MaximumConcurrentHTTP)
 			return err
 		}}
 }

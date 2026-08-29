@@ -87,7 +87,7 @@ for an installed artifact.
 | Schema commit | `e409463d702888fefd253b32f21b9b2f864aabed` |
 | Embedded schema SHA-256 | `e63bdd01f0241aa4d94d5ccc45e84bcea70a6a7fd46ab77cff4802b3f8b8fc65` |
 | MCP protocol target | `2026-07-28` |
-| Timestamp profile | `opentimestamps-public-v1` (experimental; four calendars, threshold two, two Bitcoin observers, 32 heights, 128 requests, four concurrent) |
+| Timestamp profile | `opentimestamps-public-v1` (experimental; four calendars, threshold two, two Bitcoin observers; per invocation: 32 heights, 128 requests, four concurrent) |
 | Go toolchain | `1.27.0` |
 
 Validation uses embedded contract bytes and does not resolve remote schema

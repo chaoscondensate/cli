@@ -5,6 +5,11 @@ tags and downloadable files are published on GitHub Releases.
 
 ## Unreleased
 
+### Changed
+
+- Clarify in timestamp help and human version output that the Bitcoin observer
+  limits apply to each invocation, not to a unit of elapsed time.
+
 ## 0.2.4 - 2026-08-27
 
 ### Fixed

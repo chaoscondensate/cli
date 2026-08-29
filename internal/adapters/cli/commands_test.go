@@ -485,6 +485,14 @@ func TestHelpSuggestionsCompletionAndVersionJSON(t *testing.T) {
 			t.Fatalf("unexpected version metadata: %#v", got)
 		}
 	}
+	code, stdout, stderr = runCLI("forecast-ledger", "version")
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "limits per invocation: 32 heights/128 requests/4 concurrent") {
+		t.Fatalf("human version does not scope timestamp limits: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	code, stdout, stderr = runCLI("forecast-ledger", "timestamp", "--help")
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "limits per invocation: 32 heights/128 requests/4 concurrent") {
+		t.Fatalf("timestamp help does not scope limits: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
 	code, _, stderr = runCLI("forecast-ledger", "--plain", "version", "--json")
 	if code != 2 || !strings.Contains(stderr, "cannot be combined") {
 		t.Fatalf("mixed global/local output modes code=%d stderr=%q", code, stderr)
