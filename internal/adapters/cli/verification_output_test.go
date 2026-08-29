@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/chaoscondensate/cli/internal/ledger"
 	"github.com/chaoscondensate/cli/internal/presentation"
 	"github.com/chaoscondensate/cli/internal/service"
+	"github.com/chaoscondensate/cli/internal/storage"
 	"github.com/chaoscondensate/cli/internal/timestamp/ots"
 )
 
@@ -154,6 +156,73 @@ func TestVerificationOutputWriterFailureIsInternal(t *testing.T) {
 	}
 }
 
+func TestTimestampVerifySourceOutageReturnsSafeReport(t *testing.T) {
+	path := confirmedVerificationLedger(t)
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		http.Error(response, "REMOTE-PRIVATE-BODY", http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	authPath := filepath.Join(t.TempDir(), "bitcoin-auth.json")
+	const secret = "CLI-BITCOIN-SECRET"
+	if err := storage.CreateProtectedFile(authPath, []byte(`{"username":"rpc-user","password":"`+secret+`"}`)); err != nil {
+		t.Fatal(err)
+	}
+	arguments := []string{"forecast-ledger", "--json", "timestamp", "verify", "--file", path, "--question", "q-election-coalition", "--forecast", "f-election-coalition-001", "--bitcoin-core", server.URL, "--bitcoin-auth-file", authPath}
+	code, stdout, stderr := runCLI(arguments...)
+	if code != 8 || stderr != "" {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	for _, expected := range []string{`"code":"timestamp.verification.not_checked"`, `"state":"confirmed_unverified"`, `"state":"not_checked"`, `"timing.source_unavailable"`, `"kind":"source_unavailable"`, `"source_ids":["bitcoin-core"]`, `"mode":"bitcoin_core"`, `"http_requests":1`} {
+		if !strings.Contains(stdout, expected) {
+			t.Errorf("outage JSON missing %q:\n%s", expected, stdout)
+		}
+	}
+	for _, forbidden := range []string{"Bitcoin evidence did not verify", server.URL, secret, "REMOTE-PRIVATE-BODY"} {
+		if strings.Contains(stdout+stderr, forbidden) {
+			t.Errorf("outage output leaked or retained obsolete message %q: %s%s", forbidden, stdout, stderr)
+		}
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatalf("outage changed ledger: err=%v", err)
+	}
+
+	plainArguments := append([]string(nil), arguments...)
+	plainArguments[1] = "--plain"
+	code, stdout, stderr = runCLI(plainArguments...)
+	if code != 8 || stderr != "" || !strings.Contains(stdout, "verification\tnot_checked\ttiming.source_unavailable") || !strings.Contains(stdout, "sources\tbitcoin-core") {
+		t.Fatalf("plain outage code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+}
+
+func TestNoEvidenceUsesExitNineForLedgerAndPackage(t *testing.T) {
+	directory := t.TempDir()
+	ledgerPath := filepath.Join(directory, "empty.json")
+	if err := os.WriteFile(ledgerPath, fixtureBytes(t, "empty-ledger.json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := runCLI("forecast-ledger", "--json", "verify", "--file", ledgerPath, "--offline")
+	if code != 9 || stderr != "" || !strings.Contains(stdout, `"code":"verification.no_evidence"`) || !strings.Contains(stdout, `"overall":"no_evidence"`) {
+		t.Fatalf("empty ledger code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	code, stdout, stderr = runCLI("forecast-ledger", "--plain", "verify", "--file", ledgerPath, "--offline")
+	if code != 9 || stderr != "" || !strings.Contains(stdout, "overall\tno_evidence") || !strings.Contains(stdout, "document\tpass") {
+		t.Fatalf("plain empty ledger code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	packageRoot := filepath.Join(directory, "package")
+	if _, err := service.CommitPublicationBuild(context.Background(), ledgerPath, packageRoot, false); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr = runCLI("forecast-ledger", "--json", "publish", "verify", "--file", filepath.Join(packageRoot, "ledger", "empty.json"), "--manifest", filepath.Join(packageRoot, "manifest.json"))
+	if code != 9 || stderr != "" || !strings.Contains(stdout, `"code":"publication.verification.no_evidence"`) || !strings.Contains(stdout, `"overall":"no_evidence"`) || !strings.Contains(stdout, `"files"`) {
+		t.Fatalf("empty package code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+}
+
 func pendingVerificationLedger(t *testing.T) string {
 	t.Helper()
 	directory := t.TempDir()
@@ -175,6 +244,23 @@ func pendingVerificationLedger(t *testing.T) string {
 	_, err := service.CommitTimestampStamp(context.Background(), path, "q-election-coalition", "f-election-coalition-001", service.TimestampStampOptions{
 		CalendarClient: &ots.CalendarClient{HTTPClient: &http.Client{Transport: transport}},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func confirmedVerificationLedger(t *testing.T) string {
+	t.Helper()
+	path := pendingVerificationLedger(t)
+	transport := roundTripFunc(func(*http.Request) (*http.Response, error) {
+		branch, err := ots.SerializeCalendarResponse([]ots.Sequence{{{Attestation: &ots.Attestation{Kind: ots.AttestationBitcoin, Height: 1}}}})
+		if err != nil {
+			return nil, err
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(branch)), Header: make(http.Header)}, nil
+	})
+	_, err := service.CommitTimestampUpgrade(context.Background(), path, "q-election-coalition", "f-election-coalition-001", service.TimestampUpgradeOptions{CalendarClient: &ots.CalendarClient{HTTPClient: &http.Client{Transport: transport}}})
 	if err != nil {
 		t.Fatal(err)
 	}

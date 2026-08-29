@@ -1,4 +1,392 @@
 {
+  "$defs": {
+    "bitcoinObservationIssue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "source_unavailable",
+            "observation_inconclusive",
+            "observation_budget_exhausted"
+          ]
+        },
+        "source_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "networkProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "max_concurrent": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_requests": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_unique_heights": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "minimum_success": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mode": {
+          "enum": [
+            "offline",
+            "builtin",
+            "custom",
+            "bitcoin_core"
+          ]
+        },
+        "privacy_limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "source_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "trust_limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
+    "requestSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "http_requests": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_concurrent": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_heights": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_requests": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "unique_heights": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "unique_heights",
+        "http_requests",
+        "max_heights",
+        "max_requests",
+        "max_concurrent"
+      ],
+      "type": "object"
+    },
+    "timestampVerificationData": {
+      "additionalProperties": false,
+      "properties": {
+        "anchored_before": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "bitcoin_height": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "calendar_identities": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "calendar_source_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "effects": {
+          "type": "array"
+        },
+        "forecast_id": {
+          "type": "string"
+        },
+        "network_profile": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "max_concurrent": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "max_requests": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "max_unique_heights": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "minimum_success": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "mode": {
+              "enum": [
+                "offline",
+                "builtin",
+                "custom",
+                "bitcoin_core"
+              ]
+            },
+            "privacy_limitations": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "source_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "trust_limitations": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "mode"
+          ],
+          "type": "object"
+        },
+        "next_actions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "observation_issue": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "source_unavailable",
+                "observation_inconclusive",
+                "observation_budget_exhausted"
+              ]
+            },
+            "source_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        "question_id": {
+          "type": "string"
+        },
+        "receipt_path": {
+          "type": "string"
+        },
+        "receipt_present": {
+          "type": "boolean"
+        },
+        "recovery": {
+          "type": "object"
+        },
+        "request_summary": {
+          "additionalProperties": false,
+          "properties": {
+            "http_requests": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "max_concurrent": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "max_heights": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "max_requests": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "unique_heights": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "unique_heights",
+            "http_requests",
+            "max_heights",
+            "max_requests",
+            "max_concurrent"
+          ],
+          "type": "object"
+        },
+        "state": {
+          "enum": [
+            "unanchored",
+            "pending",
+            "confirmed_unverified",
+            "verified",
+            "failed",
+            "inconsistent"
+          ]
+        },
+        "target_path": {
+          "type": "string"
+        },
+        "target_present": {
+          "type": "boolean"
+        },
+        "target_sha256": {
+          "type": "string"
+        },
+        "verification": {
+          "additionalProperties": false,
+          "properties": {
+            "evidence": {
+              "type": "object"
+            },
+            "limitations": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "name": {
+              "type": "string"
+            },
+            "reason_codes": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "state": {
+              "enum": [
+                "pass",
+                "fail",
+                "pending",
+                "not_applicable",
+                "not_checked"
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "state"
+          ],
+          "type": "object"
+        },
+        "warnings": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "question_id",
+        "forecast_id",
+        "state",
+        "target_path",
+        "target_sha256",
+        "receipt_path",
+        "target_present",
+        "receipt_present",
+        "network_profile",
+        "request_summary",
+        "verification"
+      ],
+      "type": "object"
+    },
+    "verificationLayer": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "type": "object"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "state": {
+          "enum": [
+            "pass",
+            "fail",
+            "pending",
+            "not_applicable",
+            "not_checked"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "state"
+      ],
+      "type": "object"
+    },
+    "verificationOverall": {
+      "enum": [
+        "pass",
+        "fail",
+        "pending",
+        "incomplete",
+        "no_evidence"
+      ]
+    }
+  },
   "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/result/v1",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
@@ -7,6 +395,7 @@
       "type": "string"
     },
     "data": {
+      "description": "Operation-specific public data; timestamp.verify uses $defs.timestampVerificationData.",
       "type": "object"
     },
     "effects": {

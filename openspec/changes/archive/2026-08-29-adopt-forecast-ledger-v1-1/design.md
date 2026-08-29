@@ -86,7 +86,7 @@ Use the published fixtures for contract conformance and repository-created fixtu
 
 - [A nil optional value is dereferenced in one adapter or presenter] → Route through one creation classifier and one result builder; add empty-state CLI and MCP regression tests.
 - [A zero-target operation still creates directories or a journal] → Short-circuit after validated selection and before filesystem preflight; assert the entire ledger directory is unchanged.
-- [An empty verification `pass` is read as proof of completeness] → Preserve the standard completeness limitation, expose an empty forecast list and document-layer evidence, and document that pass covers applicable checks only.
+- [An empty verification result is read as verified evidence] → Return `no_evidence`/`incomplete`, preserve the standard completeness limitation, and expose the empty forecast list plus independently established document or package-integrity observations.
 - [Conditional MCP schemas accidentally permit sealed material inline] → Generate restrictions for a present forecast, retain protected-file tests, and add negative inline-sealed cases.
 - [Schema identity drifts across metadata, publication, docs, or notices] → Keep one constants package, pin digest tests, regenerate goldens, and search for stale v1.0.0 identifiers before completion.
 - [Breaking cutover surprises a developer with an old local file] → Make the changelog and compatibility docs explicit; return `unsupported_schema_version` with the one supported version. Do not add conversion code.

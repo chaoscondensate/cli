@@ -198,3 +198,95 @@ func TestPublicationPackagesPendingEvidenceAndClassifiesMissingReceipt(t *testin
 		t.Fatalf("missing listed receipt error = %v", err)
 	}
 }
+
+func TestPublicationOnlineOutagePreservesPackageIntegrityReport(t *testing.T) {
+	raw, _ := fs.ReadFile(contractschema.Conformance(), "individual-ledger.json")
+	directory := t.TempDir()
+	ledgerPath, output := filepath.Join(directory, "ledger.json"), filepath.Join(directory, "package")
+	if err := os.WriteFile(ledgerPath, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	transport := timestampRoundTripper(func(request *http.Request) (*http.Response, error) {
+		var branch []byte
+		if request.Method == http.MethodPost {
+			identity := "https://alice.btc.calendar.opentimestamps.org"
+			if request.URL.Host == "b.pool.opentimestamps.org" {
+				identity = "https://bob.btc.calendar.opentimestamps.org"
+			}
+			branch, _ = ots.SerializeCalendarResponse([]ots.Sequence{{{Attestation: &ots.Attestation{Kind: ots.AttestationPending, Calendar: identity}}}})
+		} else {
+			branch, _ = ots.SerializeCalendarResponse([]ots.Sequence{{{Attestation: &ots.Attestation{Kind: ots.AttestationBitcoin, Height: 1}}}})
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(branch)), Header: make(http.Header)}, nil
+	})
+	client := &ots.CalendarClient{HTTPClient: &http.Client{Transport: transport}}
+	if _, err := CommitTimestampStamp(context.Background(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampStampOptions{CalendarClient: client}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CommitTimestampUpgrade(context.Background(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampUpgradeOptions{CalendarClient: client}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CommitPublicationBuild(context.Background(), ledgerPath, output, false); err != nil {
+		t.Fatal(err)
+	}
+	observer := &publicationOutageObserver{err: ots.NewObservationIssue(ots.ObservationSourceUnavailable, "blockstream")}
+	verified, err := VerifyPublicationPackage(context.Background(), filepath.Join(output, "ledger", "ledger.json"), filepath.Join(output, "manifest.json"), PublicationVerifyOptions{Online: true, Observer: observer})
+	if err != nil || verified.Overall != VerificationIncomplete || verified.FailureCode != app.CodeNetwork || verified.ManifestSHA256 == "" || len(verified.Files) == 0 || observer.requests != 1 {
+		t.Fatalf("online outage package report=%#v requests=%d err=%v", verified, observer.requests, err)
+	}
+	found := false
+	for _, forecast := range verified.Evidence {
+		for _, layer := range forecast.Layers {
+			if layer.Name == "existence_timing" && layer.State == LayerNotChecked && len(layer.ReasonCodes) == 1 && layer.ReasonCodes[0] == "timing.source_unavailable" {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("online outage report omitted timing source failure: %#v", verified.Evidence)
+	}
+}
+
+func TestPublicationAllNotApplicableEvidenceIsNoEvidence(t *testing.T) {
+	directory := t.TempDir()
+	ledgerPath, output := filepath.Join(directory, "ledger.json"), filepath.Join(directory, "package")
+	root, err := BuildLedgerRootAt(InitRootRequest{
+		LedgerID: "all-not-applicable", Timezone: "UTC", ForecasterID: "owner", ForecasterName: "Owner",
+	}, "2025-12-31T10:00:00Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	model, err := BuildInitialPublicLedgerAt(root, binaryInitialQuestion(), "2026-01-01T00:00:00Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CommitNewLedger(ledgerPath, model); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CommitPublicationBuild(context.Background(), ledgerPath, output, false); err != nil {
+		t.Fatal(err)
+	}
+	verified, err := VerifyPublicationPackage(context.Background(), filepath.Join(output, "ledger", "ledger.json"), filepath.Join(output, "manifest.json"))
+	if err != nil || verified.Overall != VerificationNoEvidence || verified.FailureCode != app.CodeIncomplete || len(verified.Evidence) != 1 || verified.ManifestSHA256 == "" || len(verified.Files) == 0 {
+		t.Fatalf("all-not-applicable package report=%#v err=%v", verified, err)
+	}
+	for _, layer := range verified.Evidence[0].Layers {
+		if layer.State != LayerNotApplicable {
+			t.Fatalf("all-not-applicable package layer=%#v", layer)
+		}
+	}
+}
+
+type publicationOutageObserver struct {
+	err      error
+	requests int
+}
+
+func (observer *publicationOutageObserver) Observe(context.Context, uint64) (ots.BlockObservation, error) {
+	observer.requests++
+	return ots.BlockObservation{}, observer.err
+}
+
+func (observer *publicationOutageObserver) Summary() ots.RequestSummary {
+	return ots.RequestSummary{UniqueHeights: observer.requests, HTTPRequests: observer.requests, MaxHeights: 32, MaxRequests: 128, MaxConcurrent: 1}
+}

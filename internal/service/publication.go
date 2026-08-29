@@ -312,6 +312,9 @@ func VerifyPublicationPackage(ctx context.Context, ledgerPath, manifestPath stri
 			result.Evidence = append(result.Evidence, ForecastVerification{QuestionID: question.ID, ForecastID: forecast.ID, Layers: []VerificationLayer{content, timing, reveal, outcome}})
 		}
 	}
+	if ctx != nil && ctx.Err() != nil {
+		return result, app.NewError(app.CodeInterrupted, "package verification was interrupted", ctx.Err())
+	}
 	temporaryReport := VerificationReport{Forecasts: result.Evidence}
 	result.Overall, result.FailureCode = aggregateVerification(temporaryReport)
 	if observer != nil {

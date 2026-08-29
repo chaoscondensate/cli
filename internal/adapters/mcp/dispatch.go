@@ -256,8 +256,15 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 		if err != nil {
 			return nil, "", "", err
 		}
-		result, err := service.CommitTimestampVerify(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), service.TimestampVerifyOptions{DryRun: input.DryRun, Offline: s.config.Mode.Offline, VerifiedAt: verifiedAt})
-		return result, "timestamp.verified", "OpenTimestamps Bitcoin evidence was verified", err
+		result, err := service.CommitTimestampVerify(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), service.TimestampVerifyOptions{DryRun: input.DryRun, Offline: s.config.Mode.Offline, VerifiedAt: verifiedAt, Observer: s.bitcoinObserver})
+		code, message := "timestamp.verification."+string(result.Verification.State), "Timestamp verification completed with status "+string(result.Verification.State)
+		if result.Verification.State == service.LayerPass {
+			code, message = "timestamp.verified", "OpenTimestamps Bitcoin evidence was verified"
+		}
+		if input.DryRun {
+			code, message = "timestamp.verify.planned", "Timestamp verification is valid; network observation and ledger update were deferred"
+		}
+		return result, code, message, err
 	case service.OperationVerificationRun:
 		result, err := service.VerifyLedgerEvidence(ctx, file, service.VerificationOptions{Offline: s.config.Mode.Offline, CheckSources: input.CheckSources, QuestionID: ledger.Slug(input.Question), ForecastID: ledger.Slug(input.Forecast)})
 		return result, "verification." + string(result.Overall), "Verification completed with status " + string(result.Overall), err
@@ -579,6 +586,8 @@ func resultFailureCode(data any) app.ErrorCode {
 	case service.VerificationReport:
 		return value.FailureCode
 	case service.PublicationVerifyResult:
+		return value.FailureCode
+	case service.TimestampVerifyResult:
 		return value.FailureCode
 	default:
 		return ""

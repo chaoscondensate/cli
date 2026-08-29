@@ -222,8 +222,20 @@ func TestEmptyAggregateOperationsAndPublication(t *testing.T) {
 		t.Fatalf("empty target build changed ledger: err=%v", err)
 	}
 	report, err := VerifyLedgerEvidence(context.Background(), ledgerPath, VerificationOptions{})
-	if err != nil || report.Overall != VerificationPass || report.Forecasts == nil || len(report.Forecasts) != 0 || report.RequestSummary.HTTPRequests != 0 {
+	if err != nil || report.Overall != VerificationNoEvidence || report.FailureCode != app.CodeIncomplete || report.Forecasts == nil || len(report.Forecasts) != 0 || report.RequestSummary.HTTPRequests != 0 {
 		t.Fatalf("report=%#v err=%v", report, err)
+	}
+	backlogBytes, err := fs.ReadFile(contractschema.Conformance(), "question-without-forecasts.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	backlogPath := filepath.Join(directory, "backlog.yaml")
+	if err := os.WriteFile(backlogPath, backlogBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	backlogReport, err := VerifyLedgerEvidence(context.Background(), backlogPath, VerificationOptions{QuestionID: "q-example-backlog"})
+	if err != nil || backlogReport.Overall != VerificationNoEvidence || backlogReport.FailureCode != app.CodeIncomplete || len(backlogReport.Forecasts) != 0 || backlogReport.RequestSummary.HTTPRequests != 0 {
+		t.Fatalf("backlog report=%#v err=%v", backlogReport, err)
 	}
 
 	output := filepath.Join(directory, "package")
@@ -232,7 +244,7 @@ func TestEmptyAggregateOperationsAndPublication(t *testing.T) {
 		t.Fatalf("built=%#v err=%v", built, err)
 	}
 	verified, err := VerifyPublicationPackage(context.Background(), filepath.Join(output, "ledger", "ledger.json"), filepath.Join(output, "manifest.json"))
-	if err != nil || verified.Overall != VerificationPass || verified.Evidence == nil || len(verified.Evidence) != 0 || verified.RequestSummary.HTTPRequests != 0 {
+	if err != nil || verified.Overall != VerificationNoEvidence || verified.FailureCode != app.CodeIncomplete || verified.Evidence == nil || len(verified.Evidence) != 0 || verified.RequestSummary.HTTPRequests != 0 {
 		t.Fatalf("verified=%#v err=%v", verified, err)
 	}
 }

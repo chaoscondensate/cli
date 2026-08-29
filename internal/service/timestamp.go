@@ -54,6 +54,18 @@ type TimestampArtifactResult struct {
 	Recovery          Recovery            `json:"recovery,omitempty"`
 }
 
+type BitcoinObservationIssue struct {
+	Kind      ots.ObservationIssueKind `json:"kind"`
+	SourceIDs []string                 `json:"source_ids,omitempty"`
+}
+
+type TimestampVerifyResult struct {
+	TimestampArtifactResult
+	Verification     VerificationLayer        `json:"verification"`
+	ObservationIssue *BitcoinObservationIssue `json:"observation_issue,omitempty"`
+	FailureCode      app.ErrorCode            `json:"-"`
+}
+
 type TimestampStampOptions struct {
 	DryRun                bool
 	Offline               bool
@@ -418,23 +430,25 @@ func CommitTimestampUpgrade(ctx context.Context, path string, questionID, foreca
 	return result, nil
 }
 
-func CommitTimestampVerify(ctx context.Context, path string, questionID, forecastID ledger.Slug, options TimestampVerifyOptions) (TimestampArtifactResult, error) {
+func CommitTimestampVerify(ctx context.Context, path string, questionID, forecastID ledger.Slug, options TimestampVerifyOptions) (TimestampVerifyResult, error) {
 	loaded, err := LoadAndValidateLedger(ctx, path, nil)
 	if err != nil {
-		return TimestampArtifactResult{}, err
+		return TimestampVerifyResult{}, err
 	}
 	artifact, _, err := timestampPreflight(loaded.Model, questionID, forecastID)
 	if err != nil {
-		return TimestampArtifactResult{}, err
+		return TimestampVerifyResult{}, err
 	}
-	result := baseTimestampResult(artifact)
+	result := baseTimestampVerifyResult(artifact)
 	if _, err := CheckTargets(ctx, loaded.Path, false, questionID, forecastID); err != nil {
 		return result, err
 	}
+	result.TargetPresent = true
 	receiptBytes, err := readBoundedFile(filepath.Join(filepath.Dir(loaded.Path), filepath.FromSlash(string(result.ReceiptPath))), maxReceiptBytes)
 	if err != nil {
 		return result, err
 	}
+	result.ReceiptPresent = true
 	receipt, err := ots.ParseReceipt(receiptBytes)
 	if err != nil || receipt.VerifyBinding(artifact.Bytes) != nil {
 		return result, app.NewError(app.CodeVerification, "receipt does not bind the selected target", err)
@@ -451,53 +465,147 @@ func CommitTimestampVerify(ctx context.Context, path string, questionID, forecas
 	}
 	if len(bitcoin) == 0 {
 		result.State = TimestampPending
-		return result, app.NewError(app.CodePending, "OpenTimestamps receipt is still pending", nil)
+		result.Verification = VerificationLayer{Name: "existence_timing", State: LayerPending, ReasonCodes: []string{"timing.calendar_pending"}}
+		result.FailureCode = app.CodePending
+		return result, nil
 	}
+	sort.Slice(bitcoin, func(i, j int) bool { return bitcoin[i].Attestation.Height < bitcoin[j].Attestation.Height })
+	firstHeight := bitcoin[0].Attestation.Height
+	result.BitcoinHeight = &firstHeight
+	result.State = TimestampConfirmedUnverified
 	if options.DryRun {
-		result.State = TimestampConfirmedUnverified
+		result.Verification = VerificationLayer{Name: "existence_timing", State: LayerNotChecked, ReasonCodes: []string{"timing.deferred"}, Evidence: map[string]any{"height": firstHeight}}
 		result.Effects = []SideEffect{{Kind: EffectNetwork, Action: EffectContact, Status: EffectDeferred, SourceID: result.NetworkProfile.ID}, {Kind: EffectLedger, Action: EffectReplace, Status: EffectDeferred, Path: filepath.Base(loaded.Path)}}
 		return result, nil
 	}
 	if options.Offline {
-		result.State = TimestampConfirmedUnverified
-		return result, app.NewError(app.CodePending, "Bitcoin block evidence was not checked in offline mode", nil)
+		result.NetworkProfile = networkProfileForObserver(nil, true)
+		result.Verification = VerificationLayer{Name: "existence_timing", State: LayerNotChecked, ReasonCodes: []string{"timing.offline"}, Evidence: map[string]any{"height": firstHeight}}
+		result.FailureCode = app.CodeIncomplete
+		return result, nil
 	}
 	observer := options.Observer
 	if observer == nil {
 		observer = ots.NewPublicBitcoinObserver(nil)
 	}
 	result.NetworkProfile = networkProfileForObserver(observer, false)
-	sort.Slice(bitcoin, func(i, j int) bool { return bitcoin[i].Attestation.Height < bitcoin[j].Attestation.Height })
-	var verified ots.EvaluatedAttestation
-	var observation ots.BlockObservation
-	for _, item := range bitcoin {
-		observation, err = observer.Observe(ctx, item.Attestation.Height)
-		if err == nil {
-			err = ots.VerifyBitcoinAttestation(item, observation)
-		}
-		if err == nil {
-			verified = item
-			break
-		}
-	}
+	candidates, err := observeBitcoinCandidates(ctx, observer, bitcoin)
 	result.RequestSummary = observer.Summary()
-	if err != nil || verified.Attestation.Height == 0 {
-		return result, app.NewError(app.CodeVerification, "Bitcoin evidence did not verify", err)
+	if err != nil {
+		return result, err
 	}
-	height := verified.Attestation.Height
-	bound := ledger.Timestamp(observation.BlockTime.Format(time.RFC3339))
+	if candidates.Verified.Attestation.Height == 0 {
+		if len(candidates.Issues) > 0 {
+			issue, failureCode, reason := reduceObservationIssues(candidates.Issues)
+			result.ObservationIssue = &issue
+			result.FailureCode = failureCode
+			result.Verification = VerificationLayer{Name: "existence_timing", State: LayerNotChecked, ReasonCodes: []string{reason}, Evidence: map[string]any{"height": firstHeight}}
+			return result, nil
+		}
+		result.FailureCode = app.CodeVerification
+		result.Verification = VerificationLayer{Name: "existence_timing", State: LayerFail, ReasonCodes: []string{"timing.bitcoin_mismatch"}, Evidence: map[string]any{"heights": candidates.MismatchedHeights}}
+		return result, nil
+	}
+	height := candidates.Verified.Attestation.Height
+	bound := ledger.Timestamp(candidates.Observation.BlockTime.Format(time.RFC3339))
 	result.BitcoinHeight, result.AnchoredBefore, result.State = &height, &bound, TimestampVerified
+	result.Verification = VerificationLayer{Name: "existence_timing", State: LayerPass, ReasonCodes: []string{"timing.bitcoin_verified"}, Evidence: map[string]any{"height": height, "block_hash": candidates.Observation.Hash, "anchored_before": bound, "source_ids": candidates.Observation.SourceIDs}}
 	_, question, selectErr := selectQuestion(loaded.Model, questionID)
 	if selectErr == nil && question.Resolution != nil && question.Resolution.Resolved != nil {
 		outcomeKnownAt, parseErr := ParseTimestamp(question.Resolution.Resolved.OutcomeKnownAt, "outcome_known_at")
-		if parseErr == nil && !observation.BlockTime.Before(outcomeKnownAt) {
+		if parseErr == nil && !candidates.Observation.BlockTime.Before(outcomeKnownAt) {
 			result.Warnings = append(result.Warnings, Warning{Code: "timestamp.valid_but_too_late", Message: "The Bitcoin evidence is valid, but its conservative time bound is not before the recorded outcome became known."})
 		}
 	}
 	if options.VerifiedAt == "" {
 		options.VerifiedAt = ledger.Timestamp(time.Now().Format(time.RFC3339))
 	}
-	return commitTimestampVerified(ctx, loaded.Path, questionID, forecastID, artifact, verified.Attestation.Height, bound, options.VerifiedAt, result)
+	committed, err := commitTimestampVerified(ctx, loaded.Path, questionID, forecastID, artifact, candidates.Verified.Attestation.Height, bound, options.VerifiedAt, result.TimestampArtifactResult)
+	result.TimestampArtifactResult = committed
+	return result, err
+}
+
+type bitcoinCandidateResult struct {
+	Verified          ots.EvaluatedAttestation
+	Observation       ots.BlockObservation
+	Issues            []BitcoinObservationIssue
+	MismatchedHeights []uint64
+}
+
+func observeBitcoinCandidates(ctx context.Context, observer ots.BitcoinObserver, candidates []ots.EvaluatedAttestation) (bitcoinCandidateResult, error) {
+	result := bitcoinCandidateResult{Issues: []BitcoinObservationIssue{}, MismatchedHeights: []uint64{}}
+	for _, item := range candidates {
+		observation, err := observer.Observe(ctx, item.Attestation.Height)
+		if err != nil {
+			if ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return result, app.NewError(app.CodeInterrupted, "timestamp verification was interrupted", err)
+			}
+			result.Issues = append(result.Issues, publicObservationIssue(err))
+			continue
+		}
+		if err := ots.VerifyBitcoinAttestation(item, observation); err != nil {
+			result.MismatchedHeights = append(result.MismatchedHeights, item.Attestation.Height)
+			continue
+		}
+		result.Verified = item
+		result.Observation = observation
+		return result, nil
+	}
+	return result, nil
+}
+
+func baseTimestampVerifyResult(artifact TargetArtifact) TimestampVerifyResult {
+	return TimestampVerifyResult{
+		TimestampArtifactResult: baseTimestampResult(artifact),
+		Verification:            VerificationLayer{Name: "existence_timing", State: LayerNotChecked, ReasonCodes: []string{"timing.not_started"}},
+	}
+}
+
+func publicObservationIssue(err error) BitcoinObservationIssue {
+	var observationErr *ots.ObservationError
+	if errors.As(err, &observationErr) {
+		return BitcoinObservationIssue{Kind: observationErr.Kind(), SourceIDs: observationErr.SourceIDs()}
+	}
+	return BitcoinObservationIssue{Kind: ots.ObservationInconclusive}
+}
+
+func reduceObservationIssues(issues []BitcoinObservationIssue) (BitcoinObservationIssue, app.ErrorCode, string) {
+	kind := ots.ObservationInconclusive
+	sourceIDs := make([]string, 0)
+	for _, issue := range issues {
+		sourceIDs = append(sourceIDs, issue.SourceIDs...)
+		switch issue.Kind {
+		case ots.ObservationSourceUnavailable:
+			kind = ots.ObservationSourceUnavailable
+		case ots.ObservationBudgetExhausted:
+			if kind != ots.ObservationSourceUnavailable {
+				kind = ots.ObservationBudgetExhausted
+			}
+		}
+	}
+	sort.Strings(sourceIDs)
+	sourceIDs = compactSafeStrings(sourceIDs)
+	switch kind {
+	case ots.ObservationSourceUnavailable:
+		return BitcoinObservationIssue{Kind: kind, SourceIDs: sourceIDs}, app.CodeNetwork, "timing.source_unavailable"
+	case ots.ObservationBudgetExhausted:
+		return BitcoinObservationIssue{Kind: kind, SourceIDs: sourceIDs}, app.CodeIncomplete, "timing.observation_budget_exhausted"
+	default:
+		return BitcoinObservationIssue{Kind: kind, SourceIDs: sourceIDs}, app.CodeIncomplete, "timing.observation_inconclusive"
+	}
+}
+
+func compactSafeStrings(values []string) []string {
+	if len(values) < 2 {
+		return values
+	}
+	result := values[:1]
+	for _, value := range values[1:] {
+		if value != result[len(result)-1] {
+			result = append(result, value)
+		}
+	}
+	return result
 }
 
 func baseTimestampResult(artifact TargetArtifact) TimestampArtifactResult {

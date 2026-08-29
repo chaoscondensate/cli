@@ -43,9 +43,10 @@ portable path with SHA-256 and size. `--dry-run` performs preflight without
 creating the package.
 
 An empty ledger produces a valid minimal package containing the copied ledger
-and `manifest.json`, with no evidence entries. Offline package verification
-passes the applicable document and manifest checks; that result does not claim
-that any forecast evidence exists.
+and `manifest.json`, with no evidence entries. Package verification reports the
+passing manifest and file checks, but its evidence aggregate is `no_evidence`
+with `incomplete`/exit 9. Structural integrity is not evidence that a forecast,
+target, timestamp, reveal, or outcome record exists.
 
 Verify the copy independently; package verification is offline by default:
 
@@ -62,7 +63,8 @@ then runs document, content, reveal, outcome, and local timestamp checks.
 Add `--online` only when fresh Bitcoin timing checks are wanted. The same
 dual-source agreement and request budgets used by ordinary verification apply.
 Network source unavailability makes timing incomplete; it does not change the
-already established package byte-integrity verdict.
+already established package byte-integrity verdict and is not reported as a
+Bitcoin-proof mismatch.
 
 The copied directory remains valid after the source ledger and source proof
 files are removed. It may be shared by any file transport.

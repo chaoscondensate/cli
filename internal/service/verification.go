@@ -52,6 +52,7 @@ const (
 	VerificationFail       VerificationOverall = "fail"
 	VerificationPending    VerificationOverall = "pending"
 	VerificationIncomplete VerificationOverall = "incomplete"
+	VerificationNoEvidence VerificationOverall = "no_evidence"
 )
 
 type VerificationReport struct {
@@ -118,6 +119,9 @@ func VerifyLedgerEvidence(ctx context.Context, path string, options Verification
 			item.Layers = append(item.Layers, verifyOutcomeLayer(ctx, question, options))
 			report.Forecasts = append(report.Forecasts, item)
 		}
+	}
+	if ctx != nil && ctx.Err() != nil {
+		return report, app.NewError(app.CodeInterrupted, "verification was interrupted", ctx.Err())
 	}
 	if observer != nil {
 		report.RequestSummary = observer.Summary()
@@ -385,9 +389,12 @@ func verifyOutcomeLayer(ctx context.Context, question ledger.Question, options V
 }
 
 func aggregateVerification(report VerificationReport) (VerificationOverall, app.ErrorCode) {
-	hasPending, hasNotChecked, sourceUnavailable := false, false, false
+	hasPending, hasNotChecked, sourceUnavailable, applicable := false, false, false, 0
 	for _, forecast := range report.Forecasts {
 		for _, layer := range forecast.Layers {
+			if layer.State != LayerNotApplicable {
+				applicable++
+			}
 			if layer.State == LayerFail {
 				return VerificationFail, app.CodeVerification
 			}
@@ -404,14 +411,17 @@ func aggregateVerification(report VerificationReport) (VerificationOverall, app.
 			}
 		}
 	}
-	if sourceUnavailable {
-		return VerificationIncomplete, app.CodeNetwork
+	if hasNotChecked {
+		if sourceUnavailable {
+			return VerificationIncomplete, app.CodeNetwork
+		}
+		return VerificationIncomplete, app.CodeIncomplete
 	}
 	if hasPending {
 		return VerificationPending, app.CodePending
 	}
-	if hasNotChecked {
-		return VerificationIncomplete, app.CodeIncomplete
+	if applicable == 0 {
+		return VerificationNoEvidence, app.CodeIncomplete
 	}
 	return VerificationPass, ""
 }

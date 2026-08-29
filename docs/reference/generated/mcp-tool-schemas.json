@@ -1960,6 +1960,7 @@
       }
     },
     "publication_verify": {
+      "description": "Pass requires at least one applicable forecast-evidence layer; an empty or all-not-applicable selection returns no_evidence.",
       "input_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -3271,6 +3272,7 @@
       }
     },
     "timestamp_verify": {
+      "description": "Returns a structured timing report for pending, not-checked, mismatch, and verified outcomes; source unavailability is not proof failure.",
       "input_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -3308,10 +3310,23 @@
       },
       "operation": "timestamp.verify",
       "result_schema": {
-        "$ref": "result.schema.json"
+        "allOf": [
+          {
+            "$ref": "result.schema.json"
+          },
+          {
+            "properties": {
+              "data": {
+                "$ref": "result.schema.json#/$defs/timestampVerificationData"
+              }
+            },
+            "type": "object"
+          }
+        ]
       }
     },
     "verification_run": {
+      "description": "Pass requires at least one applicable forecast-evidence layer; an empty or all-not-applicable selection returns no_evidence.",
       "input_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,

@@ -207,6 +207,9 @@ commitment to four fixed calendars and needs two valid responses. Public Bitcoin
 verification requires both fixed observers to agree. These calls disclose
 request timing and, during verification, the block heights of interest. Read
 [Timestamp forecasts](docs/how-to/timestamp-forecasts.md) before using them.
+An unavailable observer produces a structured `not_checked` report and network
+exit 8; it is not reported as a failed proof. A proof mismatch is reported only
+after the required Bitcoin observation completed.
 
 Run all evidence layers locally, or opt into network checks:
 
@@ -218,7 +221,9 @@ forecast-ledger verify --file ledger.yaml
 Verification reports content binding, existence timing, reveal authentication,
 and outcome evidence separately. Normal human and `--plain` output include the
 complete ordered layer matrix; `--json` adds the same matrix as stable data. See
-[Verify evidence](docs/how-to/verify-evidence.md).
+[Verify evidence](docs/how-to/verify-evidence.md). Overall `pass` requires at
+least one applicable forecast-evidence layer. An empty or all-not-applicable
+selection returns `no_evidence`, `incomplete`, and exit 9.
 
 Build a standalone package without Git or a hosted service, then verify its
 manifest and evidence offline:
@@ -233,7 +238,9 @@ forecast-ledger publish verify \
 Use `--online` on `publish verify` only when you want fresh Bitcoin-source
 checks. Publication follows evidence paths recorded in the selected ledger. A
 standalone target merely sitting beside the ledger is not packaged until the
-ledger references it. See [Build and verify publication packages](docs/how-to/publish-evidence.md).
+ledger references it. Manifest and file integrity remain visible even when the
+evidence aggregate is `no_evidence` or incomplete. See
+[Build and verify publication packages](docs/how-to/publish-evidence.md).
 
 Run the local MCP stdio adapter with explicit named roots:
 

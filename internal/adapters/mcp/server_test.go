@@ -1,8 +1,11 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +17,7 @@ import (
 	"github.com/chaoscondensate/cli/internal/app"
 	"github.com/chaoscondensate/cli/internal/service"
 	"github.com/chaoscondensate/cli/internal/storage"
+	"github.com/chaoscondensate/cli/internal/timestamp/ots"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -225,6 +229,40 @@ func TestMCPEmptyInitAndBacklogQuestion(t *testing.T) {
 	}
 }
 
+func TestMCPTimestampObservationFailureReturnsReportAndKeepsSession(t *testing.T) {
+	ledgerRoot := t.TempDir()
+	ledgerPath := filepath.Join(ledgerRoot, "ledger.json")
+	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.1.0", "individual-ledger.json"), ledgerPath)
+	prepareConfirmedMCPReceipt(t, ledgerPath)
+	observer := &mcpObservationFailure{err: ots.NewObservationIssue(ots.ObservationSourceUnavailable, "mempool-space")}
+	server, err := New(Config{LedgerRoots: []string{"main=" + ledgerRoot}, Timeout: time.Second, BitcoinObserver: observer})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := connectClient(t, t.Context(), server)
+	defer client.Close()
+
+	result, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "timestamp_verify", Arguments: map[string]any{
+		"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-001",
+	}})
+	if err != nil || !result.IsError {
+		t.Fatalf("timestamp outage result=%#v err=%v", result, err)
+	}
+	text := toolText(result)
+	for _, expected := range []string{`"code":"network"`, `"state":"not_checked"`, `"timing.source_unavailable"`, `"kind":"source_unavailable"`, `"source_ids":["mempool-space"]`, `"http_requests":1`} {
+		if !strings.Contains(text, expected) {
+			t.Errorf("MCP outage report missing %q: %s", expected, text)
+		}
+	}
+	if strings.Contains(text, "Bitcoin evidence did not verify") {
+		t.Fatalf("MCP outage retained false verification message: %s", text)
+	}
+	validation, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "ledger_validate", Arguments: map[string]any{"file": "main:ledger.json"}})
+	if err != nil || validation.IsError {
+		t.Fatalf("MCP session did not survive recoverable outage: result=%#v err=%v", validation, err)
+	}
+}
+
 func TestMCPRevealDiscoveryReadOnlyOfflineAndRootValidation(t *testing.T) {
 	ledgerRoot, secretRoot := t.TempDir(), t.TempDir()
 	if _, err := New(Config{LedgerRoots: []string{ledgerRoot}}); err == nil {
@@ -393,6 +431,54 @@ func copyFixture(t *testing.T, source, destination string) {
 	if err := os.WriteFile(destination, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+type mcpObservationFailure struct {
+	err      error
+	requests int
+}
+
+func (observer *mcpObservationFailure) Observe(context.Context, uint64) (ots.BlockObservation, error) {
+	observer.requests++
+	return ots.BlockObservation{}, observer.err
+}
+
+func (observer *mcpObservationFailure) Summary() ots.RequestSummary {
+	return ots.RequestSummary{UniqueHeights: observer.requests, HTTPRequests: observer.requests, MaxHeights: 32, MaxRequests: 128, MaxConcurrent: 1}
+}
+
+func prepareConfirmedMCPReceipt(t *testing.T, ledgerPath string) {
+	t.Helper()
+	transport := mcpRoundTripper(func(request *http.Request) (*http.Response, error) {
+		var branch []byte
+		var err error
+		if request.Method == http.MethodPost {
+			identity := "https://alice.btc.calendar.opentimestamps.org"
+			if strings.Contains(request.URL.Host, "b.pool") {
+				identity = "https://bob.btc.calendar.opentimestamps.org"
+			}
+			branch, err = ots.SerializeCalendarResponse([]ots.Sequence{{{Attestation: &ots.Attestation{Kind: ots.AttestationPending, Calendar: identity}}}})
+		} else {
+			branch, err = ots.SerializeCalendarResponse([]ots.Sequence{{{Attestation: &ots.Attestation{Kind: ots.AttestationBitcoin, Height: 1}}}})
+		}
+		if err != nil {
+			return nil, err
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(branch)), Header: make(http.Header)}, nil
+	})
+	client := &ots.CalendarClient{HTTPClient: &http.Client{Transport: transport}}
+	if _, err := service.CommitTimestampStamp(context.Background(), ledgerPath, "q-election-coalition", "f-election-coalition-001", service.TimestampStampOptions{CalendarClient: client}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.CommitTimestampUpgrade(context.Background(), ledgerPath, "q-election-coalition", "f-election-coalition-001", service.TimestampUpgradeOptions{CalendarClient: client}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type mcpRoundTripper func(*http.Request) (*http.Response, error)
+
+func (function mcpRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	return function(request)
 }
 
 func containsName(values []string, wanted string) bool {

@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: unreleased-main
-reviewed: 2026-08-26
+reviewed: 2026-08-29
 owner: interface
 generated: false
 security-critical: true
@@ -70,6 +70,14 @@ MCP never accepts custom calendar, explorer, proxy, or Bitcoin endpoint URLs.
 It uses only the embedded `opentimestamps-public-v1` profile or offline mode.
 Private seal input and keys are protected-file references under a secret root;
 they are never raw tool arguments or resource content.
+
+Expected verification outcomes remain structured results even when their
+stable application code makes the tool response recoverable `isError: true`.
+For example, `timestamp_verify` returns a `not_checked` timing layer and safe
+observer issue when Bitcoin acquisition is unavailable; the MCP session stays
+alive. `verification_run` and `publication_verify` return `no_evidence` with
+`incomplete` when no applicable forecast-evidence layer exists. Neither outcome
+is relabeled as a successful proof.
 
 Addressed redacted resources use the versioned form
 `forecast-ledger://v1/<kind>/<root>/<path>`, with optional question and forecast

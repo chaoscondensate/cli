@@ -199,6 +199,9 @@ func TestPublicBitcoinObserverRequiresAgreementAndDeduplicates(t *testing.T) {
 	if err != nil || observation.Hash != genesisHash || observation.MerkleRoot != genesisHeader[72:136] {
 		t.Fatalf("Observe = %+v, %v", observation, err)
 	}
+	if strings.Join(observation.SourceIDs, ",") != "blockstream,mempool-space" {
+		t.Fatalf("source IDs are not stable: %v", observation.SourceIDs)
+	}
 	if _, err := observer.Observe(context.Background(), 1); err != nil {
 		t.Fatal(err)
 	}
@@ -212,6 +215,47 @@ func TestPublicBitcoinObserverRequiresAgreementAndDeduplicates(t *testing.T) {
 	}
 }
 
+func TestPublicBitcoinObserverIsDeterministicAcrossResponseOrder(t *testing.T) {
+	const genesisHash = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
+	const genesisHeader = "0100000000000000000000000000000000000000000000000000000000000000000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4a29ab5f49ffff001d1dac2b7c"
+	for _, delayedHost := range []string{"blockstream.info", "mempool.space"} {
+		t.Run(delayedHost, func(t *testing.T) {
+			transport := roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+				if request.URL.Host == delayedHost {
+					time.Sleep(5 * time.Millisecond)
+				}
+				body := genesisHash
+				if strings.HasSuffix(request.URL.Path, "/header") {
+					body = genesisHeader
+				}
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+			})
+			observation, err := NewPublicBitcoinObserver(&http.Client{Transport: transport}).Observe(context.Background(), 1)
+			if err != nil || strings.Join(observation.SourceIDs, ",") != "blockstream,mempool-space" {
+				t.Fatalf("ordered observation=%#v err=%v", observation, err)
+			}
+		})
+	}
+}
+
+func TestPublicBitcoinObserverClassifiesHeaderRejectionAndRequestBudget(t *testing.T) {
+	const genesisHash = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
+	headerTransport := roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		body := genesisHash
+		if strings.HasSuffix(request.URL.Path, "/header") {
+			body = strings.Repeat("00", 80)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+	})
+	_, err := NewPublicBitcoinObserver(&http.Client{Transport: headerTransport}).Observe(context.Background(), 1)
+	assertObservationIssue(t, err, ObservationInconclusive, "blockstream,mempool-space")
+
+	budgetObserver := NewPublicBitcoinObserver(&http.Client{Transport: headerTransport})
+	budgetObserver.profile.MaximumHTTPRequests = 1
+	_, err = budgetObserver.Observe(context.Background(), 1)
+	assertObservationIssue(t, err, ObservationBudgetExhausted, "blockstream,mempool-space")
+}
+
 func TestPublicBitcoinObserverRejectsDisagreement(t *testing.T) {
 	transport := roundTripperFunc(func(request *http.Request) (*http.Response, error) {
 		value := strings.Repeat("0", 64)
@@ -223,6 +267,8 @@ func TestPublicBitcoinObserverRejectsDisagreement(t *testing.T) {
 	observer := NewPublicBitcoinObserver(&http.Client{Transport: transport})
 	if _, err := observer.Observe(context.Background(), 1); err == nil {
 		t.Fatal("disagreeing sources accepted")
+	} else {
+		assertObservationIssue(t, err, ObservationInconclusive, "blockstream,mempool-space")
 	}
 }
 
@@ -234,10 +280,32 @@ func TestPublicBitcoinObserverOutageAndHeightBudget(t *testing.T) {
 	for height := uint64(1); height <= uint64(Profile().MaximumUniqueHeights); height++ {
 		if _, err := observer.Observe(context.Background(), height); err == nil {
 			t.Fatalf("outage accepted at height %d", height)
+		} else {
+			assertObservationIssue(t, err, ObservationSourceUnavailable, "blockstream,mempool-space")
+			if strings.Contains(err.Error(), "source outage") || strings.Contains(err.Error(), "http") {
+				t.Fatalf("public observation error leaked cause or endpoint: %q", err)
+			}
 		}
 	}
-	if _, err := observer.Observe(context.Background(), uint64(Profile().MaximumUniqueHeights+1)); err == nil || !strings.Contains(err.Error(), "budget") {
-		t.Fatalf("unique-height budget error = %v", err)
+	if _, err := observer.Observe(context.Background(), uint64(Profile().MaximumUniqueHeights+1)); err == nil {
+		t.Fatal("unique-height budget was not enforced")
+	} else {
+		assertObservationIssue(t, err, ObservationBudgetExhausted, "")
+	}
+}
+
+func TestPublicBitcoinObserverClassifiesMalformedResponseDeterministically(t *testing.T) {
+	transport := roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		body := "not-a-block-hash"
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+	})
+	observer := NewPublicBitcoinObserver(&http.Client{Transport: transport})
+	_, err := observer.Observe(context.Background(), 10)
+	assertObservationIssue(t, err, ObservationInconclusive, "blockstream,mempool-space")
+	_, cachedErr := observer.Observe(context.Background(), 10)
+	assertObservationIssue(t, cachedErr, ObservationInconclusive, "blockstream,mempool-space")
+	if summary := observer.Summary(); summary.UniqueHeights != 1 || summary.HTTPRequests != 2 {
+		t.Fatalf("malformed response cache summary = %#v", summary)
 	}
 }
 
@@ -265,6 +333,45 @@ func TestBitcoinCoreObserverUsesBoundedAuthenticatedRPC(t *testing.T) {
 	observation, err := observer.Observe(context.Background(), 1)
 	if err != nil || observation.Hash != genesisHash || requests.Load() != 2 || observer.Summary().HTTPRequests != 2 {
 		t.Fatalf("Core observation = %#v, requests=%d, err=%v", observation, requests.Load(), err)
+	}
+}
+
+func TestBitcoinCoreObserverClassifiesOutageWithoutLeakingCredentials(t *testing.T) {
+	const secret = "rpc-secret-marker"
+	transport := roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return nil, errors.New(secret)
+	})
+	observer, err := NewCoreObserver("http://127.0.0.1:8332", CoreAuth{Username: "rpc-user", Password: secret}, &http.Client{Transport: transport})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = observer.Observe(context.Background(), 1)
+	assertObservationIssue(t, err, ObservationSourceUnavailable, "bitcoin-core")
+	if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), "127.0.0.1") {
+		t.Fatalf("Core observation error leaked secret or endpoint: %q", err)
+	}
+}
+
+func TestBitcoinCoreObserverClassifiesMalformedObservation(t *testing.T) {
+	transport := roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"result":"not-a-hash","error":null,"id":"forecast-ledger"}`)), Header: make(http.Header)}, nil
+	})
+	observer, err := NewCoreObserver("http://127.0.0.1:8332", CoreAuth{Username: "rpc-user", Password: "rpc-password"}, &http.Client{Transport: transport})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = observer.Observe(context.Background(), 1)
+	assertObservationIssue(t, err, ObservationInconclusive, "bitcoin-core")
+}
+
+func assertObservationIssue(t *testing.T, err error, wantKind ObservationIssueKind, wantSources string) {
+	t.Helper()
+	var issue *ObservationError
+	if !errors.As(err, &issue) {
+		t.Fatalf("observation error type = %T, %v", err, err)
+	}
+	if issue.Kind() != wantKind || strings.Join(issue.SourceIDs(), ",") != wantSources {
+		t.Fatalf("observation issue kind=%q sources=%v, want kind=%q sources=%q", issue.Kind(), issue.SourceIDs(), wantKind, wantSources)
 	}
 }
 

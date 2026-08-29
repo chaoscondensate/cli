@@ -39,6 +39,7 @@ type OperationDefinition struct {
 	InputTransport InputTransport  `json:"input_transport"`
 	Fields         []RequestField  `json:"fields,omitempty"`
 	Policy         OperationPolicy `json:"policy"`
+	ResultNotes    string          `json:"result_notes,omitempty"`
 }
 
 func OperationDefinitions() []OperationDefinition {
@@ -107,7 +108,18 @@ func definition(name OperationName, cli, mcp string, selection SelectionKind, in
 	}
 	return OperationDefinition{
 		Name: name, CLI: cli, MCPTool: mcp, Selection: selection,
-		InputSchema: input, InputTransport: transport, Fields: fields, Policy: policy,
+		InputSchema: input, InputTransport: transport, Fields: fields, Policy: policy, ResultNotes: operationResultNotes(name),
+	}
+}
+
+func operationResultNotes(name OperationName) string {
+	switch name {
+	case OperationTimestampVerify:
+		return "Returns a structured timing report for pending, not-checked, mismatch, and verified outcomes; source unavailability is not proof failure."
+	case OperationVerificationRun, OperationPublicationVerify:
+		return "Pass requires at least one applicable forecast-evidence layer; an empty or all-not-applicable selection returns no_evidence."
+	default:
+		return ""
 	}
 }
 

@@ -599,7 +599,7 @@ func TestLayeredVerifyCLIProducesStableReport(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, stdout, stderr := runCLI("forecast-ledger", "--json", "verify", "--file", path, "--question", "q-election-coalition", "--forecast", "f-election-coalition-001", "--offline")
-	if code != 0 || stderr != "" || !strings.Contains(stdout, `"code":"verification.pass"`) || !strings.Contains(stdout, `"limitations"`) {
+	if code != 9 || stderr != "" || !strings.Contains(stdout, `"code":"verification.no_evidence"`) || !strings.Contains(stdout, `"overall":"no_evidence"`) || !strings.Contains(stdout, `"limitations"`) {
 		t.Fatalf("verify code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 }

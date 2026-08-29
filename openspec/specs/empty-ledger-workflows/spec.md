@@ -1,8 +1,10 @@
+# Empty Ledger Workflows Specification
+
 ## Purpose
 
 Defines predictable authoring and command behavior when a valid ledger has no questions or when a valid question has no forecasts.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Initialize a ledger without a question
 `forecast-ledger init` SHALL require the existing explicit ledger file and scalar identity flags but SHALL make `--input` optional. With no input, it SHALL create a valid v1.1.0 document containing explicit empty `platforms` and `questions` collections. A supplied input document MAY contain root metadata and platforms without a question.
@@ -113,11 +115,11 @@ Public add and sealed forecast commands SHALL accept an existing open question w
 - **THEN** the operation fails without changing the ledger
 
 ### Requirement: Aggregate forecast operations handle an empty selection
-Selector-free verification and explicit `--all` target operations SHALL treat a valid selection containing zero forecasts as a successful empty result. They SHALL return empty forecast or target arrays, make no network request, and create no target files, proof directories, resource journal, or other artifact. An operation selecting a specific absent question or forecast SHALL retain the stable `not_found` error.
+Selector-free verification and explicit `--all` target operations SHALL handle a valid selection containing zero forecasts without fabricating forecast evidence. They SHALL return empty forecast or target arrays, make no network request, and create no target files, proof directories, resource journal, or other artifact. Verification SHALL report `no_evidence` with application category `incomplete` and exit 9; target operations SHALL remain successful empty operations. An operation selecting a specific absent question or forecast SHALL retain the stable `not_found` error.
 
 #### Scenario: Verify empty ledger locally
 - **WHEN** verify runs on a valid empty ledger without a specific forecast selector
-- **THEN** the document layer passes, `forecasts` is empty, overall is `pass`, request counts are zero, and no network request occurs
+- **THEN** the document layer passes, `forecasts` is empty, overall is `no_evidence`, the application category is `incomplete`, request counts are zero, and no network request occurs
 
 #### Scenario: Build all targets for no forecasts
 - **WHEN** target build runs with `--all` on a ledger containing no forecasts
@@ -136,7 +138,7 @@ Selector-free verification and explicit `--all` target operations SHALL treat a 
 - **THEN** it creates the first sealed forecast without a supersedes link under the normal atomic secret-handling rules
 
 ### Requirement: Publication supports empty evidence sets
-Publication build SHALL accept a valid empty ledger and create a deterministic package containing the ledger and manifest with no forecast target or receipt entries. Publication verify SHALL validate that package, report an empty evidence list and zero network requests, and return overall `pass`; this pass SHALL mean that all applicable checks passed and SHALL NOT claim forecast-set completeness.
+Publication build SHALL accept a valid empty ledger and create a deterministic package containing the ledger and manifest with no forecast target or receipt entries. Publication verify SHALL validate that package, preserve its manifest and file-integrity observations, report an empty evidence list and zero network requests, and return overall `no_evidence` with application category `incomplete` and exit 9. It SHALL NOT claim forecast evidence or forecast-set completeness.
 
 #### Scenario: Build package from empty ledger
 - **WHEN** publication build receives a valid ledger with no forecasts
@@ -144,7 +146,7 @@ Publication build SHALL accept a valid empty ledger and create a deterministic p
 
 #### Scenario: Verify empty package
 - **WHEN** publication verify checks that package
-- **THEN** it returns `evidence: []`, overall `pass`, zero requests, and the standard limitation that forecast-set completeness is not proved
+- **THEN** it returns `evidence: []`, overall `no_evidence`, application category `incomplete`, zero requests, and the standard limitation that forecast-set completeness is not proved
 
 ### Requirement: Generated contracts and documentation teach empty-first use
 Generated input schemas, MCP tool schemas, CLI help, README, getting-started material, command reference, examples, compatibility notes, and changelog SHALL agree that init input and initial forecasts are optional. Examples SHALL show an empty-first workflow and how to add a question and its first later forecast, while retaining a protected sealed example.

@@ -33,10 +33,16 @@ Each checked layer reports one of these states:
 Do not collapse these states into one boolean named `verified`.
 
 Forecast Ledger v1.1 permits an empty ledger and a question with no forecasts.
-A verification pass over an empty selection means every applicable check
-completed and nothing failed; it does not mean a forecast, target, timestamp,
-or outcome evidence exists. Empty forecast collections remain explicit in
-machine output rather than being omitted or replaced by placeholder records.
+Verification over such an empty selection returns overall `no_evidence`, not
+`pass`, even when the document itself is valid. Overall `pass` is reserved for
+a selection with at least one applicable forecast-evidence layer. Empty
+forecast collections remain explicit in machine output rather than being
+omitted or replaced by placeholder records.
+
+An external observation is input to a cryptographic comparison. Failure to
+acquire that input means `not_checked`; it does not show that the retained proof
+failed. A proof mismatch may be claimed only after the required observation
+completed and the local comparison failed.
 
 ## Approved terms
 

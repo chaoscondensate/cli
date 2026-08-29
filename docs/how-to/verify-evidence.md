@@ -39,16 +39,23 @@ The stable layers are:
 - `outcome_evidence`: checks resolution metadata and optional source bytes.
 
 Each layer returns `pass`, `fail`, `pending`, `not_applicable`, or
-`not_checked`, with reason codes, safe evidence, and limitations. Any failure
-wins aggregation. Pending work returns overall `pending`; unavailable required
-checks return `incomplete`. Exit 0 is reserved for a complete pass. Verification
-failure uses exit 6, network failure exit 8, and pending or incomplete exit 9.
+`not_checked`, with reason codes, safe evidence, and limitations. Aggregation
+uses this precedence: any completed failure wins; otherwise a required
+`not_checked` layer is incomplete; otherwise pending evidence is pending;
+otherwise an empty or all-not-applicable selection is `no_evidence`; otherwise
+the applicable evidence passes. Exit 0 is reserved for a complete pass with at
+least one applicable forecast-evidence layer. Verification failure uses exit 6,
+network source failure exit 8, and pending, incomplete, or `no_evidence` exit 9.
 
-An empty ledger is a complete pass with an empty forecast report and zero
-network requests: every check that applies to the empty selection completed.
-This does not claim that forecasts or evidence exist. A question-only selector
-also works over its empty forecast set; a selector naming a nonexistent
-forecast returns `not_found`.
+An empty ledger returns `no_evidence` with an empty forecast report and zero
+network requests. The document layer can still pass, but it is not counted as
+forecast evidence. A question-only selector over an empty forecast set has the
+same result; a selector naming a nonexistent forecast returns `not_found`.
+
+When fresh Bitcoin observation cannot be acquired, existence timing is
+`not_checked`, not failed. A source outage uses `timing.source_unavailable` and
+network exit 8. `timing.bitcoin_mismatch` is reserved for comparison against a
+complete observation and uses verification exit 6.
 
 Human, plain, JSON, and MCP reports expose safely available timing evidence,
 including the receipt and target paths, binding/proof state, Bitcoin block

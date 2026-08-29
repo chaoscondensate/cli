@@ -66,6 +66,14 @@ ID, forecast ID, layer, state, comma-separated reason codes, and compact JSON
 evidence. Quote RFC 3339 values in maintained YAML input, such as
 `recorded_at: "2026-09-01T09:01:00Z"`.
 
+Verification commands emit their complete expected outcome report to stdout
+before returning a nonzero semantic exit. `timestamp verify` uses network exit
+8 for unavailable observation and verification exit 6 only for a comparison
+against a complete mismatching observation. Layered and package verification
+use `incomplete`/exit 9 with overall `no_evidence` when no applicable
+forecast-evidence layer exists. Passing document, manifest, or file checks
+remain visible but do not turn that aggregate into `pass`.
+
 `mcp serve` also accepts repeatable named `--output-root` and `--secret-root`,
 whole-server `--read-only` and `--offline`, default-off `--allow-reveal`, and
 bounded `--max-concurrent` and `--max-tool-bytes` limits. It has no general

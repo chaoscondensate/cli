@@ -51,9 +51,9 @@ The following commands have connected application services:
 | `forecast-ledger question add|update|list|show|resolve|annul|dispute ...` | Creates a typed question with an optional first public or sealed forecast, applies safe patches, reads redacted summaries, and records approved lifecycle claims. List/show accept `--file -`. | None |
 | `forecast-ledger forecast add|list|show|seal|reveal ...`, `forecast key-hint update ...` | Appends public or sealed forecasts, authenticates approved reveal, repairs safe logical hints, or reads redacted history. List/show accept `--file -`. | None |
 | `forecast-ledger target build|check ...` | Builds or checks exact `forecast-envelope/v1` RFC 8785 target bytes at deterministic ledger-relative paths. | None |
-| `forecast-ledger timestamp stamp|upgrade|status|verify ...` | Creates, upgrades, inspects, and verifies experimental pure-Go OpenTimestamps receipts. Built-in stamp is 2-of-4; Bitcoin verification requires two public observers to agree. CLI-only custom calendars and Bitcoin Core are advanced overrides. | Built-in profile, explicit custom mode, Core, or offline as applicable |
-| `forecast-ledger verify --file <path> ...` | Reports document, content-binding, existence-timing, reveal, and outcome-evidence layers with stable states, reasons, evidence, and limitations. | Built-in Bitcoin observers unless `--offline`; outcome URLs only with `--check-sources` |
-| `forecast-ledger publish build|verify ...` | Builds a deterministic allowlisted package with canonical manifest and verifies it offline by default. It does not use Git or a hosted publisher. | None by default; verify uses built-in Bitcoin observers only with `--online` |
+| `forecast-ledger timestamp stamp|upgrade|status|verify ...` | Creates, upgrades, inspects, and verifies experimental pure-Go OpenTimestamps receipts. Built-in stamp is 2-of-4; Bitcoin verification requires two public observers to agree. Acquisition failure is a structured `not_checked` outcome, not proof mismatch. CLI-only custom calendars and Bitcoin Core are advanced overrides. | Built-in profile, explicit custom mode, Core, or offline as applicable |
+| `forecast-ledger verify --file <path> ...` | Reports document, content-binding, existence-timing, reveal, and outcome-evidence layers with stable states, reasons, evidence, and limitations. Pass requires applicable forecast evidence; empty or all-not-applicable selections return `no_evidence`. | Built-in Bitcoin observers unless `--offline`; outcome URLs only with `--check-sources` |
+| `forecast-ledger publish build|verify ...` | Builds a deterministic allowlisted package with canonical manifest and verifies it offline by default. Manifest/file integrity is reported separately from the evidence aggregate. It does not use Git or a hosted publisher. | None by default; verify uses built-in Bitcoin observers only with `--online` |
 | `forecast-ledger mcp serve --ledger-root <name=path> ...` | Starts a protocol-clean stdio server with closed CLI-parity tools and redacted addressed resources. Default is read-write/online within roots; read-only/offline are whole-server modes and reveal is separately default-off. | Built-in profile unless server is offline |
 | `forecast-ledger validate --file <path>` | Parses and validates an embedded-schema JSON or YAML ledger. Eligible for `--file -`. | None |
 | `forecast-ledger status --file <path>` | Validates a ledger and summarizes questions, forecasts, and receipt states. Eligible for `--file -`. | None |
@@ -67,6 +67,10 @@ mutually exclusive. Stable application error codes are `usage`,
 `verification`, `io`, `network`, `network_disabled`, `pending`, `incomplete`,
 `unavailable`, `internal`, and `interrupted`; their CLI exits are implemented in
 `internal/app/errors.go`.
+
+Expected verification reports remain on stdout even when their semantic result
+uses a nonzero exit. Bitcoin observation outage uses `network`/exit 8; proof
+mismatch uses `verification`/exit 6; and `no_evidence` uses `incomplete`/exit 9.
 
 ### Availability and maturity
 

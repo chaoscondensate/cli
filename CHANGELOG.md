@@ -5,6 +5,23 @@ tags and downloadable files are published on GitHub Releases.
 
 ## Unreleased
 
+## 0.3.1-rc.1 - 2026-08-29
+
+### Fixed
+
+- Distinguish unavailable, inconclusive, and budget-limited Bitcoin observation
+  from a cryptographic proof mismatch. Timestamp verification now preserves a
+  safe structured report and leaves the ledger unchanged when observation does
+  not complete.
+- Reserve `timing.bitcoin_mismatch` for comparison against complete Bitcoin
+  observations, and let a later valid attestation win when a receipt contains
+  multiple Bitcoin branches.
+- Report `no_evidence` with `incomplete`/exit 9 for empty or entirely
+  `not_applicable` evidence selections instead of returning a vacuous pass.
+  Document, manifest, and package-file integrity observations remain visible.
+- Keep CLI and MCP outcome fields, stable application categories, request
+  summaries, safe source IDs, generated contracts, and public guidance aligned.
+
 ## 0.3.0 - 2026-08-29
 
 ### Changed

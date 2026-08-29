@@ -36,16 +36,16 @@
 - [x] 5.1 Add JSON/YAML tests showing validate, status, platform operations, question list/show/update, forecast list, and question resolve/annul/dispute handle zero questions or zero forecasts with the specified counts and empty outputs.
 - [x] 5.2 Add public and sealed forecast tests showing the first later forecast on a backlog question has no implicit supersedes link and an explicit missing superseded ID is rejected without mutation.
 - [x] 5.3 Short-circuit target plan/commit/check for an empty `--all` selection before directory inspection, directory creation, or journal creation; assert empty results and a byte-for-byte unchanged working directory.
-- [x] 5.4 Add selector-free verification tests for empty ledgers and backlog questions that assert document pass, overall pass, empty forecast results, preserved limitations, and zero observer/HTTP requests.
+- [x] 5.4 Add selector-free verification tests for empty ledgers and backlog questions that assert document pass, overall `no_evidence` with incomplete/exit 9, empty forecast results, preserved limitations, and zero observer/HTTP requests.
 - [x] 5.5 Add specific-selector negative tests across forecast show, target, timestamp, and reveal paths to retain `not_found` and prove no file or network side effect when a question has no forecasts; prove separately that seal can create the first forecast.
-- [x] 5.6 Add deterministic publication build/verify tests for an empty evidence set, asserting ledger-plus-manifest contents, v1.1.0 pin, empty evidence, `complete`/`pass` results, completeness limitation, and zero requests.
+- [x] 5.6 Add deterministic publication build/verify tests for an empty evidence set, asserting ledger-plus-manifest contents, v1.1.0 pin, empty evidence, build `complete`, verify `no_evidence`/incomplete, completeness limitation, and zero requests.
 
 ## 6. Regenerate interfaces and update maintained information
 
 - [x] 6.1 Run `go generate ./internal/service`, inspect generated input/MCP schemas and fixtures, and update their deterministic goldens so optionality and conditional secret rules match runtime behavior.
 - [x] 6.2 Update `AGENTS.md`, `CONTRIBUTING.md`, `REUSE.toml`, `THIRD_PARTY_NOTICES.md`, build/development documentation, and compatibility metadata with the exact v1.1.0 commit, paths, digests, attribution, and no-migration policy.
 - [x] 6.3 Rewrite the README and getting-started creation flow to show empty init, optional backlog question creation, and a first later forecast, while keeping a correct protected sealed example and linking the broader project at `https://chaoscondensate.com/`.
-- [x] 6.4 Update command reference, question/forecast how-to pages, MCP descriptions, validation/verification explanations, and navigation/metadata so empty collections, selector behavior, publication semantics, and applicable-check `pass` wording are explicit.
+- [x] 6.4 Update command reference, question/forecast how-to pages, MCP descriptions, validation/verification explanations, and navigation/metadata so empty collections, selector behavior, publication semantics, and the distinction between `no_evidence` and an applicable-check `pass` are explicit.
 - [x] 6.5 Add a changelog/release-note entry identifying the v1.1.0 cutover as breaking and stating that v1.0.0 files are rejected with no migration command.
 - [x] 6.6 Reconcile non-historical conflicting v1.0.0 and mandatory-initial-forecast assertions in the active `complete-forecast-ledger-command-surface` OpenSpec artifacts, recording this change as the superseding decision without editing archived history.
 - [x] 6.7 Run documentation checks and executable snippet tests, including the empty-first CLI sequence, and fix stale help, schema, link, platform, or package references.

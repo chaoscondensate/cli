@@ -26,6 +26,11 @@ work. Every ledger tool requires `file`; selectors match the CLI. Mutations use
 `dry_run`, and actions that need approval use `confirm: true`. Expected domain
 errors are successful MCP protocol responses with `isError: true` and a stable
 application envelope, so one failed call does not terminate the session.
+Timestamp acquisition outcomes retain their structured timing report and safe
+observer issue inside that envelope. Source unavailability is `not_checked` and
+`network`, while a completed proof mismatch is `fail` and `verification`.
+Layered and package verification use overall `no_evidence` with `incomplete`
+when no forecast-evidence layer applies.
 
 `ledger_init` may omit both `input` and `input_file` to create an empty ledger.
 Init input may contain a question without `initial_forecast`. `question_add`

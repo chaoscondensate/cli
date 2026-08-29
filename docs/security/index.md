@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: unreleased-main
-reviewed: 2026-08-26
+reviewed: 2026-08-29
 owner: security
 generated: false
 security-critical: true
@@ -32,6 +32,15 @@ The built-in timestamp profile sends blinded commitments to third-party
 calendars and later sends block heights to two public Bitcoin APIs. Blinding
 does not hide request timing; height queries reveal an approximate time period.
 The two APIs must agree, but are still trusted for canonical-chain selection.
+If an observer is unavailable, malformed, disagreeing, or over budget, the tool
+cannot make a fresh proof comparison. It returns only stable issue kinds, safe
+source IDs, and bounded request counts; raw endpoints, credentials, response
+bodies, and underlying errors are not public result fields. Such acquisition
+failure is not evidence that the cryptographic proof mismatched.
+
+A valid document or package manifest is a structural conclusion. Overall
+verification `pass` additionally requires at least one applicable
+forecast-evidence layer; empty selections return `no_evidence`.
 
 Publication copies only the exact ledger and referenced targets/receipts. Always
 inspect the new package before sharing it, because an exact ledger may contain

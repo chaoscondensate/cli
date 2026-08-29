@@ -18,24 +18,26 @@ import (
 const ProtocolRevision = buildinfo.MCPProtocolVersion
 
 type Config struct {
-	LedgerRoots   []string
-	OutputRoots   []string
-	SecretRoots   []string
-	Mode          service.AccessMode
-	Timeout       time.Duration
-	MaxConcurrent int
-	MaxToolBytes  int
-	Stderr        io.Writer
-	Effects       service.Effects
+	LedgerRoots     []string
+	OutputRoots     []string
+	SecretRoots     []string
+	Mode            service.AccessMode
+	Timeout         time.Duration
+	MaxConcurrent   int
+	MaxToolBytes    int
+	Stderr          io.Writer
+	Effects         service.Effects
+	BitcoinObserver ots.BitcoinObserver
 }
 
 type Server struct {
-	config       Config
-	roots        *RootSet
-	effects      service.Effects
-	sdk          *sdk.Server
-	sem          chan struct{}
-	maxToolBytes int
+	config          Config
+	roots           *RootSet
+	effects         service.Effects
+	bitcoinObserver ots.BitcoinObserver
+	sdk             *sdk.Server
+	sem             chan struct{}
+	maxToolBytes    int
 }
 
 func New(config Config) (*Server, error) {
@@ -81,7 +83,7 @@ func New(config Config) (*Server, error) {
 	instructions := fmt.Sprintf("Forecast Ledger MCP. schema=%s schema_commit=%s schema_sha256=%s network_profile=%s mode=%s access=%s timestamps=experimental protocol=%s", info.Schema.Version, info.Schema.Commit, info.Schema.SHA256, profile.ID, mode, access, info.MCPProtocol)
 	logger := slog.New(slog.NewTextHandler(config.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	server := sdk.NewServer(&sdk.Implementation{Name: info.Binary, Version: info.Version}, &sdk.ServerOptions{Instructions: instructions, Logger: logger, PageSize: 100})
-	result := &Server{config: config, roots: roots, effects: effects, sdk: server, sem: make(chan struct{}, config.MaxConcurrent), maxToolBytes: config.MaxToolBytes}
+	result := &Server{config: config, roots: roots, effects: effects, bitcoinObserver: config.BitcoinObserver, sdk: server, sem: make(chan struct{}, config.MaxConcurrent), maxToolBytes: config.MaxToolBytes}
 	if err := result.registerTools(); err != nil {
 		return nil, err
 	}
@@ -175,6 +177,9 @@ func (s *Server) registerTools() error {
 			return err
 		}
 		description := fmt.Sprintf("%s. file paths use root-name:relative/path. effect=%s server_access=%s network=%s", definition.CLI, effectLabel(definition.Policy), accessLabel(s.config.Mode), definition.Policy.Network)
+		if definition.ResultNotes != "" {
+			description += ". " + definition.ResultNotes
+		}
 		s.sdk.AddTool(&sdk.Tool{Name: definition.MCPTool, Description: description, InputSchema: schema}, s.toolHandler(definition, allowed, contract.Required))
 	}
 	return nil

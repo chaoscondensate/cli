@@ -912,6 +912,7 @@ func timestampCommand() *urfavecli.Command {
 		&urfavecli.StringFlag{Name: "bitcoin-auth-file", TakesFile: true, Usage: "Protected JSON file with Bitcoin Core username and password"},
 		&urfavecli.StringFlag{Name: "verified-at", Usage: "Exact RFC 3339 verification time; defaults to now"},
 	)
+	verify.Description += "\n\nExpected pending, unavailable, inconclusive, budget-limited, mismatch, and verified outcomes are structured reports. Observation acquisition failure is not reported as proof mismatch."
 	verify.Action = timestampVerifyAction
 	command := group("timestamp", "Manage experimental OpenTimestamps receipts", stamp, upgrade, status, verify)
 	profile := ots.Profile()
@@ -1010,11 +1011,24 @@ func timestampVerifyAction(ctx context.Context, command *urfavecli.Command) erro
 	if err != nil {
 		return err
 	}
-	code, message := "timestamp.verified", "OpenTimestamps Bitcoin evidence was verified"
+	code, message := "timestamp.verification."+string(result.Verification.State), "Timestamp verification completed with status "+string(result.Verification.State)
+	if result.Verification.State == service.LayerPass {
+		code, message = "timestamp.verified", "OpenTimestamps Bitcoin evidence was verified"
+	}
 	if runtime.DryRun {
 		code, message = "timestamp.verify.planned", "Timestamp verification is valid; network observation and ledger update were deferred"
 	}
-	return presenterFor(command).Success(code, message, result)
+	presenter := presenterFor(command)
+	if presenter.Mode() != presentation.ModeJSON && presenter.Mode() != presentation.ModeQuiet {
+		message = formatTimestampVerification(presenter.Mode(), result)
+	}
+	if err := presenter.Success(code, message, result); err != nil {
+		return err
+	}
+	if result.FailureCode != "" {
+		return presentedApplicationError{app.NewError(result.FailureCode, "timestamp verification completed with status "+string(result.Verification.State), nil)}
+	}
+	return nil
 }
 
 func verifyCommand() *urfavecli.Command {
@@ -1037,7 +1051,7 @@ func verifyCommand() *urfavecli.Command {
 		return ctx, nil
 	}
 	command.Action = verificationAction
-	command.Description += "\n\nNormal human and plain output includes the complete ordered evidence matrix and safe retained timing values. Offline stored values are not freshly rechecked."
+	command.Description += "\n\nNormal human and plain output includes the complete ordered evidence matrix and safe retained timing values. Offline stored values are not freshly rechecked. Pass requires at least one applicable forecast-evidence layer; an empty or all-not-applicable selection returns no_evidence."
 	return command
 }
 
@@ -1090,6 +1104,7 @@ func publishCommand() *urfavecli.Command {
 		}
 		return ctx, nil
 	}
+	verify.Description += "\n\nManifest and file integrity remain visible separately. Pass requires at least one applicable forecast-evidence layer; an empty package returns no_evidence."
 	verify.Action = publicationVerifyAction
 	return group("publish", "Build or verify portable evidence packages", build, verify)
 }
@@ -1291,6 +1306,35 @@ func formatVerificationReport(mode presentation.Mode, report service.Verificatio
 		}
 	}
 	return output.String()
+}
+
+func formatTimestampVerification(mode presentation.Mode, result service.TimestampVerifyResult) string {
+	if mode == presentation.ModePlain {
+		return fmt.Sprintf("state\t%s\nverification\t%s\t%s\theight=%s\nnetwork\t%s\nsources\t%s\nrequests\t%s",
+			result.State, result.Verification.State, strings.Join(result.Verification.ReasonCodes, ","), compactPublicJSON(result.BitcoinHeight),
+			result.NetworkProfile.ID, strings.Join(observationSourceIDs(result), ","), compactPublicJSON(result.RequestSummary))
+	}
+	var output strings.Builder
+	fmt.Fprintf(&output, "State: %s\nVerification: %s", result.State, result.Verification.State)
+	if len(result.Verification.ReasonCodes) > 0 {
+		fmt.Fprintf(&output, " (%s)", strings.Join(result.Verification.ReasonCodes, ", "))
+	}
+	if result.BitcoinHeight != nil {
+		fmt.Fprintf(&output, "\nBitcoin height: %d", *result.BitcoinHeight)
+	}
+	fmt.Fprintf(&output, "\nNetwork profile: %s", result.NetworkProfile.ID)
+	if sourceIDs := observationSourceIDs(result); len(sourceIDs) > 0 {
+		fmt.Fprintf(&output, "\nAffected sources: %s", strings.Join(sourceIDs, ", "))
+	}
+	fmt.Fprintf(&output, "\nRequest summary: %s", compactPublicJSON(result.RequestSummary))
+	return output.String()
+}
+
+func observationSourceIDs(result service.TimestampVerifyResult) []string {
+	if result.ObservationIssue == nil {
+		return nil
+	}
+	return result.ObservationIssue.SourceIDs
 }
 
 func formatPublicationVerification(mode presentation.Mode, result service.PublicationVerifyResult) string {

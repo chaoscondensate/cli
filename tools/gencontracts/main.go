@@ -31,11 +31,15 @@ func main() {
 func mcpCatalog() map[string]any {
 	tools := make(map[string]any)
 	for _, definition := range service.SortedOperationDefinitions() {
-		tools[definition.MCPTool] = map[string]any{
+		entry := map[string]any{
 			"operation":     definition.Name,
 			"input_schema":  toolInputSchema(definition),
-			"result_schema": map[string]any{"$ref": "result.schema.json"},
+			"result_schema": operationResultSchema(definition),
 		}
+		if definition.ResultNotes != "" {
+			entry["description"] = definition.ResultNotes
+		}
+		tools[definition.MCPTool] = entry
 	}
 	return map[string]any{
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -43,6 +47,16 @@ func mcpCatalog() map[string]any {
 		"profile": "forecast-ledger-mcp-tools/v1",
 		"tools":   tools,
 	}
+}
+
+func operationResultSchema(definition service.OperationDefinition) map[string]any {
+	base := map[string]any{"$ref": "result.schema.json"}
+	if definition.Name != service.OperationTimestampVerify {
+		return base
+	}
+	return map[string]any{"allOf": []any{base, map[string]any{
+		"type": "object", "properties": map[string]any{"data": map[string]any{"$ref": "result.schema.json#/$defs/timestampVerificationData"}},
+	}}}
 }
 
 func toolInputSchema(definition service.OperationDefinition) map[string]any {
@@ -155,7 +169,7 @@ func resultSchema() map[string]any {
 		"required": []string{"operation", "code", "message", "data", "recovery"},
 		"properties": map[string]any{
 			"operation": map[string]any{"type": "string"}, "code": map[string]any{"type": "string"},
-			"message": map[string]any{"type": "string"}, "data": map[string]any{"type": "object"},
+			"message": map[string]any{"type": "string"}, "data": map[string]any{"type": "object", "description": "Operation-specific public data; timestamp.verify uses $defs.timestampVerificationData."},
 			"warnings": map[string]any{"type": "array", "items": closedRecord([]string{"code", "message"}, map[string]any{
 				"code": map[string]any{"type": "string"}, "message": map[string]any{"type": "string"}, "details": map[string]any{"type": "object"},
 			})},
@@ -171,6 +185,43 @@ func resultSchema() map[string]any {
 				"message": map[string]any{"type": "string"}, "paths": stringArray(), "actions": stringArray(),
 			}),
 		},
+		"$defs": resultDefinitions(),
+	}
+}
+
+func resultDefinitions() map[string]any {
+	stringList := stringArray()
+	requestSummary := closedRecord([]string{"unique_heights", "http_requests", "max_heights", "max_requests", "max_concurrent"}, map[string]any{
+		"unique_heights": map[string]any{"type": "integer", "minimum": 0}, "http_requests": map[string]any{"type": "integer", "minimum": 0},
+		"max_heights": map[string]any{"type": "integer", "minimum": 0}, "max_requests": map[string]any{"type": "integer", "minimum": 0}, "max_concurrent": map[string]any{"type": "integer", "minimum": 0},
+	})
+	networkProfile := closedRecord([]string{"mode"}, map[string]any{
+		"mode": map[string]any{"enum": []string{"offline", "builtin", "custom", "bitcoin_core"}}, "id": map[string]any{"type": "string"},
+		"source_ids": stringList, "minimum_success": map[string]any{"type": "integer", "minimum": 0}, "max_unique_heights": map[string]any{"type": "integer", "minimum": 0},
+		"max_requests": map[string]any{"type": "integer", "minimum": 0}, "max_concurrent": map[string]any{"type": "integer", "minimum": 0},
+		"trust_limitations": stringList, "privacy_limitations": stringList,
+	})
+	verificationLayer := closedRecord([]string{"name", "state"}, map[string]any{
+		"name": map[string]any{"type": "string"}, "state": map[string]any{"enum": []string{"pass", "fail", "pending", "not_applicable", "not_checked"}},
+		"reason_codes": stringList, "evidence": map[string]any{"type": "object"}, "limitations": stringList,
+	})
+	observationIssue := closedRecord([]string{"kind"}, map[string]any{
+		"kind": map[string]any{"enum": []string{"source_unavailable", "observation_inconclusive", "observation_budget_exhausted"}}, "source_ids": stringList,
+	})
+	timestampData := closedRecord([]string{"question_id", "forecast_id", "state", "target_path", "target_sha256", "receipt_path", "target_present", "receipt_present", "network_profile", "request_summary", "verification"}, map[string]any{
+		"question_id": map[string]any{"type": "string"}, "forecast_id": map[string]any{"type": "string"},
+		"state":       map[string]any{"enum": []string{"unanchored", "pending", "confirmed_unverified", "verified", "failed", "inconsistent"}},
+		"target_path": map[string]any{"type": "string"}, "target_sha256": map[string]any{"type": "string"}, "receipt_path": map[string]any{"type": "string"},
+		"target_present": map[string]any{"type": "boolean"}, "receipt_present": map[string]any{"type": "boolean"}, "calendar_source_ids": stringList, "calendar_identities": stringList,
+		"bitcoin_height": map[string]any{"type": "integer", "minimum": 0}, "anchored_before": map[string]any{"type": "string", "format": "date-time"},
+		"network_profile": networkProfile, "request_summary": requestSummary, "next_actions": stringList,
+		"warnings": map[string]any{"type": "array"}, "effects": map[string]any{"type": "array"}, "recovery": map[string]any{"type": "object"},
+		"verification": verificationLayer, "observation_issue": observationIssue,
+	})
+	return map[string]any{
+		"verificationOverall": map[string]any{"enum": []string{"pass", "fail", "pending", "incomplete", "no_evidence"}},
+		"verificationLayer":   verificationLayer, "bitcoinObservationIssue": observationIssue, "networkProfile": networkProfile,
+		"requestSummary": requestSummary, "timestampVerificationData": timestampData,
 	}
 }
 
@@ -185,19 +236,19 @@ func stringArray() map[string]any {
 func markdownReference() string {
 	var builder strings.Builder
 	builder.WriteString("# Generated operation contracts\n\n")
-	builder.WriteString("<!-- doc-metadata\ncoverage: operation-contracts-v1\nreviewed: 2026-08-26\nowner: interface\ngenerated: true\nsecurity-critical: true\nprerequisites: index.md\nnext: ../index.md\nsource: go generate ./internal/service\n-->\n\n")
+	builder.WriteString("<!-- doc-metadata\ncoverage: operation-contracts-v1\nreviewed: 2026-08-29\nowner: interface\ngenerated: true\nsecurity-critical: true\nprerequisites: index.md\nnext: ../index.md\nsource: go generate ./internal/service\n-->\n\n")
 	builder.WriteString("> Generated; do not edit by hand. Run `go generate ./internal/service`.\n\n")
 	builder.WriteString("These declarations are shared inputs for CLI reference and MCP discovery. A declaration does not make a hidden command available.\n\n")
-	builder.WriteString("| Operation | CLI | MCP tool | Selection | Structured input | Dry-run | Confirmation | Network |\n")
-	builder.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- |\n")
+	builder.WriteString("| Operation | CLI | MCP tool | Selection | Structured input | Dry-run | Confirmation | Network | Result notes |\n")
+	builder.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
 	for _, definition := range service.SortedOperationDefinitions() {
 		input := "—"
 		if definition.InputSchema != "" {
 			input = fmt.Sprintf("[%s](input-schemas/%s.schema.json) (%s)", definition.InputSchema, definition.InputSchema, definition.InputTransport)
 		}
-		builder.WriteString(fmt.Sprintf("| `%s` | `forecast-ledger %s` | `%s` | `%s` | %s | %t | %t | `%s` |\n",
+		builder.WriteString(fmt.Sprintf("| `%s` | `forecast-ledger %s` | `%s` | `%s` | %s | %t | %t | `%s` | %s |\n",
 			definition.Name, definition.CLI, definition.MCPTool, definition.Selection, input,
-			definition.Policy.PersistentEffect, definition.Policy.RequiresConfirmation, definition.Policy.Network))
+			definition.Policy.PersistentEffect, definition.Policy.RequiresConfirmation, definition.Policy.Network, definition.ResultNotes))
 	}
 	builder.WriteString("\nThe common [operation result schema](result.schema.json) defines warning, side-effect, and recovery fields. The [MCP tool catalog](mcp-tool-schemas.json) contains closed request schemas.\n\n")
 	builder.WriteString("[Reference index](../index.md)\n")

@@ -87,3 +87,38 @@ func TestLayeredVerificationOfflineSourceCheckOpensNoNetwork(t *testing.T) {
 		t.Fatalf("offline outcome layer = %#v", outcome)
 	}
 }
+
+func TestVerificationAggregationRequiresApplicableEvidence(t *testing.T) {
+	layer := func(state LayerState, reason string) VerificationReport {
+		reasons := []string{}
+		if reason != "" {
+			reasons = []string{reason}
+		}
+		return VerificationReport{Forecasts: []ForecastVerification{{QuestionID: "q-one", ForecastID: "f-one", Layers: []VerificationLayer{{Name: "existence_timing", State: state, ReasonCodes: reasons}}}}}
+	}
+	tests := []struct {
+		name    string
+		report  VerificationReport
+		want    VerificationOverall
+		failure app.ErrorCode
+	}{
+		{name: "empty", report: VerificationReport{Forecasts: []ForecastVerification{}}, want: VerificationNoEvidence, failure: app.CodeIncomplete},
+		{name: "not applicable", report: layer(LayerNotApplicable, "timing.unanchored"), want: VerificationNoEvidence, failure: app.CodeIncomplete},
+		{name: "applicable pass with not applicable", report: VerificationReport{Forecasts: []ForecastVerification{{Layers: []VerificationLayer{{State: LayerNotApplicable}, {State: LayerPass}}}}}, want: VerificationPass},
+		{name: "applicable pass", report: layer(LayerPass, "timing.bitcoin_verified"), want: VerificationPass},
+		{name: "pending", report: layer(LayerPending, "timing.calendar_pending"), want: VerificationPending, failure: app.CodePending},
+		{name: "not checked", report: layer(LayerNotChecked, "timing.offline"), want: VerificationIncomplete, failure: app.CodeIncomplete},
+		{name: "source unavailable", report: layer(LayerNotChecked, "timing.source_unavailable"), want: VerificationIncomplete, failure: app.CodeNetwork},
+		{name: "failure", report: layer(LayerFail, "timing.bitcoin_mismatch"), want: VerificationFail, failure: app.CodeVerification},
+		{name: "not checked beats pending", report: VerificationReport{Forecasts: []ForecastVerification{{Layers: []VerificationLayer{{State: LayerPending}, {State: LayerNotChecked}}}}}, want: VerificationIncomplete, failure: app.CodeIncomplete},
+		{name: "failure beats source", report: VerificationReport{Forecasts: []ForecastVerification{{Layers: []VerificationLayer{{State: LayerNotChecked, ReasonCodes: []string{"timing.source_unavailable"}}, {State: LayerFail}}}}}, want: VerificationFail, failure: app.CodeVerification},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, failure := aggregateVerification(test.report)
+			if got != test.want || failure != test.failure {
+				t.Fatalf("aggregate=%q/%q want=%q/%q", got, failure, test.want, test.failure)
+			}
+		})
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"io"
 	"io/fs"
 	"net/http"
@@ -65,8 +66,9 @@ func TestTimestampStampPendingStatusAndRetry(t *testing.T) {
 	if requests.Load() != 4 {
 		t.Fatalf("retry submitted duplicate calendar requests: %d", requests.Load())
 	}
-	if _, err := CommitTimestampVerify(context.Background(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampVerifyOptions{}); app.ErrorCodeOf(err) != app.CodePending {
-		t.Fatalf("pending verify error = %v", err)
+	verification, err := CommitTimestampVerify(context.Background(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampVerifyOptions{})
+	if err != nil || verification.FailureCode != app.CodePending || verification.Verification.State != LayerPending {
+		t.Fatalf("pending verify result = %#v, err = %v", verification, err)
 	}
 	loaded, err := LoadAndValidateLedger(context.Background(), ledgerPath, nil)
 	if err != nil {
@@ -331,6 +333,36 @@ func TestTimestampUpgradeVerifyAndVerifiedStatus(t *testing.T) {
 		t.Fatal("upgraded receipt has no Bitcoin attestation")
 	}
 	observation := mineTestObservation(t, bitcoin)
+	beforeNonSuccess, err := os.ReadFile(ledgerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outageObserver := &scriptedBitcoinObserver{byHeight: map[uint64]scriptedBitcoinObservation{
+		bitcoin.Attestation.Height: {err: ots.NewObservationIssue(ots.ObservationSourceUnavailable, "mempool-space")},
+	}}
+	outage, err := CommitTimestampVerify(context.Background(), ledgerPath, questionID, forecastID, TimestampVerifyOptions{Observer: outageObserver})
+	if err != nil || outage.FailureCode != app.CodeNetwork || outage.State != TimestampConfirmedUnverified || outage.Verification.State != LayerNotChecked || outage.Verification.ReasonCodes[0] != "timing.source_unavailable" || outage.ObservationIssue == nil || strings.Join(outage.ObservationIssue.SourceIDs, ",") != "mempool-space" || outage.RequestSummary.HTTPRequests != 1 {
+		t.Fatalf("source outage report=%#v err=%v", outage, err)
+	}
+	afterOutage, err := os.ReadFile(ledgerPath)
+	if err != nil || !bytes.Equal(beforeNonSuccess, afterOutage) {
+		t.Fatalf("source outage changed ledger: err=%v", err)
+	}
+	offline, err := CommitTimestampVerify(context.Background(), ledgerPath, questionID, forecastID, TimestampVerifyOptions{Offline: true})
+	if err != nil || offline.FailureCode != app.CodeIncomplete || offline.Verification.State != LayerNotChecked || offline.Verification.ReasonCodes[0] != "timing.offline" || offline.RequestSummary.HTTPRequests != 0 {
+		t.Fatalf("offline report=%#v err=%v", offline, err)
+	}
+	wrongProof := bitcoin
+	wrongProof.Message = bytes.Repeat([]byte{0x7a}, 32)
+	mismatchObservation := mineTestObservation(t, wrongProof)
+	mismatch, err := CommitTimestampVerify(context.Background(), ledgerPath, questionID, forecastID, TimestampVerifyOptions{Observer: fixedBitcoinObserver{observation: mismatchObservation}})
+	if err != nil || mismatch.FailureCode != app.CodeVerification || mismatch.Verification.State != LayerFail || mismatch.Verification.ReasonCodes[0] != "timing.bitcoin_mismatch" {
+		t.Fatalf("mismatch report=%#v err=%v", mismatch, err)
+	}
+	afterMismatch, err := os.ReadFile(ledgerPath)
+	if err != nil || !bytes.Equal(beforeNonSuccess, afterMismatch) {
+		t.Fatalf("mismatch changed ledger: err=%v", err)
+	}
 	verifiedAt := ledger.Timestamp("2026-01-02T03:04:05Z")
 	verified, err := CommitTimestampVerify(context.Background(), ledgerPath, questionID, forecastID, TimestampVerifyOptions{VerifiedAt: verifiedAt, Observer: fixedBitcoinObserver{observation: observation}})
 	if err != nil || verified.State != TimestampVerified || verified.BitcoinHeight == nil || verified.AnchoredBefore == nil {
@@ -363,6 +395,72 @@ func TestTimestampUpgradeVerifyAndVerifiedStatus(t *testing.T) {
 
 type fixedBitcoinObserver struct {
 	observation ots.BlockObservation
+}
+
+type scriptedBitcoinObservation struct {
+	observation ots.BlockObservation
+	err         error
+}
+
+type scriptedBitcoinObserver struct {
+	byHeight map[uint64]scriptedBitcoinObservation
+	calls    []uint64
+}
+
+func (observer *scriptedBitcoinObserver) Observe(_ context.Context, height uint64) (ots.BlockObservation, error) {
+	observer.calls = append(observer.calls, height)
+	result := observer.byHeight[height]
+	return result.observation, result.err
+}
+
+func (observer *scriptedBitcoinObserver) Summary() ots.RequestSummary {
+	return ots.RequestSummary{UniqueHeights: len(observer.calls), HTTPRequests: len(observer.calls), MaxHeights: 32, MaxRequests: 128, MaxConcurrent: 1}
+}
+
+func TestBitcoinCandidateReductionIsConservativeAndOrderIndependent(t *testing.T) {
+	first := ots.EvaluatedAttestation{Message: bytes.Repeat([]byte{0x11}, 32), Attestation: ots.Attestation{Kind: ots.AttestationBitcoin, Height: 1}}
+	second := ots.EvaluatedAttestation{Message: bytes.Repeat([]byte{0x22}, 32), Attestation: ots.Attestation{Kind: ots.AttestationBitcoin, Height: 2}}
+	matchingSecond := mineTestObservation(t, second)
+	wrongFirst := first
+	wrongFirst.Message = bytes.Repeat([]byte{0x33}, 32)
+	mismatchingFirstObservation := mineTestObservation(t, wrongFirst)
+
+	observer := &scriptedBitcoinObserver{byHeight: map[uint64]scriptedBitcoinObservation{
+		1: {err: ots.NewObservationIssue(ots.ObservationSourceUnavailable, "mempool-space")},
+		2: {observation: matchingSecond},
+	}}
+	result, err := observeBitcoinCandidates(context.Background(), observer, []ots.EvaluatedAttestation{first, second})
+	if err != nil || result.Verified.Attestation.Height != 2 || len(result.Issues) != 1 {
+		t.Fatalf("later verified branch result=%#v err=%v", result, err)
+	}
+
+	observer = &scriptedBitcoinObserver{byHeight: map[uint64]scriptedBitcoinObservation{
+		1: {observation: mismatchingFirstObservation},
+		2: {err: ots.NewObservationIssue(ots.ObservationSourceUnavailable, "blockstream")},
+	}}
+	result, err = observeBitcoinCandidates(context.Background(), observer, []ots.EvaluatedAttestation{first, second})
+	if err != nil || len(result.MismatchedHeights) != 1 || len(result.Issues) != 1 {
+		t.Fatalf("mixed uncertain result=%#v err=%v", result, err)
+	}
+	issue, code, reason := reduceObservationIssues(result.Issues)
+	if code != app.CodeNetwork || reason != "timing.source_unavailable" || issue.Kind != ots.ObservationSourceUnavailable {
+		t.Fatalf("mixed uncertain reduction issue=%#v code=%q reason=%q", issue, code, reason)
+	}
+
+	observer = &scriptedBitcoinObserver{byHeight: map[uint64]scriptedBitcoinObservation{
+		1: {observation: mismatchingFirstObservation},
+	}}
+	result, err = observeBitcoinCandidates(context.Background(), observer, []ots.EvaluatedAttestation{first})
+	if err != nil || len(result.Issues) != 0 || len(result.MismatchedHeights) != 1 || result.Verified.Attestation.Height != 0 {
+		t.Fatalf("complete mismatch result=%#v err=%v", result, err)
+	}
+
+	unknown := errors.New("injected observer private error")
+	observer = &scriptedBitcoinObserver{byHeight: map[uint64]scriptedBitcoinObservation{1: {err: unknown}}}
+	result, err = observeBitcoinCandidates(context.Background(), observer, []ots.EvaluatedAttestation{first})
+	if err != nil || len(result.Issues) != 1 || result.Issues[0].Kind != ots.ObservationInconclusive || len(result.Issues[0].SourceIDs) != 0 {
+		t.Fatalf("unknown observer error result=%#v err=%v", result, err)
+	}
 }
 
 func (observer fixedBitcoinObserver) Observe(context.Context, uint64) (ots.BlockObservation, error) {
