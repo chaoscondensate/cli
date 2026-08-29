@@ -1,7 +1,7 @@
 # Manage public forecasts
 
 <!-- doc-metadata
-coverage: unreleased-main
+coverage: v0.3.1
 reviewed: 2026-08-29
 owner: interface
 generated: false

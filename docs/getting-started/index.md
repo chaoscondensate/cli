@@ -1,7 +1,7 @@
 # Getting started
 
 <!-- doc-metadata
-coverage: v0.3.0
+coverage: v0.3.1
 reviewed: 2026-08-29
 owner: documentation
 generated: false
@@ -22,7 +22,7 @@ result.
 - [Validate or inspect an existing ledger](../../README.md#quick-start).
 - [Review the implementation and compatibility baseline](../development/documentation-baseline.md).
 
-Release `v0.3.0` implements the complete advertised command surface. Timestamp support is
+Release `v0.3.1` implements the complete advertised command surface. Timestamp support is
 experimental and remains subject to the review gates in the baseline.
 
 [Documentation index](../index.md)

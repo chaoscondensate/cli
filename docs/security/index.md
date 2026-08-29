@@ -1,7 +1,7 @@
 # Security documentation
 
 <!-- doc-metadata
-coverage: unreleased-main
+coverage: v0.3.1
 reviewed: 2026-08-29
 owner: security
 generated: false

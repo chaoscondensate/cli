@@ -1,8 +1,8 @@
 # OpenTimestamps release review
 
 <!-- doc-metadata
-coverage: unreleased-main
-reviewed: 2026-08-26
+coverage: v0.3.1
+reviewed: 2026-08-29
 owner: security
 generated: false
 security-critical: true

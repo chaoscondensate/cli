@@ -18,7 +18,7 @@ The interoperable data contract is maintained in the
 User-visible changes are tracked in the [changelog](CHANGELOG.md).
 
 > [!IMPORTANT]
-> **Status: Preview and unaudited.** Release `v0.3.0` implements the complete
+> **Status: Preview and unaudited.** Release `v0.3.1` implements the complete
 > CLI and MCP command surface: authoring, sealed forecasts, canonical
 > targets, experimental OpenTimestamps receipts, layered verification, and
 > portable publication packages. OpenTimestamps support remains experimental
@@ -54,7 +54,7 @@ The CLI is designed around a few strict rules:
 See the [complete installation guide](docs/getting-started/install.md) for
 checksum verification, upgrades, removal, and archive fallback instructions.
 
-Release `v0.3.0` provides Homebrew, platform archives, native Linux packages,
+Release `v0.3.1` provides Homebrew, platform archives, native Linux packages,
 and a Windows Chocolatey package. Check the selected release's asset list before
 using a package command.
 

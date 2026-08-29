@@ -1,7 +1,7 @@
 # Documentation baseline
 
 <!-- doc-metadata
-coverage: unreleased-main
+coverage: v0.3.1
 reviewed: 2026-08-29
 owner: project-maintainer
 generated: false
@@ -36,8 +36,7 @@ that the corresponding document or test has been implemented.
 
 ## Implementation inventory
 
-This inventory was checked against the current unreleased `main` source after
-release `v0.1.1`.
+This inventory was checked against the source published as release `v0.3.1`.
 
 ### Working CLI surface
 
@@ -108,7 +107,7 @@ GoReleaser builds six `CGO_ENABLED=0` archives:
 - Linux arm64 and x86-64 as `.tar.gz`; and
 - Windows arm64 and x86-64 as `.zip`.
 
-Release `v0.1.1` contains those six archives and eight native Linux packages:
+Release `v0.3.1` contains those six archives and eight native Linux packages:
 `deb`, `rpm`, `apk`, and Arch Linux packages for arm64 and x86-64. Each package
 installs the binary in `/usr/bin` and the Apache-2.0 license in
 `/usr/share/licenses/forecast-ledger`. The main checksum manifest covers the
@@ -207,7 +206,7 @@ The maintained maturity labels have these meanings:
 | Deprecated | The behavior still works for a stated period but has a documented replacement and removal version. |
 | Unsupported | The behavior is outside the maintained contract and must not be presented as working. |
 
-Release `v0.1.1` is **Preview**. A stable SemVer tag identifies a reproducible
+Release `v0.3.1` is **Preview**. A stable SemVer tag identifies a reproducible
 release; it does not promote unfinished commands or unaudited components to the
 Stable product maturity label.
 
@@ -235,13 +234,12 @@ time, or substantive outcome-source correctness.
 
 ### Maturity, audit, and limitations
 
-- The approved public status currently visible in README is **active
-  pre-release development**. `v0.1.1` is published as a stable SemVer release,
-  so maintained documentation must explain that version stability does not
-  imply feature completeness.
+- The approved public status currently visible in README is **Preview**.
+  `v0.3.1` is published as a stable SemVer release, but version stability does
+  not imply feature completeness or completion of experimental review gates.
 - No independent security or cryptographic audit is recorded. A pinned
   `govulncheck` run reported no reachable dependency vulnerability on
-  2026-08-25; that result is not an audit or a security guarantee.
+  2026-08-29; that result is not an audit or a security guarantee.
 - Local validation and status are offline. No telemetry or runtime update check
   is implemented. Planned OpenTimestamps calendar operations would use the
   network only at an explicit command and grant boundary, but are unavailable.

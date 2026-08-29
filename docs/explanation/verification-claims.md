@@ -1,7 +1,7 @@
 # Verification claims and evidence terms
 
 <!-- doc-metadata
-coverage: unreleased-main
+coverage: v0.3.1
 reviewed: 2026-08-29
 owner: security
 generated: false
@@ -10,7 +10,7 @@ prerequisites: ../getting-started/index.md
 next: ../security/index.md
 -->
 
-Applies to: current unreleased Forecast Ledger CLI source (Preview).
+Applies to: Forecast Ledger CLI release v0.3.1 (Preview).
 Last substantive review: 2026-08-29.
 Owner: security and interface owners
 
