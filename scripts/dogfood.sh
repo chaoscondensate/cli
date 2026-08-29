@@ -102,7 +102,9 @@ fi
 "$binary" --json timestamp status --file "$ledger" --question q-one --forecast f-one | grep -F 'unanchored' >/dev/null
 
 set +e
-"$binary" --json timestamp stamp --file "$ledger" --question q-one --forecast f-one --offline >"$work/offline.out" 2>"$work/offline.err"
+"$binary" --json timestamp stamp --file "$ledger" --question q-one --forecast f-one \
+  --tsa-url https://tsa.invalid/ --ca-bundle trust/tsa.pem --offline \
+  >"$work/offline.out" 2>"$work/offline.err"
 offline_exit=$?
 set -e
 if [[ $offline_exit -ne 8 ]]; then
