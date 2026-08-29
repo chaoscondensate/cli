@@ -5,7 +5,7 @@ tags and downloadable files are published on GitHub Releases.
 
 ## Unreleased
 
-## 0.4.0 - 2026-08-29
+## 0.4.0 - 2026-08-30
 
 ### Changed
 

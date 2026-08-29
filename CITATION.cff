@@ -7,7 +7,7 @@ authors:
     given-names: "Andrey"
     alias: "57uff3r"
 version: "0.4.0"
-date-released: "2026-08-29"
+date-released: "2026-08-30"
 license: "Apache-2.0"
 repository-code: "https://github.com/chaoscondensate/cli"
 url: "https://github.com/chaoscondensate/cli"
