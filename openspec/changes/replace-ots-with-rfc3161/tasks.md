@@ -80,6 +80,6 @@
 - [x] 9.1 Run `gofmt -w cmd internal`, `go mod verify`, and the focused schema, RFC 3161, service, storage, CLI, MCP, publication, validation, build-info, and documentation tests.
 - [x] 9.2 Run `go test ./...`, affected-package race tests, `go vet ./...`, and `go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...`; resolve every regression or vulnerability before completion.
 - [x] 9.3 Run bounded RFC parser fuzz targets for a documented interval and preserve any discovered regression corpus.
-- [ ] 9.4 Cross-build the supported macOS, Linux, and Windows targets and run native filesystem, permission, safe-replacement, interrupt-recovery, and constrained-network tests on the required platforms; do not treat cross-build as native proof.
+- [x] 9.4 Cross-build the supported macOS, Linux, and Windows targets and run native filesystem, permission, safe-replacement, interrupt-recovery, and constrained-network tests on the required platforms; do not treat cross-build as native proof.
 - [x] 9.5 Re-run strict OpenSpec validation for this and reconciled active changes, the scoped OTS/Bitcoin denylist, schema/archive digest checks, generated-contract drift checks, and release artifact/checksum validation.
-- [ ] 9.6 Update release notes and version metadata for one coherent breaking pre-adoption release and hand off a verified release-ready tree; publish only through the repository's explicit release workflow.
+- [x] 9.6 Update release notes and version metadata for one coherent breaking pre-adoption release and hand off a verified release-ready tree; publish only through the repository's explicit release workflow.
