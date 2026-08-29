@@ -10,6 +10,7 @@ import (
 	"github.com/chaoscondensate/cli/internal/app"
 	"github.com/chaoscondensate/cli/internal/ledger"
 	contractschema "github.com/chaoscondensate/cli/internal/schema"
+	"github.com/chaoscondensate/cli/internal/storage"
 )
 
 func TestEmptyAndQuestionOnlyCreationShapes(t *testing.T) {
@@ -174,7 +175,7 @@ func TestEmptyReadsPlatformMutationAndSpecificForecastFailures(t *testing.T) {
 		t.Fatalf("timestamp error=%v", err)
 	}
 	keyPath := filepath.Join(directory, "dummy.key")
-	if err := os.WriteFile(keyPath, []byte("invalid but protected"), 0o600); err != nil {
+	if err := storage.CreateProtectedFile(keyPath, []byte("invalid but protected")); err != nil {
 		t.Fatal(err)
 	}
 	beforeFailures, err := os.ReadDir(directory)
