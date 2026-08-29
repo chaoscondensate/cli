@@ -1,7 +1,7 @@
 # How-to guides
 
 <!-- doc-metadata
-coverage: v0.3.1
+coverage: v0.4.0
 reviewed: 2026-08-29
 owner: documentation
 generated: false
@@ -20,15 +20,15 @@ services are implemented, the maintained task guidance is limited to:
 - [append, list, and inspect public forecasts](manage-public-forecasts.md);
 - [seal, reveal, and repair key hints](seal-and-reveal-forecasts.md);
 - [build and check deterministic forecast targets](build-targets.md);
-- [create, upgrade, inspect, and verify OpenTimestamps receipts](timestamp-forecasts.md);
+- [create, inspect, and verify RFC 3161 timestamps](timestamp-forecasts.md);
 - [run layered evidence verification](verify-evidence.md);
 - [build and verify standalone publication packages](publish-evidence.md);
 - [run the root-confined MCP stdio server](run-mcp.md);
 - [build the project](../development/build.md); and
 - [create and verify a release](../development/releasing.md).
 
-OpenTimestamps is experimental even though its commands are connected. Check
-the [implementation baseline](../development/documentation-baseline.md) for
-current release and review status.
+RFC 3161 acquisition requires a public HTTPS timestamp authority and its CA
+bundle. Check the [implementation baseline](../development/documentation-baseline.md)
+for current release and review status.
 
 [Documentation index](../index.md)

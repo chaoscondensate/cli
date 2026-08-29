@@ -1,7 +1,7 @@
 # Build and verify an evidence package
 
 <!-- doc-metadata
-coverage: v0.3.1
+coverage: v0.4.0
 reviewed: 2026-08-29
 owner: security
 generated: false
@@ -17,38 +17,24 @@ repository, or a hosted publisher.
 forecast-ledger publish build --file ledger.yaml --output evidence-package
 ```
 
-The output must be a new path. Build validates the complete source ledger,
-rebuilds every referenced target, checks every retained OTS receipt binding and
-revealed forecast authentication, and copies only this allowlist:
+The destination must not exist. Build validates the ledger, rebuilds referenced
+targets, validates timestamp artifact structure, and copies only:
 
-- the exact complete ledger at `ledger/<original-name>`;
-- referenced `proofs/targets/...` files; and
-- referenced `proofs/receipts/...` OpenTimestamps files.
+- the ledger at `ledger/<original-name>`;
+- each referenced `forecast_target`;
+- each referenced `timestamp_request` (`.tsq`);
+- each referenced `timestamp_response` (`.tsr`); and
+- each referenced `timestamp_ca_bundle` (PEM).
 
-Keys, private input files, locks, journals, temporary files, neighboring files,
-and recursively discovered directories are not copied. Key hints must use the
-path-free `scheme:opaque` form. Repair an imported location-like hint with
-`forecast-ledger forecast key-hint update` before building.
+A shared CA path is copied once only when its bytes and role agree. Missing,
+escaping, symlinked, conflicting, or tampered artifacts fail the build. Secret
+keys, private input, locks, journals, temporary files, and unrelated neighbors
+are excluded.
 
-The ledger is the publication graph's source of truth. `target build` can create
-a useful standalone target beside a ledger without changing ledger integrity;
-that adjacent file is intentionally not discovered or copied unless a retained
-integrity record references it. This keeps package content explicit and
-reviewable without requiring Git-managed storage.
+The canonical `forecast-ledger-publication/v2` manifest pins schema v1.2.0 and
+records each allowlisted path, role, size, and SHA-256 digest.
 
-The canonical `manifest.json` is written last. Its closed
-`forecast-ledger-publication/v1` profile contains one exact ledger entry and
-only `forecast_target` or `opentimestamps_receipt` evidence entries, sorted by
-portable path with SHA-256 and size. `--dry-run` performs preflight without
-creating the package.
-
-An empty ledger produces a valid minimal package containing the copied ledger
-and `manifest.json`, with no evidence entries. Package verification reports the
-passing manifest and file checks, but its evidence aggregate is `no_evidence`
-with `incomplete`/exit 9. Structural integrity is not evidence that a forecast,
-target, timestamp, reveal, or outcome record exists.
-
-Verify the copy independently; package verification is offline by default:
+Verify on another machine with no network option:
 
 ```sh
 forecast-ledger publish verify \
@@ -56,17 +42,14 @@ forecast-ledger publish verify \
   --manifest evidence-package/manifest.json
 ```
 
-The verifier reads and validates the manifest first, confines every listed
-path, rejects missing, changed, extra, linked, or unsupported-role entries, and
-then runs document, content, reveal, outcome, and local timestamp checks.
+Verification first checks the manifest and every listed file, rejects extra
+files, then runs the same target, RFC 3161, reveal, chronology, and outcome
+metadata checks against packaged bytes. It does not contact a TSA, blockchain,
+Git host, system trust store, or outcome URL. Manifest observations remain
+available even when the evidence aggregate is pending, failed, or
+`no_evidence`.
 
-Add `--online` only when fresh Bitcoin timing checks are wanted. The same
-dual-source agreement and request budgets used by ordinary verification apply.
-Network source unavailability makes timing incomplete; it does not change the
-already established package byte-integrity verdict and is not reported as a
-Bitcoin-proof mismatch.
+The package is portable evidence, not proof of authorship, completeness, truth,
+TSA clock honesty, current revocation status, or long-term validation.
 
-The copied directory remains valid after the source ledger and source proof
-files are removed. It may be shared by any file transport.
-
-[Verify ledger evidence](verify-evidence.md) · [Publication manifest reference](../reference/generated/index.md)
+[Run the MCP server](run-mcp.md)

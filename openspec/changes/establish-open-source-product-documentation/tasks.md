@@ -66,13 +66,13 @@
 - [ ] 7.1 Implement deterministic command-reference generation from the candidate binary, including command hierarchy, required leaf-local `--file/-f`, selectors, flags, examples, side effects, and network behavior
 - [ ] 7.2 Generate and annotate the exit-code, stable error object, JSON output, environment, color/TTY, timeout, cancellation, and shell-completion references
 - [ ] 7.3 Generate the MCP tool/resource reference from the same declarations used by the server, including closed schemas, required `file`, grants, side effects, roots, and error mappings
-- [ ] 7.4 Write file and artifact reference for ledgers, targets, OTS receipts, key files, manifests, evidence packages, locks, journals, and safe path behavior without restating the embedded schema
+- [ ] 7.4 Write file and artifact reference for ledgers, targets, RFC 3161 `.tsq` requests, `.tsr` responses, retained PEM CA bundles, key files, manifests, evidence packages, locks, journals, and safe path behavior without restating the embedded schema
 - [ ] 7.5 Add schema and version provenance to every generated reference page, including binary version and pinned Forecast Ledger version, commit, and digest
 - [ ] 7.6 Add clean-tree generation checks that fail when committed reference differs from candidate CLI help, exit codes, output schemas, or MCP declarations
 
 ## 8. Explanations, Security, and Project Background
 
-- [ ] 8.1 Write explanations of the architecture, Forecast Ledger contract, format-preserving mutations, append-only history, sealing profile, OpenTimestamps model, and transport-neutral evidence packages
+- [ ] 8.1 Write explanations of the architecture, Forecast Ledger contract, format-preserving mutations, append-only history, sealing profile, RFC 3161 TSA/retained-trust model, and transport-neutral evidence packages
 - [ ] 8.2 Write the verification-claims explanation that separates every evidence layer and explicitly excludes unsupported authorship, completeness, truth, self-reported-time, and outcome-source claims
 - [ ] 8.3 Write the threat model, key-custody guide, timestamp/network trust-source guide, privacy/local-data statement, telemetry statement, and experimental/no-audit disclosures
 - [ ] 8.4 Write project background that links `https://chaoscondensate.com/`, distinguishes website context from normative repository contracts, and avoids claims about the separate site's commercial status

@@ -42,7 +42,7 @@ func (s *Server) resourceHandler(ctx context.Context, request *sdk.ReadResourceR
 	query := parsed.Query()
 	var data any
 	switch kind {
-	case "ledger", "question", "forecast", "target", "receipt", "report":
+	case "ledger", "question", "forecast", "target", "timestamp", "report":
 		file, resolveErr := s.roots.Resolve(service.RootLedger, rootName+":"+relative, true)
 		if resolveErr != nil {
 			return nil, resourceError(request.Params.URI, resolveErr)
@@ -84,7 +84,7 @@ func (s *Server) readLedgerResource(ctx context.Context, kind, file string, quer
 		return result, err
 	case "target":
 		return service.CheckTargets(ctx, file, false, questionID, forecastID)
-	case "receipt":
+	case "timestamp":
 		return service.TimestampStatusFor(ctx, file, questionID, forecastID)
 	case "report":
 		return service.VerifyLedgerEvidence(ctx, file, service.VerificationOptions{Offline: true, QuestionID: questionID, ForecastID: forecastID})

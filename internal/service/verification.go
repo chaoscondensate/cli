@@ -11,14 +11,12 @@ import (
 	"net/netip"
 	"net/url"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/chaoscondensate/cli/internal/app"
 	"github.com/chaoscondensate/cli/internal/forecastcrypto"
 	"github.com/chaoscondensate/cli/internal/ledger"
-	"github.com/chaoscondensate/cli/internal/timestamp/ots"
 )
 
 type LayerState string
@@ -56,20 +54,17 @@ const (
 )
 
 type VerificationReport struct {
-	LedgerID       ledger.Slug            `json:"ledger_id"`
-	Overall        VerificationOverall    `json:"overall"`
-	Document       VerificationLayer      `json:"document"`
-	Forecasts      []ForecastVerification `json:"forecasts"`
-	Limitations    []string               `json:"limitations"`
-	NetworkProfile NetworkProfile         `json:"network_profile"`
-	RequestSummary ots.RequestSummary     `json:"request_summary,omitempty"`
-	FailureCode    app.ErrorCode          `json:"-"`
+	LedgerID    ledger.Slug            `json:"ledger_id"`
+	Overall     VerificationOverall    `json:"overall"`
+	Document    VerificationLayer      `json:"document"`
+	Forecasts   []ForecastVerification `json:"forecasts"`
+	Limitations []string               `json:"limitations"`
+	FailureCode app.ErrorCode          `json:"-"`
 }
 
 type VerificationOptions struct {
 	Offline      bool
 	CheckSources bool
-	Observer     ots.BitcoinObserver
 	HTTPClient   *http.Client
 	QuestionID   ledger.Slug
 	ForecastID   ledger.Slug
@@ -79,11 +74,11 @@ var verificationLimitations = []string{
 	"Forecast Ledger v1 does not prove authorship.",
 	"It does not prove that the ledger or forecast set is complete.",
 	"It does not prove forecast truth or calibration.",
-	"Forecast and outcome times are self-reported except for the conservative existence bound supplied by verified OpenTimestamps evidence.",
+	"Forecast and outcome times are self-reported; verified RFC 3161 evidence supplies a signed generation time for the exact target.",
 	"Outcome-source checks do not establish authority or substantive truth.",
 	"Filesystem, archive, hosting, source-control, and external-anchor times are not cryptographic existence evidence.",
-	"Calendar services learn request timing and blinded commitments.",
-	"Public Bitcoin services learn requested block heights and approximate timestamp periods.",
+	"A valid timestamp signature and certificate chain do not prove that the timestamp authority clock was honest.",
+	"The retained CA bundle does not establish current revocation status or long-term legal validity.",
 }
 
 func VerifyLedgerEvidence(ctx context.Context, path string, options VerificationOptions) (VerificationReport, error) {
@@ -97,11 +92,6 @@ func VerifyLedgerEvidence(ctx context.Context, path string, options Verification
 		Forecasts:   []ForecastVerification{},
 		Limitations: append([]string(nil), verificationLimitations...),
 	}
-	observer := options.Observer
-	if observer == nil && !options.Offline {
-		observer = ots.NewPublicBitcoinObserver(nil)
-	}
-	report.NetworkProfile = networkProfileForObserver(observer, options.Offline)
 	selectedQuestions, err := selectVerificationQuestions(loaded.Model, options.QuestionID, options.ForecastID)
 	if err != nil {
 		return report, err
@@ -114,7 +104,7 @@ func VerifyLedgerEvidence(ctx context.Context, path string, options Verification
 			item := ForecastVerification{QuestionID: question.ID, ForecastID: forecast.ID}
 			content := verifyContentLayer(ctx, loaded, question, forecast)
 			item.Layers = append(item.Layers, content)
-			item.Layers = append(item.Layers, verifyTimingLayer(ctx, loaded, question, forecast, content, options.Offline, observer))
+			item.Layers = append(item.Layers, verifyTimingLayer(ctx, loaded, question, forecast, content))
 			item.Layers = append(item.Layers, verifyRevealLayer(question, forecast, content))
 			item.Layers = append(item.Layers, verifyOutcomeLayer(ctx, question, options))
 			report.Forecasts = append(report.Forecasts, item)
@@ -122,9 +112,6 @@ func VerifyLedgerEvidence(ctx context.Context, path string, options Verification
 	}
 	if ctx != nil && ctx.Err() != nil {
 		return report, app.NewError(app.CodeInterrupted, "verification was interrupted", ctx.Err())
-	}
-	if observer != nil {
-		report.RequestSummary = observer.Summary()
 	}
 	report.Overall, report.FailureCode = aggregateVerification(report)
 	return report, nil
@@ -177,8 +164,8 @@ func verifyContentLayer(ctx context.Context, loaded *LoadedLedger, question ledg
 	return layer
 }
 
-func verifyTimingLayer(ctx context.Context, loaded *LoadedLedger, question ledger.Question, forecast ledger.Forecast, content VerificationLayer, offline bool, observer ots.BitcoinObserver) VerificationLayer {
-	layer := VerificationLayer{Name: "existence_timing", Limitations: []string{"Bitcoin evidence establishes a conservative existence bound, not authorship or exact creation time."}}
+func verifyTimingLayer(ctx context.Context, loaded *LoadedLedger, question ledger.Question, forecast ledger.Forecast, content VerificationLayer) VerificationLayer {
+	layer := VerificationLayer{Name: "existence_timing", Limitations: timestampLimitations()}
 	if forecast.Integrity.Unanchored != nil {
 		layer.State, layer.ReasonCodes = LayerNotApplicable, []string{"timing.unanchored"}
 		return layer
@@ -190,122 +177,38 @@ func verifyTimingLayer(ctx context.Context, loaded *LoadedLedger, question ledge
 		layer.State, layer.ReasonCodes = LayerNotChecked, []string{"timing.blocked_by_content"}
 		return layer
 	}
-	receiptPath := filepath.Join(filepath.Dir(loaded.Path), filepath.FromSlash(string(ReceiptRelativePath(forecast.ID))))
-	safeReceiptPath := ReceiptRelativePath(forecast.ID)
-	data, err := readBoundedFile(receiptPath, maxReceiptBytes)
-	if err != nil {
-		return failedLayer(layer.Name, "timing.receipt_missing", err)
-	}
-	receipt, err := ots.ParseReceipt(data)
-	if err != nil {
-		return failedLayer(layer.Name, "timing.receipt_invalid", err)
-	}
 	artifact, _ := BuildForecastTarget(loaded.Model, question.ID, forecast.ID)
-	if err := receipt.VerifyBinding(artifact.Bytes); err != nil {
-		return failedLayer(layer.Name, "timing.receipt_binding_mismatch", err)
+	entries := integrityTimestamps(forecast.Integrity)
+	results := inspectTimestampEntries(ctx, filepath.Dir(loaded.Path), artifact.Bytes, entries)
+	hasPending, hasLate := false, false
+	evidence := map[string]any{"target_path": artifact.RelativePath, "target_binding": "pass", "timestamps": results}
+	if forecast.Integrity.Verified != nil {
+		evidence["verified_at"] = forecast.Integrity.Verified.VerifiedAt
 	}
-	evaluated, err := receipt.Evaluate()
-	if err != nil {
-		return failedLayer(layer.Name, "timing.proof_invalid", err)
-	}
-	bitcoin := make([]ots.EvaluatedAttestation, 0)
-	for _, item := range evaluated {
-		if item.Attestation.Kind == ots.AttestationBitcoin {
-			bitcoin = append(bitcoin, item)
-		}
-	}
-	if err := verifiedTimestampMatchesReceipt(forecast, evaluated); err != nil {
-		return failedLayer(layer.Name, "timing.stored_metadata_mismatch", err)
-	}
-	if len(bitcoin) == 0 {
-		layer.State, layer.ReasonCodes = LayerPending, []string{"timing.calendar_pending"}
-		return layer
-	}
-	if offline {
-		if forecast.Integrity.Verified != nil {
-			layer.Evidence = storedTimingEvidence(forecast, safeReceiptPath, artifact.RelativePath)
-			if question.Resolution != nil && question.Resolution.Resolved != nil {
-				known, _ := ParseTimestamp(question.Resolution.Resolved.OutcomeKnownAt, "outcome_known_at")
-				for _, timestamp := range forecast.Integrity.Verified.Timestamps {
-					if timestamp.Type != "opentimestamps" || timestamp.State != ledger.OTSConfirmed || timestamp.AnchoredBefore == nil {
-						continue
-					}
-					bound, parseErr := ParseTimestamp(*timestamp.AnchoredBefore, "anchored_before")
-					if parseErr != nil || !bound.Before(known) {
-						evidence := storedTimingEvidence(forecast, safeReceiptPath, artifact.RelativePath)
-						return failedLayerWithEvidence(layer.Name, "timing.not_before_outcome", evidence)
-					}
-				}
-			}
-			layer.State, layer.ReasonCodes = LayerPass, []string{"timing.stored_verification_consistent"}
-			layer.Limitations = append(layer.Limitations, "The v1 ledger does not retain the prior Bitcoin source identity; block evidence was not rechecked offline.")
-			return layer
-		}
-		layer.State, layer.ReasonCodes = LayerNotChecked, []string{"timing.offline"}
-		return layer
-	}
-	sort.Slice(bitcoin, func(i, j int) bool { return bitcoin[i].Attestation.Height < bitcoin[j].Attestation.Height })
-	for _, item := range bitcoin {
-		observation, observeErr := observer.Observe(ctx, item.Attestation.Height)
-		if observeErr != nil {
-			layer.State, layer.ReasonCodes = LayerNotChecked, []string{"timing.source_unavailable"}
-			layer.Evidence = map[string]any{"height": item.Attestation.Height}
-			return layer
-		}
-		if err := ots.VerifyBitcoinAttestation(item, observation); err != nil {
-			return failedLayer(layer.Name, "timing.bitcoin_mismatch", err)
-		}
-		bound := ledger.Timestamp(observation.BlockTime.Format(time.RFC3339))
-		layer.State, layer.ReasonCodes = LayerPass, []string{"timing.bitcoin_verified"}
-		layer.Evidence = map[string]any{"receipt_path": safeReceiptPath, "target_path": artifact.RelativePath, "target_binding": "pass", "proof_valid": true, "bitcoin_block_height": item.Attestation.Height, "block_hash": observation.Hash, "anchored_before": bound, "source_ids": observation.SourceIDs, "evidence_source": "fresh_observation", "freshly_checked": true}
-		if forecast.Integrity.Verified != nil {
-			layer.Evidence["verified_at"] = forecast.Integrity.Verified.VerifiedAt
-		}
-		if question.Resolution != nil && question.Resolution.Resolved != nil {
-			known, _ := ParseTimestamp(question.Resolution.Resolved.OutcomeKnownAt, "outcome_known_at")
-			if !observation.BlockTime.Before(known) {
-				return failedLayerWithEvidence(layer.Name, "timing.not_before_outcome", layer.Evidence)
-			}
-		}
-		return layer
-	}
-	layer.State, layer.ReasonCodes = LayerNotChecked, []string{"timing.no_supported_attestation"}
-	return layer
-}
-
-func storedTimingEvidence(forecast ledger.Forecast, receiptPath, targetPath ledger.RelativePath) map[string]any {
-	evidence := map[string]any{
-		"receipt_path": receiptPath, "target_path": targetPath, "target_binding": "pass", "proof_valid": true,
-		"evidence_source": "stored_verification", "freshly_checked": false, "prior_source_retained": false,
-	}
-	if forecast.Integrity.Verified == nil {
-		return evidence
-	}
-	evidence["verified_at"] = forecast.Integrity.Verified.VerifiedAt
-	confirmed := make([]map[string]any, 0)
-	for _, timestamp := range forecast.Integrity.Verified.Timestamps {
-		if timestamp.Type != "opentimestamps" || timestamp.State != ledger.OTSConfirmed {
+	for _, item := range results {
+		if item.CheckState != LayerPass {
+			hasPending = hasPending || item.CheckState == LayerPending || item.CheckState == LayerNotChecked
 			continue
 		}
-		item := map[string]any{"proof_path": timestamp.ProofPath, "state": timestamp.State}
-		if timestamp.BitcoinBlockHeight != nil {
-			item["bitcoin_block_height"] = *timestamp.BitcoinBlockHeight
-		}
-		if timestamp.AnchoredBefore != nil {
-			item["anchored_before"] = *timestamp.AnchoredBefore
-		}
-		confirmed = append(confirmed, item)
-	}
-	evidence["timestamps"] = confirmed
-	if len(confirmed) == 1 {
-		for key, value := range confirmed[0] {
-			if key == "proof_path" || key == "state" {
+		if question.Resolution != nil && question.Resolution.Resolved != nil && item.GenTime != nil {
+			known, _ := ParseTimestamp(question.Resolution.Resolved.OutcomeKnownAt, "outcome_known_at")
+			generated, parseErr := ParseTimestamp(*item.GenTime, "gen_time")
+			if parseErr != nil || !generated.Before(known) {
+				hasLate = true
 				continue
 			}
-			evidence[key] = value
 		}
+		layer.State, layer.ReasonCodes, layer.Evidence = LayerPass, []string{"timing.rfc3161_verified"}, evidence
+		return layer
 	}
-	return evidence
+	if hasPending {
+		layer.State, layer.ReasonCodes, layer.Evidence = LayerPending, []string{"timing.local_evidence_incomplete"}, map[string]any{"timestamps": results}
+		return layer
+	}
+	if hasLate {
+		return failedLayerWithEvidence(layer.Name, "timing.not_before_outcome", evidence)
+	}
+	return VerificationLayer{Name: layer.Name, State: LayerFail, ReasonCodes: []string{"timing.all_responses_failed"}, Evidence: map[string]any{"timestamps": results}, Limitations: layer.Limitations}
 }
 
 func verifyRevealLayer(question ledger.Question, forecast ledger.Forecast, content VerificationLayer) VerificationLayer {

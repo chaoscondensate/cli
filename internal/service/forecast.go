@@ -46,14 +46,12 @@ type ForecastView struct {
 }
 
 type ForecastIntegrityView struct {
-	Status              ledger.IntegrityStatus `json:"status"`
-	Target              *ledger.ForecastTarget `json:"target,omitempty"`
-	Timestamps          []ledger.OTSTimestamp  `json:"timestamps,omitempty"`
-	VerifiedAt          *ledger.Timestamp      `json:"verified_at,omitempty"`
-	FailureReason       string                 `json:"failure_reason,omitempty"`
-	EvidenceSource      string                 `json:"evidence_source,omitempty"`
-	FreshlyChecked      *bool                  `json:"freshly_checked,omitempty"`
-	PriorSourceRetained *bool                  `json:"prior_source_retained,omitempty"`
+	Status        ledger.IntegrityStatus    `json:"status"`
+	Target        *ledger.ForecastTarget    `json:"target,omitempty"`
+	Timestamps    []ledger.RFC3161Timestamp `json:"timestamps,omitempty"`
+	VerifiedAt    *ledger.Timestamp         `json:"verified_at,omitempty"`
+	FailureReason string                    `json:"failure_reason,omitempty"`
+	StoredOnly    bool                      `json:"stored_only,omitempty"`
 }
 
 func BuildPublicForecastAppend(model *ledger.Ledger, questionID, forecastID ledger.Slug, input ForecastCreateInput, observedAt ledger.Timestamp) (ForecastMutation, error) {
@@ -195,16 +193,13 @@ func forecastIntegrityView(value ledger.Integrity) ForecastIntegrityView {
 	case value.Pending != nil:
 		target := value.Pending.Target
 		view.Target = &target
-		view.Timestamps = append([]ledger.OTSTimestamp(nil), value.Pending.Timestamps...)
+		view.Timestamps = append([]ledger.RFC3161Timestamp(nil), value.Pending.Timestamps...)
 	case value.Verified != nil:
 		target, verifiedAt := value.Verified.Target, value.Verified.VerifiedAt
-		fresh, retained := false, false
 		view.Target = &target
-		view.Timestamps = append([]ledger.OTSTimestamp(nil), value.Verified.Timestamps...)
+		view.Timestamps = append([]ledger.RFC3161Timestamp(nil), value.Verified.Timestamps...)
 		view.VerifiedAt = &verifiedAt
-		view.EvidenceSource = "stored_verification"
-		view.FreshlyChecked = &fresh
-		view.PriorSourceRetained = &retained
+		view.StoredOnly = true
 	case value.Failed != nil:
 		view.FailureReason = value.Failed.FailureReason
 		if value.Failed.Target != nil {
@@ -212,7 +207,7 @@ func forecastIntegrityView(value ledger.Integrity) ForecastIntegrityView {
 			view.Target = &target
 		}
 		if value.Failed.Timestamps != nil {
-			view.Timestamps = append([]ledger.OTSTimestamp(nil), (*value.Failed.Timestamps)...)
+			view.Timestamps = append([]ledger.RFC3161Timestamp(nil), (*value.Failed.Timestamps)...)
 		}
 	}
 	return view

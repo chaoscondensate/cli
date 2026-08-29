@@ -173,6 +173,31 @@ func (r *PathResolver) Resolve(relative string, mustExist bool) (string, error) 
 	return candidate, nil
 }
 
+// ResolveForCreate confines a future file while allowing any missing suffix of
+// parent directories. Existing path components still receive the same
+// identity, link, reparse-point, and portable-collision checks as Resolve.
+func (r *PathResolver) ResolveForCreate(relative string) (string, error) {
+	if r == nil || r.root == "" || r.rootInfo == nil {
+		return "", app.NewError(app.CodeInternal, "path resolver is not initialized", nil)
+	}
+	current, err := statPathIdentity(r.root)
+	if err != nil || !current.IsDir() || !os.SameFile(r.rootInfo, current) {
+		return "", app.NewError(app.CodeConflict, "configured root changed after startup", err)
+	}
+	if err := ValidateRelativePath(relative); err != nil {
+		return "", err
+	}
+	candidate := filepath.Join(r.root, filepath.FromSlash(relative))
+	contained, err := pathContained(r.root, candidate)
+	if err != nil || !contained {
+		return "", unsafePathError("path escapes the allowed root")
+	}
+	if err := rejectDescendantLinksForCreate(r.root, candidate); err != nil {
+		return "", err
+	}
+	return candidate, nil
+}
+
 // statPathIdentity derives FileInfo from an open handle instead of a pathname.
 // On Windows, os.Stat may defer loading the file ID until os.SameFile runs; if
 // the path was replaced in between, both FileInfo values can then describe the
@@ -267,6 +292,39 @@ func rejectDescendantLinks(root, candidate string, mustExist bool) error {
 		}
 		if info.Name() != part && strings.EqualFold(norm.NFC.String(info.Name()), norm.NFC.String(part)) {
 			return app.WithDetails(app.NewError(app.CodeConflict, "path collides with an existing entry after case folding", nil), map[string]any{"existing_name": info.Name()})
+		}
+		if index < len(parts)-1 && !info.IsDir() {
+			return unsafePathError("intermediate path component is not a directory")
+		}
+	}
+	return nil
+}
+
+func rejectDescendantLinksForCreate(root, candidate string) error {
+	relative, err := filepath.Rel(root, candidate)
+	if err != nil {
+		return unsafePathError("path cannot be made relative to its root")
+	}
+	current := root
+	parts := strings.Split(relative, string(filepath.Separator))
+	for index, part := range parts {
+		current = filepath.Join(current, part)
+		collision, collisionErr := caseFoldSibling(filepath.Dir(current), part)
+		if collisionErr != nil {
+			return collisionErr
+		}
+		if collision != "" {
+			return app.WithDetails(app.NewError(app.CodeConflict, "path collides with an existing entry after case folding", nil), map[string]any{"existing_name": collision})
+		}
+		info, statErr := os.Lstat(current)
+		if errors.Is(statErr, fs.ErrNotExist) {
+			return nil
+		}
+		if statErr != nil {
+			return app.NewError(app.CodeIO, "path component cannot be inspected", statErr)
+		}
+		if isLinkOrReparse(info) {
+			return unsafePathError("symlinks, junctions, and reparse points are not allowed inside the artifact root")
 		}
 		if index < len(parts)-1 && !info.IsDir() {
 			return unsafePathError("intermediate path component is not a directory")

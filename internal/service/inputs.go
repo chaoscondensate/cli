@@ -292,10 +292,6 @@ type PublicationBuildInput struct {
 }
 
 type PublicationVerifyInput struct {
-	File            string  `json:"file"`
-	Manifest        string  `json:"manifest"`
-	Online          bool    `json:"online,omitempty"`
-	Offline         bool    `json:"offline,omitempty"`
-	BitcoinCore     *string `json:"bitcoin_core,omitempty"`
-	BitcoinAuthFile *string `json:"bitcoin_auth_file,omitempty"`
+	File     string `json:"file"`
+	Manifest string `json:"manifest"`
 }

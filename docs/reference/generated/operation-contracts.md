@@ -33,7 +33,7 @@ These declarations are shared inputs for CLI reference and MCP discovery. A decl
 | `platform.show` | `forecast-ledger platform show` | `platform_show` | `platform` | — | false | false | `none` |  |
 | `platform.update` | `forecast-ledger platform update` | `platform_update` | `platform` | [platform-patch](input-schemas/platform-patch.schema.json) (inline) | true | false | `none` |  |
 | `publication.build` | `forecast-ledger publish build` | `publication_build` | `ledger` | — | true | false | `none` |  |
-| `publication.verify` | `forecast-ledger publish verify` | `publication_verify` | `ledger` | — | false | false | `optional` | Pass requires at least one applicable forecast-evidence layer; an empty or all-not-applicable selection returns no_evidence. |
+| `publication.verify` | `forecast-ledger publish verify` | `publication_verify` | `ledger` | — | false | false | `none` | Pass requires at least one applicable forecast-evidence layer; an empty or all-not-applicable selection returns no_evidence. |
 | `question.add` | `forecast-ledger question add` | `question_add` | `question` | [question-add](input-schemas/question-add.schema.json) (inline_or_protected_file) | true | false | `none` |  |
 | `question.annul` | `forecast-ledger question annul` | `question_annul` | `question` | [annul](input-schemas/annul.schema.json) (inline) | true | true | `none` |  |
 | `question.dispute` | `forecast-ledger question dispute` | `question_dispute` | `question` | [dispute](input-schemas/dispute.schema.json) (inline) | true | true | `none` |  |
@@ -45,8 +45,7 @@ These declarations are shared inputs for CLI reference and MCP discovery. A decl
 | `target.check` | `forecast-ledger target check` | `target_check` | `target` | — | false | false | `none` |  |
 | `timestamp.stamp` | `forecast-ledger timestamp stamp` | `timestamp_stamp` | `forecast` | — | true | false | `required` |  |
 | `timestamp.status` | `forecast-ledger timestamp status` | `timestamp_status` | `forecast` | — | false | false | `none` |  |
-| `timestamp.upgrade` | `forecast-ledger timestamp upgrade` | `timestamp_upgrade` | `forecast` | — | true | false | `required` |  |
-| `timestamp.verify` | `forecast-ledger timestamp verify` | `timestamp_verify` | `forecast` | — | true | false | `optional` | Returns a structured timing report for pending, not-checked, mismatch, and verified outcomes; source unavailability is not proof failure. |
+| `timestamp.verify` | `forecast-ledger timestamp verify` | `timestamp_verify` | `forecast` | — | true | false | `none` | Returns a structured timing report for pending, not-checked, mismatch, and verified outcomes; source unavailability is not proof failure. |
 | `verification.run` | `forecast-ledger verify` | `verification_run` | `ledger` | — | false | false | `optional` | Pass requires at least one applicable forecast-evidence layer; an empty or all-not-applicable selection returns no_evidence. |
 
 The common [operation result schema](result.schema.json) defines warning, side-effect, and recovery fields. The [MCP tool catalog](mcp-tool-schemas.json) contains closed request schemas.

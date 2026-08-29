@@ -1,7 +1,7 @@
 # Run the MCP server
 
 <!-- doc-metadata
-coverage: v0.3.1
+coverage: v0.4.0
 reviewed: 2026-08-29
 owner: interface
 generated: false
@@ -39,8 +39,8 @@ forecast-ledger mcp serve --ledger-root main=/data/ledgers --offline
 
 Read-only omits every mutating tool from `tools/list`; a direct call to an
 omitted name receives the protocol's unknown-tool response before secret, lock,
-file, or network effects. Offline opens no network socket; stamp and upgrade are
-disabled, while verification returns explicit local-only layers.
+file, or network effects. Offline opens no network socket; timestamp stamp is
+disabled, while status and verification remain local.
 
 The server accepts at most 16 concurrent tool calls and 8 MiB of decoded
 arguments per call by default. Set smaller or larger bounded values at startup
@@ -66,22 +66,25 @@ from discovery unless all three conditions hold: a secret root exists, the
 server is not read-only, and startup includes `--allow-reveal`. A reveal call
 still needs a protected key reference and `confirm: true`.
 
-MCP never accepts custom calendar, explorer, proxy, or Bitcoin endpoint URLs.
-It uses only the embedded `opentimestamps-public-v1` profile or offline mode.
+`timestamp_stamp` requires an explicit public HTTPS `tsa_url` and a retained
+ledger-relative `ca_bundle`. Redirects may not change origin. The server does
+not accept a proxy or a private, loopback, link-local, or otherwise non-public
+timestamp endpoint.
 Private seal input and keys are protected-file references under a secret root;
 they are never raw tool arguments or resource content.
 
 Expected verification outcomes remain structured results even when their
 stable application code makes the tool response recoverable `isError: true`.
-For example, `timestamp_verify` returns a `not_checked` timing layer and safe
-observer issue when Bitcoin acquisition is unavailable; the MCP session stays
-alive. `verification_run` and `publication_verify` return `no_evidence` with
+For example, `timestamp_stamp` returns a safe authority issue when acquisition
+is unavailable; the MCP session stays alive. `timestamp_verify` verifies the
+retained request, response, target, and CA bundle without a network call.
+`verification_run` and `publication_verify` return `no_evidence` with
 `incomplete` when no applicable forecast-evidence layer exists. Neither outcome
 is relabeled as a successful proof.
 
 Addressed redacted resources use the versioned form
 `forecast-ledger://v1/<kind>/<root>/<path>`, with optional question and forecast
 query fields. Resource reads are local and non-mutating. Supported kinds are
-`ledger`, `question`, `forecast`, `target`, `receipt`, `report`, and `manifest`.
+`ledger`, `question`, `forecast`, `target`, `timestamp`, `report`, and `manifest`.
 
 [MCP reference](../reference/mcp.md) · [Security](../security/index.md)

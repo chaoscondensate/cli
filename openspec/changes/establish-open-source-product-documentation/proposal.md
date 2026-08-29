@@ -5,7 +5,7 @@ The CLI handles cryptographic evidence and forecasting records, so documentation
 ## What Changes
 
 - Create an English, product-quality `README.md` that explains the problem, audience, maturity, trust model, supported platforms, installation, a short verified quick start, core CLI and MCP workflows, security warnings, and clear next links without duplicating the full manual.
-- Organize maintained documentation using the Diátaxis model: tutorials for learning, task-focused how-to guides, generated or checked reference material, and explanations of the ledger, cryptography, OpenTimestamps, evidence claims, and architectural choices.
+- Organize maintained documentation using the Diátaxis model: tutorials for learning, task-focused how-to guides, generated or checked reference material, and explanations of the ledger, cryptography, RFC 3161, evidence claims, and architectural choices.
 - Treat documentation examples as testable product interfaces: pin expected output where useful, execute safe command snippets in CI, check internal/external links, and fail when command help or documented schemas drift.
 - Add complete open-source community health and trust material: license and copyright policy, contribution guide, code of conduct, support policy, security policy with private reporting, governance and maintainer expectations, changelog/release-note policy, citation metadata, issue forms, and pull-request guidance.
 - Establish a restrained and accessible presentation system for repository documentation: consistent voice, navigation, status labels, diagrams, terminal captures, alt text, and a small set of evidence-backed badges rather than decorative badge walls or unverifiable claims.

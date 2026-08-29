@@ -11,33 +11,30 @@ import (
 	"github.com/chaoscondensate/cli/internal/app"
 	"github.com/chaoscondensate/cli/internal/buildinfo"
 	"github.com/chaoscondensate/cli/internal/service"
-	"github.com/chaoscondensate/cli/internal/timestamp/ots"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const ProtocolRevision = buildinfo.MCPProtocolVersion
 
 type Config struct {
-	LedgerRoots     []string
-	OutputRoots     []string
-	SecretRoots     []string
-	Mode            service.AccessMode
-	Timeout         time.Duration
-	MaxConcurrent   int
-	MaxToolBytes    int
-	Stderr          io.Writer
-	Effects         service.Effects
-	BitcoinObserver ots.BitcoinObserver
+	LedgerRoots   []string
+	OutputRoots   []string
+	SecretRoots   []string
+	Mode          service.AccessMode
+	Timeout       time.Duration
+	MaxConcurrent int
+	MaxToolBytes  int
+	Stderr        io.Writer
+	Effects       service.Effects
 }
 
 type Server struct {
-	config          Config
-	roots           *RootSet
-	effects         service.Effects
-	bitcoinObserver ots.BitcoinObserver
-	sdk             *sdk.Server
-	sem             chan struct{}
-	maxToolBytes    int
+	config       Config
+	roots        *RootSet
+	effects      service.Effects
+	sdk          *sdk.Server
+	sem          chan struct{}
+	maxToolBytes int
 }
 
 func New(config Config) (*Server, error) {
@@ -71,7 +68,6 @@ func New(config Config) (*Server, error) {
 		effects = service.ProductionEffects()
 	}
 	info := buildinfo.Current()
-	profile := ots.Profile()
 	mode := "online"
 	if config.Mode.Offline {
 		mode = "offline"
@@ -80,10 +76,10 @@ func New(config Config) (*Server, error) {
 	if config.Mode.ReadOnly {
 		access = "read-only"
 	}
-	instructions := fmt.Sprintf("Forecast Ledger MCP. schema=%s schema_commit=%s schema_sha256=%s network_profile=%s mode=%s access=%s timestamps=experimental protocol=%s", info.Schema.Version, info.Schema.Commit, info.Schema.SHA256, profile.ID, mode, access, info.MCPProtocol)
+	instructions := fmt.Sprintf("Forecast Ledger MCP. schema=%s schema_commit=%s schema_sha256=%s mode=%s access=%s timestamps=experimental timestamp_protocol=%s timestamp_hash=%s mcp_protocol=%s", info.Schema.Version, info.Schema.Commit, info.Schema.SHA256, mode, access, info.Timestamp.Protocol, info.Timestamp.HashAlgorithm, info.MCPProtocol)
 	logger := slog.New(slog.NewTextHandler(config.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	server := sdk.NewServer(&sdk.Implementation{Name: info.Binary, Version: info.Version}, &sdk.ServerOptions{Instructions: instructions, Logger: logger, PageSize: 100})
-	result := &Server{config: config, roots: roots, effects: effects, bitcoinObserver: config.BitcoinObserver, sdk: server, sem: make(chan struct{}, config.MaxConcurrent), maxToolBytes: config.MaxToolBytes}
+	result := &Server{config: config, roots: roots, effects: effects, sdk: server, sem: make(chan struct{}, config.MaxConcurrent), maxToolBytes: config.MaxToolBytes}
 	if err := result.registerTools(); err != nil {
 		return nil, err
 	}
@@ -136,13 +132,12 @@ func contracts() map[service.OperationName]toolContract {
 		service.OperationForecastKeyHintUpdate: {Allowed: append(file, "question", "forecast", "key_hint", "dry_run"), Required: []string{"file", "question", "forecast", "key_hint"}},
 		service.OperationTargetBuild:           {Allowed: append(file, "question", "forecast", "all", "dry_run"), Required: file},
 		service.OperationTargetCheck:           {Allowed: append(file, "question", "forecast", "all"), Required: file},
-		service.OperationTimestampStamp:        {Allowed: append(file, "question", "forecast", "dry_run"), Required: []string{"file", "question", "forecast"}},
-		service.OperationTimestampUpgrade:      {Allowed: append(file, "question", "forecast", "dry_run"), Required: []string{"file", "question", "forecast"}},
+		service.OperationTimestampStamp:        {Allowed: append(file, "question", "forecast", "tsa_url", "ca_bundle", "dry_run"), Required: []string{"file", "question", "forecast", "tsa_url", "ca_bundle"}},
 		service.OperationTimestampStatus:       {Allowed: append(file, "question", "forecast"), Required: []string{"file", "question", "forecast"}},
-		service.OperationTimestampVerify:       {Allowed: append(file, "question", "forecast", "verified_at", "dry_run"), Required: []string{"file", "question", "forecast"}},
+		service.OperationTimestampVerify:       {Allowed: append(file, "question", "forecast", "dry_run"), Required: []string{"file", "question", "forecast"}},
 		service.OperationVerificationRun:       {Allowed: append(file, "question", "forecast", "check_sources"), Required: file},
 		service.OperationPublicationBuild:      {Allowed: append(file, "output", "dry_run"), Required: []string{"file", "output"}},
-		service.OperationPublicationVerify:     {Allowed: append(file, "manifest", "online"), Required: []string{"file", "manifest"}},
+		service.OperationPublicationVerify:     {Allowed: append(file, "manifest"), Required: []string{"file", "manifest"}},
 	}
 }
 
@@ -221,7 +216,7 @@ func publicInlineSchema(operation service.OperationName, schema map[string]any) 
 
 func scalarProperty(name string) map[string]any {
 	switch name {
-	case "dry_run", "confirm", "all", "online", "check_sources":
+	case "dry_run", "confirm", "all", "check_sources":
 		return map[string]any{"type": "boolean"}
 	case "type":
 		return map[string]any{"type": "string", "enum": []string{"binary", "multiple_choice", "numeric", "date"}}

@@ -18,12 +18,11 @@ The interoperable data contract is maintained in the
 User-visible changes are tracked in the [changelog](CHANGELOG.md).
 
 > [!IMPORTANT]
-> **Status: Preview and unaudited.** Release `v0.3.1` implements the complete
+> **Status: Preview and unaudited.** Release `v0.4.0` implements the complete
 > CLI and MCP command surface: authoring, sealed forecasts, canonical
-> targets, experimental OpenTimestamps receipts, layered verification, and
-> portable publication packages. OpenTimestamps support remains experimental
-> until the tracked differential, liveness, native-platform, and independent
-> review gates are complete. The project has no recorded independent
+> targets, experimental RFC 3161 timestamp evidence, layered verification, and
+> portable publication packages. RFC 3161 support remains experimental until
+> the tracked native-platform and independent-review gates are complete. The project has no recorded independent
 > security or cryptographic audit. Do not treat the current build as a finished
 > evidence system.
 
@@ -54,7 +53,7 @@ The CLI is designed around a few strict rules:
 See the [complete installation guide](docs/getting-started/install.md) for
 checksum verification, upgrades, removal, and archive fallback instructions.
 
-Release `v0.3.1` provides Homebrew, platform archives, native Linux packages,
+Published releases provide Homebrew, platform archives, native Linux packages,
 and a Windows Chocolatey package. Check the selected release's asset list before
 using a package command.
 
@@ -119,7 +118,7 @@ forecast-ledger init \
   --forecaster-name "My Name"
 ```
 
-The embedded Forecast Ledger v1.1 contract permits zero questions and questions
+The embedded Forecast Ledger v1.2.0 contract permits zero questions and questions
 with zero forecasts. Add them when they are ready; `--input` is optional on
 `init`, and `initial_forecast` is optional in question input. See [Create a
 ledger](docs/getting-started/create-ledger.md) for the empty-first, combined,
@@ -192,26 +191,29 @@ limits. Checking a forecast whose target was never retained succeeds with
 `not_applicable` and guidance to run `target build`; it does not pretend that
 missing bytes passed verification.
 
-Create an experimental OpenTimestamps receipt and later verify its Bitcoin
-evidence:
+Create experimental RFC 3161 evidence with an explicit timestamp authority and
+a retained PEM trust bundle, then inspect or verify it locally:
 
 ```sh
-forecast-ledger timestamp stamp --file ledger.yaml --question q-launch --forecast f-launch-002
+forecast-ledger timestamp stamp \
+  --file ledger.yaml \
+  --question q-launch \
+  --forecast f-launch-002 \
+  --tsa-url https://tsa.example.com/ \
+  --ca-bundle trust/tsa-ca.pem
 forecast-ledger timestamp status --file ledger.yaml --question q-launch --forecast f-launch-002
-forecast-ledger timestamp upgrade --file ledger.yaml --question q-launch --forecast f-launch-002
 forecast-ledger timestamp verify --file ledger.yaml --question q-launch --forecast f-launch-002
 ```
 
-The default `opentimestamps-public-v1` profile submits a nonce-blinded
-commitment to four fixed calendars and needs two valid responses. Public Bitcoin
-verification requires both fixed observers to agree. These calls disclose
-request timing and, during verification, the block heights of interest. Read
-[Timestamp forecasts](docs/how-to/timestamp-forecasts.md) before using them.
-An unavailable observer produces a structured `not_checked` report and network
-exit 8; it is not reported as a failed proof. A proof mismatch is reported only
-after the required Bitcoin observation completed.
+There is no built-in TSA list and no system-root fallback. Stamp sends one
+SHA-256 RFC 3161 request to the named public HTTPS endpoint and retains the
+request (`.tsq`), response (`.tsr`), exact target, and ledger-relative CA
+bundle. Status and verify make no timestamp-service network request. Repeat
+stamp with another TSA URL to retain independent entries. Read [Timestamp
+forecasts](docs/how-to/timestamp-forecasts.md) before choosing and retaining
+trust material.
 
-Run all evidence layers locally, or opt into network checks:
+Run all evidence layers locally, or opt into outcome-source reachability checks:
 
 ```sh
 forecast-ledger verify --file ledger.yaml --offline
@@ -235,8 +237,9 @@ forecast-ledger publish verify \
   --manifest evidence-package/manifest.json
 ```
 
-Use `--online` on `publish verify` only when you want fresh Bitcoin-source
-checks. Publication follows evidence paths recorded in the selected ledger. A
+Publication verification has no network option. It verifies the packaged
+request, response, target, and CA bytes locally. Publication follows evidence
+paths recorded in the selected ledger. A
 standalone target merely sitting beside the ledger is not packaged until the
 ledger references it. Manifest and file integrity remain visible even when the
 evidence aggregate is `no_evidence` or incomplete. See
@@ -276,7 +279,7 @@ forecast-ledger validate --file - < ledger.json
 ```
 
 Stdin contains only ledger bytes, so it cannot resolve sibling targets or
-receipts. Commands that inspect or mutate evidence therefore require a real
+timestamp artifacts. Commands that inspect or mutate evidence therefore require a real
 `--file` path. In YAML input, quote RFC 3339 timestamps, for example
 `forecasted_at: "2026-09-01T09:00:00Z"`; this keeps examples portable across
 YAML parsers even though the CLI safely normalizes timestamp-tagged scalars in
@@ -308,7 +311,7 @@ The current source supports:
 - binary, multiple-choice, numeric, and date forecast values;
 - sealed forecasts using the published `forecast-seal/v1` profile;
 - reveal verification without discarding the original commitment evidence;
-- canonical target generation and OpenTimestamps receipts;
+- canonical target generation and RFC 3161 request/response evidence;
 - layered local verification and portable evidence packages;
 - a root-confined MCP stdio server backed by the same application services.
 
@@ -320,13 +323,15 @@ Progress and accepted behavior are tracked in the repository's
 Forecast Ledger can help demonstrate that specific bytes existed before a
 cryptographic timestamp bound. It cannot by itself prove who authored a record,
 that no forecasts were omitted, that a forecast or outcome is true, or that a
-self-reported timestamp is exact. A pending receipt is not verified timing, and
+self-reported timestamp is exact. Pending RFC 3161 evidence is not verified timing, and
 filesystem, hosting, Git, or archive timestamps are not substitutes for
 cryptographic evidence.
 
 Keep protected key files out of repositories, backups intended for publication,
-shell arguments, logs, and evidence packages. The constrained OpenTimestamps
-profile is experimental and rejects unsupported proof nodes instead of guessing.
+shell arguments or logs. Publication packages intentionally include the exact
+retained public CA bundle. The constrained RFC 3161 profile is experimental,
+uses SHA-256 only, excludes system roots and revocation/LTV lookup, and rejects
+unsupported or weak input instead of guessing.
 
 ## Development
 

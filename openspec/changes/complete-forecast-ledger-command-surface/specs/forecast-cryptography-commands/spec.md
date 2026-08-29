@@ -188,7 +188,7 @@ Only after every check succeeds SHALL reveal set visibility to `revealed`, add `
 - **THEN** reveal fails before mutation and reports a binding failure without exposing plaintext
 
 #### Scenario: Successful reveal of timestamped forecast
-- **WHEN** every reveal check succeeds for a forecast with retained OTS evidence
+- **WHEN** every reveal check succeeds for a forecast with retained RFC 3161 evidence
 - **THEN** disclosed mirror fields are added while the original target, receipt, and sealed target digest remain unchanged
 
 ### Requirement: Make reveal retry-safe

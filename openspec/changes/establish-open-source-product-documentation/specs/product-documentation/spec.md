@@ -30,7 +30,7 @@ Maintained documentation SHALL have a navigable index and clearly separate tutor
 - **THEN** they can reach a task-focused how-to without reading a tutorial, architecture explanation, or complete command reference first
 
 ### Requirement: Core user journeys are documented
-The documentation SHALL cover installation, checksum verification, upgrade and uninstall on every supported operating system; ledger initialization and validation; platform and question management; public and append-only forecast updates; sealing and reveal; target and OpenTimestamps workflows; layered verification; portable evidence packages; MCP stdio setup and permission grants; troubleshooting; recovery; and schema compatibility updates.
+The documentation SHALL cover installation, checksum verification, upgrade and uninstall on every supported operating system; ledger initialization and validation; platform and question management; public and append-only forecast updates; sealing and reveal; target and RFC 3161 request/response workflows with explicit TSA and retained CA-bundle inputs; layered local timestamp verification; portable evidence packages; MCP stdio setup and permission grants; troubleshooting; recovery; and schema compatibility updates.
 
 #### Scenario: User selects a supported platform
 - **WHEN** a macOS, Linux, or Windows user opens installation documentation

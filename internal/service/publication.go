@@ -9,14 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"time"
 
 	"github.com/chaoscondensate/cli/internal/app"
 	"github.com/chaoscondensate/cli/internal/ledger"
 	"github.com/chaoscondensate/cli/internal/publication"
 	ledgerschema "github.com/chaoscondensate/cli/internal/schema"
 	"github.com/chaoscondensate/cli/internal/storage"
-	"github.com/chaoscondensate/cli/internal/timestamp/ots"
+	"github.com/chaoscondensate/cli/internal/timestamp/rfc3161"
 )
 
 type PublicationFile struct {
@@ -52,15 +51,7 @@ type PublicationVerifyResult struct {
 	Evidence       []ForecastVerification `json:"evidence"`
 	Overall        VerificationOverall    `json:"overall"`
 	Limitations    []string               `json:"limitations"`
-	NetworkProfile NetworkProfile         `json:"network_profile"`
-	RequestSummary ots.RequestSummary     `json:"request_summary,omitempty"`
 	FailureCode    app.ErrorCode          `json:"-"`
-}
-
-type PublicationVerifyOptions struct {
-	Online   bool
-	Offline  bool
-	Observer ots.BitcoinObserver
 }
 
 func PlanPublicationBuild(ctx context.Context, ledgerPath, output string) (PublicationBuildResult, error) {
@@ -146,7 +137,7 @@ func collectPublication(loaded *LoadedLedger, output string) (PublicationBuildRe
 				}
 			}
 			var target *ledger.ForecastTarget
-			var timestamps []ledger.OTSTimestamp
+			var timestamps []ledger.RFC3161Timestamp
 			switch {
 			case forecast.Integrity.Pending != nil:
 				target, timestamps, evidenceState = &forecast.Integrity.Pending.Target, forecast.Integrity.Pending.Timestamps, "pending"
@@ -169,20 +160,42 @@ func collectPublication(loaded *LoadedLedger, output string) (PublicationBuildRe
 			if err != nil || !bytes.Equal(actual, artifact.Bytes) {
 				return PublicationBuildResult{}, app.NewError(app.CodeVerification, "forecast target cannot be packaged because its bytes do not match", err)
 			}
-			files[string(target.ArtifactPath)] = publicationFile(publication.RoleTarget, string(target.ArtifactPath), actual)
+			if err := addPublicationFile(files, publicationFile(publication.RoleTarget, string(target.ArtifactPath), actual)); err != nil {
+				return PublicationBuildResult{}, err
+			}
 			for _, timestamp := range timestamps {
-				if timestamp.Type != "opentimestamps" {
-					continue
-				}
-				receiptBytes, err := readConfinedArtifact(root, string(timestamp.ProofPath), maxReceiptBytes)
+				requestBytes, err := readConfinedArtifact(root, string(timestamp.RequestPath), maxTimestampRequestBytes)
 				if err != nil {
 					return PublicationBuildResult{}, err
 				}
-				receipt, err := ots.ParseReceipt(receiptBytes)
-				if err != nil || receipt.VerifyBinding(artifact.Bytes) != nil {
-					return PublicationBuildResult{}, app.NewError(app.CodeVerification, "OpenTimestamps receipt cannot be packaged because its binding is invalid", err)
+				if _, err := rfc3161.ParseRequest(requestBytes, artifact.Bytes, rfc3161.DefaultLimits()); err != nil {
+					return PublicationBuildResult{}, app.NewError(app.CodeVerification, "RFC 3161 request cannot be packaged because its target binding is invalid", nil)
 				}
-				files[string(timestamp.ProofPath)] = publicationFile(publication.RoleReceipt, string(timestamp.ProofPath), receiptBytes)
+				responseBytes, err := readConfinedArtifact(root, string(timestamp.ResponsePath), maxTimestampResponseBytes)
+				if err != nil {
+					return PublicationBuildResult{}, err
+				}
+				if err := rfc3161.ParseResponse(responseBytes, rfc3161.DefaultLimits()); err != nil {
+					return PublicationBuildResult{}, app.NewError(app.CodeVerification, "RFC 3161 response cannot be packaged because it is malformed", nil)
+				}
+				if err := addPublicationFile(files, publicationFile(publication.RoleRequest, string(timestamp.RequestPath), requestBytes)); err != nil {
+					return PublicationBuildResult{}, err
+				}
+				if err := addPublicationFile(files, publicationFile(publication.RoleResponse, string(timestamp.ResponsePath), responseBytes)); err != nil {
+					return PublicationBuildResult{}, err
+				}
+				if timestamp.CABundlePath != nil {
+					caBytes, err := readConfinedArtifact(root, string(*timestamp.CABundlePath), maxTimestampCABundleBytes)
+					if err != nil {
+						return PublicationBuildResult{}, err
+					}
+					if err := rfc3161.ValidateCABundle(caBytes, rfc3161.DefaultLimits()); err != nil {
+						return PublicationBuildResult{}, app.NewError(app.CodeVerification, "RFC 3161 CA bundle cannot be packaged because it is invalid", nil)
+					}
+					if err := addPublicationFile(files, publicationFile(publication.RoleCABundle, string(*timestamp.CABundlePath), caBytes)); err != nil {
+						return PublicationBuildResult{}, err
+					}
+				}
 			}
 			if forecast.Visibility == ledger.VisibilityRevealed {
 				layer := verifyRevealLayer(question, forecast, VerificationLayer{Name: "content_binding", State: LayerPass})
@@ -220,18 +233,7 @@ func collectPublication(loaded *LoadedLedger, output string) (PublicationBuildRe
 	return result, nil
 }
 
-func VerifyPublicationPackage(ctx context.Context, ledgerPath, manifestPath string, supplied ...PublicationVerifyOptions) (PublicationVerifyResult, error) {
-	options := PublicationVerifyOptions{}
-	if len(supplied) > 0 {
-		options = supplied[0]
-	}
-	if options.Online && options.Offline {
-		return PublicationVerifyResult{}, app.NewError(app.CodeUsage, "--online and --offline cannot be combined", nil)
-	}
-	observer := options.Observer
-	if options.Online && observer == nil {
-		observer = ots.NewPublicBitcoinObserver(nil)
-	}
+func VerifyPublicationPackage(ctx context.Context, ledgerPath, manifestPath string) (PublicationVerifyResult, error) {
 	resolvedLedger, err := storage.ResolveLedgerPath(ledgerPath, true)
 	if err != nil {
 		return PublicationVerifyResult{}, err
@@ -260,7 +262,7 @@ func VerifyPublicationPackage(ctx context.Context, ledgerPath, manifestPath stri
 	if err != nil || expectedLedger != resolvedLedger {
 		return PublicationVerifyResult{}, app.NewError(app.CodeVerification, "selected package ledger does not match manifest ledger_path", err)
 	}
-	result := PublicationVerifyResult{ManifestPath: "manifest.json", ManifestSHA256: storage.ResourceDigest(manifestBytes), FileCount: len(manifest.Entries) + 1, Evidence: []ForecastVerification{}, Limitations: append([]string(nil), verificationLimitations...), NetworkProfile: networkProfileForObserver(observer, !options.Online)}
+	result := PublicationVerifyResult{ManifestPath: "manifest.json", ManifestSHA256: storage.ResourceDigest(manifestBytes), FileCount: len(manifest.Entries) + 1, Evidence: []ForecastVerification{}, Limitations: append([]string(nil), verificationLimitations...)}
 	listed := map[string]struct{}{"manifest.json": {}}
 	for _, entry := range manifest.Entries {
 		absolute, err := resolver.Resolve(entry.Path, true)
@@ -306,7 +308,7 @@ func VerifyPublicationPackage(ctx context.Context, ledgerPath, manifestPath stri
 	for _, question := range loaded.Model.Questions {
 		for _, forecast := range question.Forecasts {
 			content := verifyPackageContent(root, loaded.Model, question, forecast)
-			timing := verifyPackageTiming(ctx, root, loaded.Model, question, forecast, content, options.Online, observer)
+			timing := verifyPackageTiming(ctx, root, loaded.Model, question, forecast, content)
 			reveal := verifyRevealLayer(question, forecast, content)
 			outcome := verifyOutcomeLayer(ctx, question, VerificationOptions{Offline: true})
 			result.Evidence = append(result.Evidence, ForecastVerification{QuestionID: question.ID, ForecastID: forecast.ID, Layers: []VerificationLayer{content, timing, reveal, outcome}})
@@ -317,9 +319,6 @@ func VerifyPublicationPackage(ctx context.Context, ledgerPath, manifestPath stri
 	}
 	temporaryReport := VerificationReport{Forecasts: result.Evidence}
 	result.Overall, result.FailureCode = aggregateVerification(temporaryReport)
-	if observer != nil {
-		result.RequestSummary = observer.Summary()
-	}
 	return result, nil
 }
 
@@ -339,14 +338,14 @@ func verifyPackageContent(root string, model *ledger.Ledger, question ledger.Que
 	return VerificationLayer{Name: "content_binding", State: LayerPass, ReasonCodes: []string{"content.target_matches"}, Evidence: map[string]any{"path": target.ArtifactPath, "sha256": artifact.SHA256}}
 }
 
-func verifyPackageTiming(ctx context.Context, root string, model *ledger.Ledger, question ledger.Question, forecast ledger.Forecast, content VerificationLayer, online bool, observer ots.BitcoinObserver) VerificationLayer {
+func verifyPackageTiming(ctx context.Context, root string, model *ledger.Ledger, question ledger.Question, forecast ledger.Forecast, content VerificationLayer) VerificationLayer {
 	if forecast.Integrity.Unanchored != nil {
 		return VerificationLayer{Name: "existence_timing", State: LayerNotApplicable, ReasonCodes: []string{"timing.unanchored"}}
 	}
 	if content.State != LayerPass {
 		return VerificationLayer{Name: "existence_timing", State: LayerNotChecked, ReasonCodes: []string{"timing.blocked_by_content"}}
 	}
-	var timestamps []ledger.OTSTimestamp
+	var timestamps []ledger.RFC3161Timestamp
 	if forecast.Integrity.Pending != nil {
 		timestamps = forecast.Integrity.Pending.Timestamps
 	} else if forecast.Integrity.Verified != nil {
@@ -355,50 +354,42 @@ func verifyPackageTiming(ctx context.Context, root string, model *ledger.Ledger,
 		return failedLayer("existence_timing", "timing.imported_failed", nil)
 	}
 	artifact, _ := BuildForecastTarget(model, question.ID, forecast.ID)
-	for _, timestamp := range timestamps {
-		if timestamp.Type != "opentimestamps" {
-			continue
-		}
-		data, err := readConfinedArtifact(root, string(timestamp.ProofPath), maxReceiptBytes)
-		if err != nil {
-			return failedLayer("existence_timing", "timing.receipt_missing", err)
-		}
-		receipt, err := ots.ParseReceipt(data)
-		if err != nil || receipt.VerifyBinding(artifact.Bytes) != nil {
-			return failedLayer("existence_timing", "timing.receipt_invalid", err)
-		}
-		evaluated, err := receipt.Evaluate()
-		if err != nil {
-			return failedLayer("existence_timing", "timing.proof_invalid", err)
-		}
-		bitcoin := make([]ots.EvaluatedAttestation, 0)
-		for _, item := range evaluated {
-			if item.Attestation.Kind == ots.AttestationBitcoin {
-				bitcoin = append(bitcoin, item)
-			}
-		}
-		if err := verifiedTimestampMatchesReceipt(forecast, evaluated); err != nil {
-			return failedLayer("existence_timing", "timing.stored_metadata_mismatch", err)
-		}
-		if online && len(bitcoin) > 0 {
-			sort.Slice(bitcoin, func(i, j int) bool { return bitcoin[i].Attestation.Height < bitcoin[j].Attestation.Height })
-			for _, item := range bitcoin {
-				observation, observeErr := observer.Observe(ctx, item.Attestation.Height)
-				if observeErr != nil {
-					return VerificationLayer{Name: "existence_timing", State: LayerNotChecked, ReasonCodes: []string{"timing.source_unavailable"}, Evidence: map[string]any{"height": item.Attestation.Height}}
+	results := inspectTimestampEntries(ctx, root, artifact.Bytes, timestamps)
+	hasPending, hasLate := false, false
+	for _, item := range results {
+		if item.CheckState == LayerPass {
+			if question.Resolution != nil && question.Resolution.Resolved != nil && item.GenTime != nil {
+				known, _ := ParseTimestamp(question.Resolution.Resolved.OutcomeKnownAt, "outcome_known_at")
+				generated, parseErr := ParseTimestamp(*item.GenTime, "gen_time")
+				if parseErr != nil || !generated.Before(known) {
+					hasLate = true
+					continue
 				}
-				if verifyErr := ots.VerifyBitcoinAttestation(item, observation); verifyErr != nil {
-					return failedLayer("existence_timing", "timing.bitcoin_mismatch", verifyErr)
-				}
-				return VerificationLayer{Name: "existence_timing", State: LayerPass, ReasonCodes: []string{"timing.bitcoin_verified"}, Evidence: map[string]any{"height": item.Attestation.Height, "block_hash": observation.Hash, "anchored_before": observation.BlockTime.Format(time.RFC3339), "source_ids": observation.SourceIDs}}
 			}
+			return VerificationLayer{Name: "existence_timing", State: LayerPass, ReasonCodes: []string{"timing.rfc3161_verified"}, Evidence: map[string]any{"timestamps": results}, Limitations: timestampLimitations()}
 		}
-		if timestamp.State == ledger.OTSConfirmed && timestamp.AnchoredBefore != nil {
-			return VerificationLayer{Name: "existence_timing", State: LayerPass, ReasonCodes: []string{"timing.stored_verification_consistent"}, Limitations: []string{"The prior Bitcoin source identity is not retained and was not rechecked offline."}}
+		if item.CheckState == LayerPending || item.CheckState == LayerNotChecked {
+			hasPending = true
 		}
-		return VerificationLayer{Name: "existence_timing", State: LayerPending, ReasonCodes: []string{"timing.calendar_pending"}}
 	}
-	return failedLayer("existence_timing", "timing.receipt_reference_missing", nil)
+	if hasPending {
+		return VerificationLayer{Name: "existence_timing", State: LayerPending, ReasonCodes: []string{"timing.local_evidence_incomplete"}, Evidence: map[string]any{"timestamps": results}}
+	}
+	if hasLate {
+		return failedLayerWithEvidence("existence_timing", "timing.not_before_outcome", map[string]any{"timestamps": results})
+	}
+	return VerificationLayer{Name: "existence_timing", State: LayerFail, ReasonCodes: []string{"timing.all_responses_failed"}, Evidence: map[string]any{"timestamps": results}}
+}
+
+func addPublicationFile(files map[string]PublicationFile, file PublicationFile) error {
+	if existing, ok := files[file.Path]; ok {
+		if existing.Role != file.Role || existing.SHA256 != file.SHA256 || existing.Size != file.Size {
+			return app.NewError(app.CodeConflict, "publication artifacts collide at one package path", nil)
+		}
+		return nil
+	}
+	files[file.Path] = file
+	return nil
 }
 
 func publicationFile(role, path string, data []byte) PublicationFile {

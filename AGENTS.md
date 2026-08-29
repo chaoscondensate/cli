@@ -16,15 +16,15 @@ content is English and should use short, plain terms.
 
 When sources disagree, use this order:
 
-1. The exact embedded Forecast Ledger v1.1.0 contract and its published
+1. The exact embedded Forecast Ledger v1.2.0 contract and its published
    conformance fixtures.
 2. Published English v1 documentation and exact-commit reference tools.
 3. Accepted OpenSpec artifacts in this repository.
 4. Older Research material, which is background only.
 
 The authoritative upstream commit is
-`c04c72a178c15cd6cbbdd2e8a7b743d58872a94a`. The embedded schema SHA-256 is
-`c478f0f568c0c746c343a308d0fcb53815f4c8b91b4666f8f784913ad9132d15`.
+`6c2fe3df99223945b8d1613a03f95796b3c7d1e2`. The embedded schema SHA-256 is
+`d609982f0fcea1ce076fdb32b44ef0eebe3265754eea7065de9d78a857dab5b8`.
 Never fetch a floating tag at build or runtime.
 Do not edit vendored contract or fixture bytes by hand. Update the exact commit,
 digests, attribution, compatibility decision, and conformance tests together.
@@ -45,7 +45,7 @@ executable project configuration.
 - `internal/validation`: schema, format, and semantic validation.
 - `internal/canonical`: bounded RFC 8785/JCS profile.
 - `internal/forecastcrypto`: target, seal, and reveal operations.
-- `internal/timestamp/ots`: constrained pure-Go OpenTimestamps backend.
+- `internal/timestamp/rfc3161`: bounded pure-Go RFC 3161 client and verifier.
 - `internal/publication`: portable evidence packages and manifests.
 - `internal/storage`: confined paths, locks, and recoverable writes.
 - `internal/presentation`: human, plain, and stable JSON results.
@@ -75,9 +75,9 @@ when a small standard-library implementation is sufficient.
   resources, or normal stdout. Use protected files or stdin where specified.
 - Local validation never makes a network request and never resolves a remote
   schema reference.
-- OpenTimestamps is the only v1 timestamp protocol. RFC 3161 exists only as a
-  required negative fixture and must be rejected.
-- A pending receipt is not verified timing. Filesystem, hosting, archive, and
+- RFC 3161 with a SHA-256 message imprint is the only v1 timestamp protocol.
+  OpenTimestamps input is a required negative fixture and must be rejected.
+- A pending response is not verified timing. Filesystem, hosting, archive, and
   source-control timestamps are not cryptographic evidence.
 - Verification reports layers separately and never claim authorship,
   completeness, truth, exact self-reported time, or substantive outcome-source
@@ -157,9 +157,9 @@ the change; passing prose lint is not evidence that an example actually works.
 
 Security-sensitive parsers and canonicalization need negative, property, and
 fuzz coverage. Cryptographic target/seal changes must reproduce the published
-vector byte-for-byte. OTS changes require differential fixtures against the
-official client; keep OTS experimental until round-trip, malformed-input,
-Bitcoin verification, real-calendar, and independent-review gates all pass.
+vector byte-for-byte. RFC 3161 changes require independent OpenSSL fixtures,
+bounded malformed ASN.1/CMS coverage, exact request/target binding, certificate
+chain verification from retained trust material, and independent review.
 
 Test native filesystem behavior on macOS, Linux, and Windows. A cross-build does
 not prove locks, ACLs, safe replacement, path confinement, or interrupt recovery.

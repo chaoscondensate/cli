@@ -113,7 +113,45 @@
     "expect_contains": "does not match the decrypted sealed bundle"
   },
   {
-    "name": "unsupported-rfc3161-timestamp",
+    "name": "rfc3161-timestamp-after-known-outcome",
+    "base": "examples/valid/individual-ledger.json",
+    "operations": [
+      {
+        "op": "replace",
+        "path": "/questions/0/forecasts/0/integrity",
+        "value": {
+          "status": "verified",
+          "target": {
+            "scope": "forecast-envelope/v1",
+            "canonicalization": "RFC8785",
+            "artifact_path": "tests/vectors/forecast-seal-v1.json",
+            "digest": {
+              "algorithm": "sha-256",
+              "value": "59f3996b22e135d5c2d1a6977c2e5dfa025d3f2ececd226b6fb4096ddc7272f5"
+            }
+          },
+          "timestamps": [
+            {
+              "type": "rfc3161",
+              "request_path": "proofs/timestamps/f-central-bank-cut-001.tsq",
+              "response_path": "proofs/timestamps/f-central-bank-cut-001.tsr",
+              "tsa_url": "https://tsa.example.com/",
+              "hash_algorithm": "sha256",
+              "state": "verified",
+              "gen_time": "2026-09-17T12:01:00+01:00",
+              "policy_oid": "1.2.3.4.1",
+              "serial_number": "0123456789abcdef",
+              "ca_bundle_path": "proofs/timestamps/tsa-ca.pem"
+            }
+          ],
+          "verified_at": "2026-09-17T12:02:00+01:00"
+        }
+      }
+    ],
+    "expect_contains": "must contain a verified RFC 3161 timestamp that predates the known outcome"
+  },
+  {
+    "name": "unsupported-opentimestamps-timestamp",
     "base": "examples/valid/individual-ledger.json",
     "operations": [
       {
@@ -132,9 +170,8 @@
           },
           "timestamps": [
             {
-              "type": "rfc3161",
-              "response_path": "proofs/targets/f-central-bank-cut-001.tsr",
-              "tsa_url": "https://tsa.example.com/",
+              "type": "opentimestamps",
+              "proof_path": "proofs/targets/f-central-bank-cut-001.json.ots",
               "state": "pending"
             }
           ]

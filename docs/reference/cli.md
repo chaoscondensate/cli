@@ -1,7 +1,7 @@
 # CLI reference
 
 <!-- doc-metadata
-coverage: v0.3.1
+coverage: v0.4.0
 reviewed: 2026-08-29
 owner: interface
 generated: false
@@ -14,7 +14,7 @@ Every ledger leaf defines its own required `--file/-f`; groups do not own that
 flag. Read-only `validate`, `status`, `platform list|show`, `question list|show`,
 and `forecast list|show` accept `--file -`. Artifact, timestamp, verification,
 publication, mutation, and MCP operations require real paths. Stdin provides
-only ledger bytes and cannot resolve sibling target or receipt paths.
+only ledger bytes and cannot resolve sibling target or timestamp paths.
 
 ## Command surface
 
@@ -36,18 +36,18 @@ only ledger bytes and cannot resolve sibling target or receipt paths.
 | `forecast reveal` | `--file --question --forecast --key-file --yes` | Authenticate and disclose a sealed forecast. |
 | `forecast key-hint update` | `--file --question --forecast --key-hint` | Replace only the safe logical hint. |
 | `target build|check` | `--file` plus `--all` or question+forecast | Create or compare canonical target bytes. |
-| `timestamp stamp|upgrade|status|verify` | `--file --question --forecast` | Manage experimental OTS evidence. |
+| `timestamp stamp` | `--file --question --forecast --tsa-url --ca-bundle`; optional `--offline` | Request and retain RFC 3161 evidence from one timestamp authority. |
+| `timestamp status|verify` | `--file --question --forecast` | Inspect or locally verify retained RFC 3161 evidence. |
 | `verify` | `--file`; optional question+forecast | Run layered evidence checks. |
 | `publish build` | `--file --output` | Create a new standalone package. |
-| `publish verify` | package ledger `--file` and `--manifest` | Verify offline by default; `--online` rechecks Bitcoin timing. |
+| `publish verify` | package ledger `--file` and `--manifest` | Verify the package and retained RFC 3161 evidence locally. |
 | `mcp serve` | one or more `--ledger-root name=path` | Serve the shared operations over protocol-clean stdio. |
-| `version` | none | Print binary, schema, MCP, and timestamp-profile pins. |
+| `version` | none | Print binary, source, schema, MCP, and RFC 3161 support metadata. |
 
 Mutation and resource-creation leaves provide `--dry-run`. It performs complete
 preflight but does not persist files; timestamp dry-runs also skip entropy and
-network. Read-only network verification has online/offline modes instead of
-dry-run. Approval uses an interactive prompt or `--yes`; `--no-input` never
-prompts.
+network. Timestamp status and verification are local and need no network mode.
+Approval uses an interactive prompt or `--yes`; `--no-input` never prompts.
 
 Global result modes are normal human output, `--json`, `--plain`, or `--quiet`.
 The last three are mutually exclusive. `--no-color` and `TERM=dumb` disable
@@ -59,7 +59,7 @@ mutations or implement a bounded retry with backoff.
 
 Question and forecast show output includes business fields and type-aware public
 values in normal human and plain modes. Forecast show also exposes safe stored
-target/receipt/timing metadata without network access. Layered verification
+target/timestamp/timing metadata without network access. Layered verification
 prints its complete ordered evidence matrix, including safe evidence values,
 without requiring `--verbose`. Plain verification rows are ordered as question
 ID, forecast ID, layer, state, comma-separated reason codes, and compact JSON
@@ -67,9 +67,9 @@ evidence. Quote RFC 3339 values in maintained YAML input, such as
 `recorded_at: "2026-09-01T09:01:00Z"`.
 
 Verification commands emit their complete expected outcome report to stdout
-before returning a nonzero semantic exit. `timestamp verify` uses network exit
-8 for unavailable observation and verification exit 6 only for a comparison
-against a complete mismatching observation. Layered and package verification
+before returning a nonzero semantic exit. `timestamp stamp` uses network exit 8
+when the authority is unavailable. Retained malformed, untrusted, or
+mismatching evidence uses verification exit 6. Layered and package verification
 use `incomplete`/exit 9 with overall `no_evidence` when no applicable
 forecast-evidence layer exists. Passing document, manifest, or file checks
 remain visible but do not turn that aggregate into `pass`.
@@ -98,7 +98,7 @@ name returns the MCP unknown-tool protocol response.
 | 10 | `unavailable` |
 | 130 | `interrupted` |
 
-Schema compatibility is exact. A ledger other than v1.1.0 produces an explicit
+Schema compatibility is exact. A ledger other than v1.2.0 produces an explicit
 warning on stderr, returns `unsupported_schema_version`/exit 3, and stops before
 any file, key, artifact, or network side effect. No migration command is
 provided during this preview cutover.

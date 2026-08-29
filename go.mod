@@ -6,6 +6,7 @@ require (
 	github.com/dlclark/regexp2 v1.11.0
 	github.com/gofrs/flock v0.13.0
 	github.com/modelcontextprotocol/go-sdk v1.7.0
+	github.com/notaryproject/tspclient-go v1.0.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/urfave/cli/v3 v3.11.0
 	go.yaml.in/yaml/v3 v3.0.5

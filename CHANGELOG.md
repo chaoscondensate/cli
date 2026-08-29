@@ -5,6 +5,38 @@ tags and downloadable files are published on GitHub Releases.
 
 ## Unreleased
 
+## 0.4.0 - 2026-08-29
+
+### Changed
+
+- **Breaking:** adopt the exact Forecast Ledger schema v1.2.0 contract and
+  reject v1.1.0 before any file, secret, entropy, or network effect. There is no
+  compatibility reader or migration command.
+- **Breaking:** replace OpenTimestamps and Bitcoin observation with RFC 3161.
+  `timestamp stamp` now requires an explicit public HTTPS TSA URL and retained
+  CA bundle; `timestamp status` and `timestamp verify` operate locally.
+- Retain the exact target, `.tsq`, `.tsr`, and PEM trust material needed for
+  portable verification. Repeated stamping with another TSA preserves an
+  independent timestamp entry.
+- Package every referenced RFC 3161 artifact and verify publication packages
+  without a blockchain, hosted API, system trust store, or network option.
+
+### Removed
+
+- Remove timestamp upgrade, calendar and endpoint profiles, Bitcoin Core and
+  explorer options, user-supplied verification time, OTS receipts, Bitcoin
+  result fields, and the OTS liveness workflow.
+
+### Security and evidence limits
+
+- RFC 3161 verification trusts only the CA bundle retained with the evidence
+  and verifies certificate validity at the signed generation time. It performs
+  no revocation lookup and provides no RFC 4998 renewal or long-term-validation
+  guarantee.
+- A valid TSA response supports a bounded existence-time claim for the target
+  digest. It does not prove authorship, completeness, forecast truth, TSA clock
+  honesty, exact self-reported time, or outcome-source correctness.
+
 ## 0.3.1 - 2026-08-29
 
 ### Fixed

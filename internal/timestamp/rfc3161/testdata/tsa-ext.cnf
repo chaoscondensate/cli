@@ -1,0 +1,5 @@
+basicConstraints = critical,CA:FALSE
+keyUsage = critical,digitalSignature
+extendedKeyUsage = critical,timeStamping
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid,issuer

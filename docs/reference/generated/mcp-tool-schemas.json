@@ -1973,10 +1973,6 @@
           "manifest": {
             "description": "Manifest path inside the package root",
             "type": "string"
-          },
-          "online": {
-            "description": "Enable built-in public Bitcoin observation",
-            "type": "boolean"
           }
         },
         "required": [
@@ -3169,6 +3165,10 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
+          "ca_bundle": {
+            "description": "Retained ledger-relative PEM CA bundle",
+            "type": "string"
+          },
           "dry_run": {
             "description": "Validate and return a plan without persistent or network effects",
             "type": "boolean"
@@ -3187,12 +3187,18 @@
             "description": "Stable question ID",
             "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
             "type": "string"
+          },
+          "tsa_url": {
+            "description": "Public HTTPS timestamp authority URL",
+            "type": "string"
           }
         },
         "required": [
+          "ca_bundle",
           "file",
           "forecast",
-          "question"
+          "question",
+          "tsa_url"
         ],
         "type": "object"
       },
@@ -3234,43 +3240,6 @@
         "$ref": "result.schema.json"
       }
     },
-    "timestamp_upgrade": {
-      "input_schema": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "additionalProperties": false,
-        "properties": {
-          "dry_run": {
-            "description": "Validate and return a plan without persistent or network effects",
-            "type": "boolean"
-          },
-          "file": {
-            "description": "Ledger reference as root-name:relative/path",
-            "minLength": 1,
-            "type": "string"
-          },
-          "forecast": {
-            "description": "Stable forecast ID",
-            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
-            "type": "string"
-          },
-          "question": {
-            "description": "Stable question ID",
-            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "file",
-          "forecast",
-          "question"
-        ],
-        "type": "object"
-      },
-      "operation": "timestamp.upgrade",
-      "result_schema": {
-        "$ref": "result.schema.json"
-      }
-    },
     "timestamp_verify": {
       "description": "Returns a structured timing report for pending, not-checked, mismatch, and verified outcomes; source unavailability is not proof failure.",
       "input_schema": {
@@ -3294,10 +3263,6 @@
           "question": {
             "description": "Stable question ID",
             "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
-            "type": "string"
-          },
-          "verified_at": {
-            "description": "Optional exact RFC 3339 verification time",
             "type": "string"
           }
         },

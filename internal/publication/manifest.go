@@ -13,10 +13,12 @@ import (
 )
 
 const (
-	ManifestProfile  = "forecast-ledger-publication/v1"
+	ManifestProfile  = "forecast-ledger-publication/v2"
 	RoleLedger       = "ledger"
 	RoleTarget       = "forecast_target"
-	RoleReceipt      = "opentimestamps_receipt"
+	RoleRequest      = "timestamp_request"
+	RoleResponse     = "timestamp_response"
+	RoleCABundle     = "timestamp_ca_bundle"
 	MaxManifestBytes = 8 << 20
 )
 
@@ -116,10 +118,12 @@ func Validate(manifest Manifest) error {
 			if len(entry.Path) < len("proofs/targets/") || entry.Path[:len("proofs/targets/")] != "proofs/targets/" {
 				return errors.New("forecast target has an invalid package path")
 			}
-		case RoleReceipt:
-			if len(entry.Path) < len("proofs/receipts/") || entry.Path[:len("proofs/receipts/")] != "proofs/receipts/" {
-				return errors.New("OpenTimestamps receipt has an invalid package path")
+		case RoleRequest, RoleResponse:
+			if len(entry.Path) < len("proofs/timestamps/") || entry.Path[:len("proofs/timestamps/")] != "proofs/timestamps/" {
+				return errors.New("RFC 3161 request or response has an invalid package path")
 			}
+		case RoleCABundle:
+			// CA bundles follow the exact safe relative path retained by the ledger.
 		default:
 			return errors.New("publication manifest entry role is not supported")
 		}

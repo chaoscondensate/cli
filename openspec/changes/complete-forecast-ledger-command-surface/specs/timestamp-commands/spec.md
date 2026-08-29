@@ -1,158 +1,128 @@
 ## Purpose
 
-Defines the complete pure-Go OpenTimestamps command lifecycle for creating, upgrading, inspecting, and verifying receipts bound to exact forecast target bytes with zero-config public sources or optional independent Bitcoin Core.
+Defines the complete RFC 3161 command lifecycle and portable evidence behavior shared by CLI and MCP for exact Forecast Ledger v1.2.0 forecast targets.
 
 ## ADDED Requirements
 
-### Requirement: Use only the supported OpenTimestamps profile
-All timestamp commands SHALL accept and produce only the bounded detached SHA-256 OpenTimestamps proof subset approved for Forecast Ledger v1. RFC 3161 and other timestamp protocols MUST be rejected as unsupported and MUST NOT be converted or reported as equivalent evidence. Core timestamp behavior SHALL require no Python process or external executable.
+### Requirement: Use only the v1.2.0 RFC 3161 profile
+The application SHALL create and verify only RFC 3161 timestamp requests and responses whose message imprint is SHA-256 over the exact `forecast-envelope/v1` target. It SHALL reject OTS receipts and all other timestamp protocols and SHALL NOT read, upgrade, translate, package, or report them as equivalent evidence.
 
-#### Scenario: RFC 3161 artifact supplied
-- **WHEN** a timestamp command receives an RFC 3161 request or response
-- **THEN** it returns invalid/unsupported data before writing a file or ledger state
+#### Scenario: OTS receipt is supplied
+- **WHEN** a timestamp or publication operation receives an `.ots` receipt or an `opentimestamps` timestamp object
+- **THEN** it rejects the unsupported input before mutation or network access and does not invoke an OTS parser
 
-### Requirement: Use a visible versioned public network profile by default
-`timestamp stamp`, `upgrade`, `status`, and `verify` SHALL require a real `--file`, `--question`, and `--forecast`; they MUST NOT accept `--file -`. Network-capable timestamp actions SHALL require no calendar, explorer, account, API-key, or network-permission setup for their normal public operation. They SHALL use the immutable profile `opentimestamps-public-v1` embedded in the released binary and SHALL report its profile ID and contacted source IDs in human and JSON results.
+#### Scenario: RFC 3161 uses the exact target
+- **WHEN** a timestamp request is created for a selected forecast
+- **THEN** its SHA-256 message imprint equals the digest of the exact canonical target bytes recorded by `integrity.target`
 
-The profile SHALL submit stamps to exactly these four HTTPS endpoints with required success `2`:
+### Requirement: Require explicit bounded TSA inputs
+`timestamp stamp` and the equivalent MCP operation SHALL require an explicit public HTTPS `tsa_url` and an explicit retained PEM CA-bundle file inside the allowed ledger root. The application SHALL accept no built-in TSA, downloaded endpoint profile, environment-selected endpoint, arbitrary request header, credential-bearing URL, private or link-local destination, cross-origin redirect, or unbounded response. A caller SHALL repeat the operation with a different TSA URL to add redundant independent timestamp evidence.
 
-- `https://a.pool.opentimestamps.org`
-- `https://b.pool.opentimestamps.org`
-- `https://a.pool.eternitywall.com`
-- `https://ots.btc.catallaxy.com`
+#### Scenario: Explicit TSA stamp
+- **WHEN** a caller supplies a safe TSA URL and an accessible retained CA bundle
+- **THEN** the application contacts only that TSA within the configured request timeout and byte limits
 
-The built-in profile SHALL accept stamp branches and automatic upgrades only for those submission endpoints and their pinned receipt calendar identities for Alice, Bob, Finney, and Catallaxy. A pool response naming an unknown pending calendar SHALL not count toward the built-in threshold and MUST NOT become an automatic network destination. The profile SHALL verify Bitcoin block observations by querying both `https://mempool.space/api` and `https://blockstream.info/api` and requiring agreement as specified below. The profile MUST NOT be downloaded, remotely replaced, extended from a receipt, project config, environment variable, redirect, or MCP request; changing its endpoints, accepted identities, limits, or trust policy requires a reviewed binary release and a new profile ID.
+#### Scenario: TSA input is absent
+- **WHEN** a caller omits either the TSA URL or CA bundle
+- **THEN** the operation fails as usage before generating entropy, creating artifacts, mutating the ledger, or opening a socket
 
-CLI users needing an explicit liveness escape hatch MAY replace the default stamp/upgrade calendars for one invocation with repeatable `--calendar <https-url>` plus required `--calendar-min-success <n>`. Custom URLs SHALL be distinct public HTTPS origins without user-info, fragments, private/link-local/reserved destinations, or redirect escape; `n` SHALL be between one and the number of supplied calendars. Custom mode SHALL never merge silently with built-in endpoints, SHALL be labeled `custom` with its weaker/unreviewed trust boundary, and SHALL report the safe endpoint identities required to repeat an upgrade. A custom upgrade MAY contact only the explicitly supplied URLs and MUST verify every returned branch against the receipt commitment. These options are CLI-only; MCP uses the built-in profile or offline mode and accepts no arbitrary endpoint.
+#### Scenario: TSA destination is unsafe
+- **WHEN** the TSA URL contains credentials, is not public HTTPS, resolves to a prohibited destination, or redirects outside its validated origin
+- **THEN** the request is rejected without following the unsafe destination or exposing it in unrestricted error text
 
-Every network-capable action SHALL support `--offline`. Offline mode MUST open no socket. `timestamp stamp` and `upgrade` SHALL return `network_disabled`/exit `8` before side effects; `timestamp verify` SHALL perform all local checks and return pending or not-checked timing without changing integrity. `timestamp status` is always local. Standard Go proxy behavior MAY be used but credentials MUST NOT be discovered from project files or emitted.
+### Requirement: Create portable request and response evidence
+`timestamp stamp` SHALL validate the ledger, reconstruct or confirm the selected target, create a fresh nonce-bearing RFC 3161 SHA-256 request with certificate inclusion requested, submit the binary `.tsq` using the RFC media types, and retain the exact `.tsq`, `.tsr`, and CA-bundle path. Artifact paths SHALL be safe, relative, deterministic for the forecast and TSA identity, and non-colliding across multiple TSAs. A retry SHALL reuse a complete matching artifact set or fail safely; it MUST NOT overwrite different durable evidence.
 
-#### Scenario: Zero-config public stamp
-- **WHEN** a user invokes stamp without network-source flags
-- **THEN** the command uses `opentimestamps-public-v1`, contacts only its four pinned calendar endpoints, and identifies the profile and responding source IDs
+#### Scenario: Successful TSA response is retained
+- **WHEN** the TSA returns a bounded syntactically valid RFC 3161 response
+- **THEN** the exact target, request, response, and CA-bundle reference are retained and the corresponding v1.2.0 timestamp object records their safe relative paths and TSA URL
 
-#### Scenario: Upgrade with calendar outside the built-in profile
-- **WHEN** a receipt contains a calendar URL outside the built-in profile
-- **THEN** upgrade does not contact that URL and reports the branch as not checked
+#### Scenario: Dry-run performs no timestamp effects
+- **WHEN** stamp runs with global dry-run
+- **THEN** it validates inputs and reports planned target, request, response, and ledger effects without generating a nonce, opening a socket, or writing a file
 
-#### Scenario: Explicit custom calendar set
-- **WHEN** a CLI user supplies three safe custom calendars and `--calendar-min-success 2`
-- **THEN** stamp contacts only those three endpoints, requires two valid branches, labels the result custom, and does not alter the embedded profile
+#### Scenario: Offline stamp is rejected without effects
+- **WHEN** stamp is explicitly offline
+- **THEN** it returns `network_disabled` with exit `8` before generating a nonce, opening a socket, creating an artifact, or changing the ledger
 
-#### Scenario: Unsafe custom calendar
-- **WHEN** a custom calendar URL contains credentials, resolves to a private address, or redirects outside its validated public origin
-- **THEN** the command fails before any calendar request or local mutation
+### Requirement: Verify every RFC 3161 evidence layer locally
+Timestamp verification SHALL parse bounded request and response bytes and SHALL separately verify successful TSA status, request nonce and message-imprint binding, target SHA-256 binding, CMS signed attributes and signature, signer certificate timestamping usage, certificate chain against the retained CA bundle at `gen_time`, supported algorithms, and declared `gen_time`, policy OID, serial number, and hash algorithm. Verification SHALL require no TSA, Git host, Bitcoin node, blockchain API, system trust-store mutation, or network request.
 
-#### Scenario: Explicit offline stamp
-- **WHEN** a user invokes stamp with `--offline`
-- **THEN** it returns network-disabled before target, receipt, or ledger mutation and opens no socket
+#### Scenario: Complete response verifies
+- **WHEN** the saved response is valid for the exact saved request and target, its signer chains to the retained CA bundle, and its metadata matches the ledger
+- **THEN** existence timing passes with reason `timing.rfc3161_verified` and reports the verified `gen_time`, policy OID, serial number, and safe TSA identity
 
-### Requirement: Stamp the exact deterministic target
-`forecast-ledger timestamp stamp` SHALL validate the ledger, reconstruct the selected `forecast-envelope/v1` target, and preflight deterministic paths `proofs/targets/<forecast-id>.json` and `proofs/receipts/<forecast-id>.json.ots`. For a new stamp after local preflight, it SHALL use the OS CSPRNG to generate one fresh 16-byte nonce, construct an OpenTimestamps operation path rooted at the exact target SHA-256 digest by appending those 16 bytes and applying SHA-256, and submit only the resulting blinded commitment to the selected calendars. The nonce and operations SHALL be retained inside the detached receipt so local verification can reconstruct binding to the exact target; raw target digest SHALL not be the calendar submission body. Dry-run MUST NOT generate the nonce or contact a calendar.
+#### Scenario: Request or target binding fails
+- **WHEN** the response nonce or message imprint differs from the saved request or exact target
+- **THEN** existence timing fails with a specific binding reason, application category `verification`, and CLI exit `6`
 
-With no custom calendar options, stamp SHALL use the four built-in endpoints concurrently and accept success only when at least two valid accepted branches are obtained. With explicit CLI custom mode, it SHALL use only that set and its validated threshold. MCP callers MUST NOT supply or weaken the embedded endpoint set or threshold.
+#### Scenario: Signature or trust chain fails
+- **WHEN** the CMS signature, timestamping certificate usage, signing algorithm, or retained trust chain is invalid
+- **THEN** existence timing fails with a specific cryptographic or trust reason and MUST NOT report the declared `gen_time` as verified timing
 
-The command SHALL sort and combine accepted branches deterministically for the single generated nonce into one detached receipt, exclusively create or confirm-identical target and receipt artifacts, then atomically change forecast integrity from `unanchored` to `pending`. The pending object SHALL contain scope `forecast-envelope/v1`, the approved canonicalization identifier, relative target path, SHA-256 digest, and exactly one OpenTimestamps entry with the deterministic receipt path and state `pending`. A calendar response or local file timestamp MUST NOT create a verified claim. A retry that finds a durable matching receipt SHALL validate and reuse its retained nonce/operations rather than generate a new commitment or submit duplicate requests.
+#### Scenario: Stored metadata differs
+- **WHEN** the cryptographically verified response metadata differs from the ledger's `gen_time`, policy OID, serial number, TSA URL association, or hash algorithm
+- **THEN** verification fails rather than silently correcting or trusting the stored fields
 
-#### Scenario: Successful pending stamp
-- **WHEN** the minimum number of built-in-profile calendars return valid bounded branches
-- **THEN** durable target/receipt artifacts exist, the receipt proves the blinded operation path from the exact target digest, and matching pending ledger metadata is committed atomically
+### Requirement: Keep the RFC 3161 command surface minimal
+The CLI SHALL expose `timestamp stamp`, `timestamp status`, and `timestamp verify` with leaf-level `--file`, `--question`, and `--forecast`. Stamp SHALL additionally expose `--tsa-url`, `--ca-bundle`, and `--offline`; status and verify SHALL be local. MCP SHALL expose equivalent transport-neutral operations and fields subject to configured ledger roots, server-wide write mode, and server-wide offline mode. No surface SHALL expose `timestamp upgrade`, calendars, calendar thresholds, OTS profiles, explorers, Bitcoin Core, Bitcoin credentials, block heights, or blockchain-specific online rechecks.
 
-#### Scenario: Calendar cannot correlate a published target digest directly
-- **WHEN** a new target is stamped through any calendar mode
-- **THEN** every calendar receives the nonce-blinded commitment rather than the deterministic target digest, while the retained receipt still verifies the complete operation path
+#### Scenario: Help contains only RFC 3161 controls
+- **WHEN** a user inspects CLI help, MCP tools, generated input schemas, and command examples
+- **THEN** the timestamp surface contains the RFC 3161 operations and inputs and contains none of the removed OTS or Bitcoin controls
 
-#### Scenario: Insufficient calendar success
-- **WHEN** fewer than two built-in profile calendars return valid responses
-- **THEN** stamp returns network failure, does not mark the ledger pending or verified, and reports any retained target artifact available for safe retry
+#### Scenario: Local status does not mutate
+- **WHEN** timestamp status reads a retained RFC 3161 artifact set
+- **THEN** it reports local request, response, trust-material, and metadata state without a network request or ledger mutation
 
-#### Scenario: Repeat identical stamp
-- **WHEN** target, receipt, and matching pending metadata already exist
-- **THEN** stamp is idempotent and does not submit duplicate requests unless `--restamp` is introduced by a separately reviewed change
+### Requirement: Commit only honest RFC 3161 state
+The application SHALL record timestamp `state: verified` and integrity `status: verified` only after all required local RFC 3161 checks pass. A retained response not yet successfully verified SHALL remain `pending`; a network error or malformed response SHALL NOT become verified timing. Adding another pending TSA response SHALL NOT erase an already verified response, and integrity SHALL remain verified when at least one retained timestamp independently verifies.
 
-### Requirement: Recover multi-file stamp failures
-Before the first write, stamp SHALL validate all resolved paths and collisions. Different existing target or receipt bytes SHALL return `conflict`. If interruption occurs after creating artifacts but before ledger commit, the original ledger SHALL remain coherent and a recovery journal SHALL identify only CLI-created paths. A retry SHALL either complete the matching pending mutation or safely report the retained artifacts; it MUST NOT delete unrelated or pre-existing files.
+#### Scenario: Stamp completes verification
+- **WHEN** a TSA returns a response that passes every required local check
+- **THEN** stamp atomically retains the evidence and records its verified metadata without requiring a later upgrade operation
 
-#### Scenario: Receipt durable and ledger replacement interrupted
-- **WHEN** the process stops after flushing the receipt but before ledger commit
-- **THEN** recovery preserves the original ledger and enables a retry to associate only the matching target and receipt
+#### Scenario: Response is retained but not verified
+- **WHEN** a bounded response and request are safely retained but local verification cannot establish valid timing
+- **THEN** the result preserves a recoverable pending report and does not claim verified timing
 
-### Requirement: Upgrade pending receipts without losing proof data
-`forecast-ledger timestamp upgrade` SHALL require pending matching ledger metadata and artifacts, verify target bytes/digest first, parse the bounded receipt, and query only calendar identities included in the built-in profile for missing attestations. It SHALL merge valid responses deterministically and preserve safe unknown proof nodes byte-for-byte. It SHALL replace the receipt recoverably only when the new receipt is a semantic superset; otherwise it SHALL report `unchanged` or failure.
+#### Scenario: Second TSA remains independent
+- **WHEN** a forecast already has one verified timestamp and stamp is repeated for a different TSA
+- **THEN** the new request and response use distinct artifact paths and the earlier verified evidence remains unchanged
 
-Upgrade SHALL leave integrity `pending` until Bitcoin block verification succeeds through the built-in public profile or optional Bitcoin Core mode. It MUST NOT set `anchored_before`, block height, `verified_at`, or `verified` merely because a calendar returns a Bitcoin attestation.
+### Requirement: Verify multiple TSAs conservatively
+Existence timing SHALL pass when at least one retained RFC 3161 timestamp independently verifies. It SHALL fail only when every applicable timestamp is completely checked and every one fails. If none verifies and at least one timestamp is pending or cannot be completely checked, the layer SHALL remain pending or not checked instead of claiming cryptographic failure. For a resolved forecast, at least one verified `gen_time` MUST predate `outcome_known_at` for the timing layer to exclude hindsight.
 
-#### Scenario: No upgrade available
-- **WHEN** every matching built-in-profile calendar reports no new branch
-- **THEN** the command returns pending/not-ready, leaves receipt and ledger unchanged, and provides a retry-safe result
+#### Scenario: One of two TSAs verifies
+- **WHEN** one retained TSA response fails and a second independently verifies
+- **THEN** existence timing passes using the verified response while preserving the failed branch observation
 
-#### Scenario: Downgrade response
-- **WHEN** a response would discard an existing proof branch or supported attestation
-- **THEN** upgrade rejects it and preserves the original receipt
+#### Scenario: Timestamp follows the known outcome
+- **WHEN** every otherwise valid RFC 3161 response has `gen_time` at or after `outcome_known_at`
+- **THEN** the timing layer fails to exclude hindsight and does not claim that the forecast predated the outcome
 
-### Requirement: Report timestamp status locally
-`forecast-ledger timestamp status` SHALL perform no network request and no mutation. It SHALL report one of `unanchored`, `pending`, `confirmed_unverified`, `verified`, `failed`, or `inconsistent`, together with target/receipt presence, digest agreement, supported attestations, recorded ledger state, and safe next commands. Because forecast integrity is schema-required, there is no separate `missing` integrity state: absent artifacts referenced by pending/verified metadata are `inconsistent`, while an unanchored forecast is `unanchored`. Status SHALL distinguish receipt syntax/attestation presence from a previously recorded Bitcoin verification and SHALL state that v1 does not retain whether the prior source was public or independently operated.
+### Requirement: Package complete RFC 3161 evidence
+Publication build SHALL include every referenced exact target, `.tsq` request, `.tsr` response, and retained CA bundle under distinct transport-neutral manifest roles. Publication verify SHALL recompute package-file digests and run the same local RFC 3161 checks against packaged bytes by default. It SHALL NOT require or offer a Bitcoin, blockchain, calendar, TSA, or other online recheck to establish packaged timing.
 
-#### Scenario: Bitcoin attestation not checked against block data
-- **WHEN** a well-formed receipt contains a supported Bitcoin attestation but the ledger is still pending
-- **THEN** status reports `confirmed_unverified`, not verified existence timing
+#### Scenario: Build packages a verified forecast
+- **WHEN** publication build selects a forecast with RFC 3161 evidence
+- **THEN** the package contains the ledger, exact target, every referenced request and response, every referenced CA bundle, and manifest digests for all files
 
-#### Scenario: Missing pending receipt
-- **WHEN** ledger metadata is pending but the receipt path is absent
-- **THEN** status reports `inconsistent` and returns verification failure without modifying integrity
+#### Scenario: Package verifies without network
+- **WHEN** publication verify receives a complete untampered RFC 3161 package on a machine without network access
+- **THEN** it verifies manifest integrity, target binding, timestamp signatures and trust chains, and declared metadata from packaged evidence alone
 
-### Requirement: Verify receipts automatically with an optional independent source
-`forecast-ledger timestamp verify` SHALL reconstruct and compare the target before proof verification. By default it SHALL query both public Bitcoin APIs in `opentimestamps-public-v1` for the attested height, require identical block hash and raw 80-byte header observations, validate each response binding, header hash, encoded proof-of-work target, proof operations, and the attestation against the exact target, and report that canonical-chain selection still trusts two third-party public services. One unavailable, malformed, disagreeing, or invalid public response MUST prevent a verified transition; safely established partial observations SHALL remain visible.
+#### Scenario: Required timestamp artifact is absent
+- **WHEN** a referenced request, response, target, or CA bundle is missing or differs from its manifest digest
+- **THEN** package verification fails the affected layer and does not fall back to a remote service
 
-Within one timestamp, layered, or online package verification invocation, the Bitcoin observer SHALL group attestations by unique block height, perform at most one logical observation for each `(source, height)` pair, and share the result across every matching forecast. The built-in profile SHALL cap one invocation at 32 unique heights, 128 total Bitcoin API HTTP requests, and 4 concurrent requests. These limits include redirects/retries and MUST be visible in profile metadata. No persistent cross-invocation cache SHALL be written. When a multi-forecast run exceeds the budget without another failure, already established layers remain visible, remaining heights become `not_checked`, overall becomes `incomplete`, and the command exits `9` with guidance to narrow selectors, use offline inspection, or select Bitcoin Core. Budget exhaustion MUST NOT mutate integrity.
+### Requirement: Conformance is independent and bounded
+The RFC 3161 parser and verifier SHALL enforce explicit byte, certificate, chain-depth, attribute, and algorithm bounds; reject malformed, ambiguous, trailing, unsupported, or adversarial ASN.1/CMS input; and pass deterministic interoperability fixtures created and verified by an independent RFC 3161 implementation. Normal tests and releases SHALL not depend on a live public TSA.
 
-An advanced user MAY instead select Bitcoin Core with `--bitcoin-core <rpc-url>` and protected `--bitcoin-auth-file <path>`. Core mode SHALL contact only that explicit RPC URL, SHALL be reported as independently operated verification, and SHALL take precedence over the public profile for that invocation. Credentials MUST NOT be accepted inline in argv URLs, ordinary environment variables, output, or diagnostics. No arbitrary public explorer URL flag SHALL exist in v1.
+#### Scenario: OpenSSL interoperability fixtures pass
+- **WHEN** the conformance suite exchanges SHA-256 requests and responses with pinned OpenSSL-generated fixtures
+- **THEN** request binding, response parsing, signature verification, metadata extraction, and negative mutations agree for the supported profile
 
-The verifier SHALL use bounded requests, response sizes, redirects, and chain data. It SHALL derive the protocol's conservative `anchored_before` value and block height only from a successfully verified attestation. Results SHALL include source mode, profile ID or safe Core identity, agreement state, trust limitation, request/budget summary, and exact observed block evidence. Because the v1 ledger does not persist verification-source identity, later offline reports MUST state that the prior source is not retained and that the receipt can be reverified. Online results SHALL also state that public Bitcoin APIs learn the requested block heights and therefore an approximate period of timestamp activity. Calendar results SHALL state that calendars see request timing and a blinded commitment even though they do not receive the target digest or plaintext.
-
-#### Scenario: Exact proof verification
-- **WHEN** both built-in public Bitcoin APIs agree and the locally checked header/proof confirms a supported attestation for the reconstructed target
-- **THEN** verification reports the confirmed block evidence and conservative time bound
-
-#### Scenario: Receipt for different bytes
-- **WHEN** the receipt is valid for a digest different from the reconstructed target
-- **THEN** verification fails cryptographically and performs no ledger transition
-
-#### Scenario: Public sources disagree
-- **WHEN** the two built-in public APIs return different block hashes or headers for the attested height
-- **THEN** verification returns evidence failure, preserves ledger state, and reports both safe source IDs without selecting either response
-
-#### Scenario: Repeated block height across forecasts
-- **WHEN** fifty selected forecasts contain supported attestations at the same block height
-- **THEN** each public source is observed once for that height within the invocation and the shared validated result is applied to all fifty forecasts
-
-#### Scenario: Public verification budget exhausted
-- **WHEN** a layered run reaches the built-in request or unique-height limit before checking every selected forecast
-- **THEN** unchecked heights remain explicit, overall is incomplete with exit `9`, and no additional request or integrity mutation occurs
-
-#### Scenario: Bitcoin Core override
-- **WHEN** valid Core connection and protected authentication options are supplied
-- **THEN** the command uses Core instead of public APIs and reports the stronger independently operated source boundary
-
-### Requirement: Commit verified integrity only after all checks
-After successful proof verification, `timestamp verify` SHALL atomically change matching pending integrity to `verified`, retain target, every receipt reference, and every `external_anchor` byte-for-byte, set the OpenTimestamps entry to `confirmed`, store the verified conservative `anchored_before` and Bitcoin block height, and set `verified_at` to the exact command time or explicit override. It MUST NOT mutate on network failure, unavailable source, unsupported proof branch, target mismatch, invalid proof, or imported failed integrity.
-
-If the question is resolved and `anchored_before` is not earlier than `outcome_known_at`, the cryptographic timestamp MAY still become verified, but output SHALL warn that it is insufficient to exclude hindsight; layered verification SHALL fail the pre-outcome evidence claim.
-
-#### Scenario: Late but valid timestamp
-- **WHEN** Bitcoin evidence is valid but its conservative bound is after the known outcome
-- **THEN** integrity records cryptographic verification while output explicitly marks pre-outcome sufficiency as failed
-
-### Requirement: Keep pending and failure semantics honest
-Pending/not yet confirmed or request-budget incomplete SHALL return exit `9` when it is the primary result. Network unavailability SHALL return exit `8`; because the built-in Bitcoin policy requires agreement, either public source being unavailable makes automatic online verification unavailable even if the other responds. Malformed, disagreeing, or mismatched proof evidence SHALL return exit `6`; unsafe/missing local files SHALL use the corresponding I/O/not-found categories. A verification failure MUST NOT automatically destroy a previously verified record or rewrite integrity to `failed`; persistent failure-state mutation requires retained evidence and an explicit separately specified repair/review action.
-
-#### Scenario: Temporary Bitcoin source outage
-- **WHEN** either required public source or the selected Core source times out
-- **THEN** verify returns network failure and leaves pending or verified metadata unchanged
-
-### Requirement: Pass official-client and adversarial conformance gates
-Timestamp commands MUST remain unavailable or explicitly experimental until Python-to-Go and Go-to-Python receipts round-trip, supported info/upgrade/verify results match the official client, the built-in profile endpoints and identities have conformance fixtures, dual-public-source and Bitcoin Core tests pass, malformed/oversized/deep proof fuzzing is clean, redirect/timeout/SSRF controls pass, native-platform recovery tests pass, real-calendar nightly tests are stable, and the supported subset receives independent review.
-
-#### Scenario: Unsupported proof operation
-- **WHEN** a receipt contains an operation outside the reviewed subset
-- **THEN** it is preserved safely for round-trip or rejected explicitly, never ignored while claiming successful verification
+#### Scenario: Malformed response is bounded
+- **WHEN** a response exceeds limits or contains malformed, ambiguous, unsupported, or trailing ASN.1/CMS data
+- **THEN** it is rejected within bounded resources without panic, partial success, or unsafe diagnostic output

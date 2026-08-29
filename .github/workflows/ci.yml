@@ -45,7 +45,7 @@ jobs:
 
       - name: Run race detector
         if: runner.os != 'Windows'
-        run: go test -race ./internal/storage ./internal/service ./internal/timestamp/ots ./internal/adapters/mcp
+        run: go test -race ./internal/storage ./internal/service ./internal/timestamp/rfc3161 ./internal/adapters/mcp
 
   native-smoke:
     name: Native command smoke (${{ matrix.os }})

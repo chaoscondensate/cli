@@ -32,8 +32,8 @@ func TestAllPinnedInvalidCasesAreRejected(t *testing.T) {
 	if err := decoder.Decode(&cases); err != nil {
 		t.Fatal(err)
 	}
-	if len(cases) != 11 {
-		t.Fatalf("got %d invalid cases, want 11", len(cases))
+	if len(cases) != 12 {
+		t.Fatalf("got %d invalid cases, want 12", len(cases))
 	}
 
 	for _, testCase := range cases {
@@ -52,8 +52,11 @@ func TestAllPinnedInvalidCasesAreRejected(t *testing.T) {
 			if len(schemaIssues) == 0 && len(semanticIssues) == 0 {
 				t.Fatal("invalid upstream fixture was accepted")
 			}
-			if testCase.Name == "unsupported-rfc3161-timestamp" && len(schemaIssues) == 0 {
-				t.Fatalf("RFC 3161 fixture must be rejected by the pinned schema, got semantic=%#v", semanticIssues)
+			if testCase.Name == "unsupported-opentimestamps-timestamp" && len(schemaIssues) == 0 {
+				t.Fatalf("unsupported timestamp protocol fixture must be rejected by the pinned schema, got semantic=%#v", semanticIssues)
+			}
+			if testCase.Name == "rfc3161-timestamp-after-known-outcome" && !hasSemanticCode(semanticIssues, "semantic.timestamp_chronology") {
+				t.Fatalf("late timestamp fixture must be rejected by chronology semantics, got schema=%#v semantic=%#v", schemaIssues, semanticIssues)
 			}
 		})
 	}

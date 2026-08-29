@@ -77,11 +77,11 @@ func OperationDefinitions() []OperationDefinition {
 		definition(OperationForecastKeyHintUpdate, "forecast key-hint update", "forecast_key_hint_update", SelectionForecast, InputSchemaKeyHintUpdate, InputInline),
 		definition(OperationTargetBuild, "target build", "target_build", SelectionTarget, "", InputNone),
 		definition(OperationTargetCheck, "target check", "target_check", SelectionTarget, "", InputNone),
-		definition(OperationTimestampStamp, "timestamp stamp", "timestamp_stamp", SelectionForecast, "", InputNone),
-		definition(OperationTimestampUpgrade, "timestamp upgrade", "timestamp_upgrade", SelectionForecast, "", InputNone),
+		definition(OperationTimestampStamp, "timestamp stamp", "timestamp_stamp", SelectionForecast, "", InputNone,
+			requiredString("tsa_url", "Public HTTPS timestamp authority URL"),
+			requiredString("ca_bundle", "Retained ledger-relative PEM CA bundle")),
 		definition(OperationTimestampStatus, "timestamp status", "timestamp_status", SelectionForecast, "", InputNone),
-		definition(OperationTimestampVerify, "timestamp verify", "timestamp_verify", SelectionForecast, "", InputNone,
-			RequestField{Name: "verified_at", Type: "string", Description: "Optional exact RFC 3339 verification time"}),
+		definition(OperationTimestampVerify, "timestamp verify", "timestamp_verify", SelectionForecast, "", InputNone),
 		definition(OperationVerificationRun, "verify", "verification_run", SelectionLedger, "", InputNone,
 			RequestField{Name: "question", Type: "string", Description: "Optional question ID"},
 			RequestField{Name: "forecast", Type: "string", Description: "Optional forecast ID; requires question"},
@@ -89,8 +89,7 @@ func OperationDefinitions() []OperationDefinition {
 		definition(OperationPublicationBuild, "publish build", "publication_build", SelectionLedger, "", InputNone,
 			requiredString("output", "New package path inside an output root")),
 		definition(OperationPublicationVerify, "publish verify", "publication_verify", SelectionLedger, "", InputNone,
-			requiredString("manifest", "Manifest path inside the package root"),
-			RequestField{Name: "online", Type: "boolean", Description: "Enable built-in public Bitcoin observation"}),
+			requiredString("manifest", "Manifest path inside the package root")),
 	}
 	return definitions
 }

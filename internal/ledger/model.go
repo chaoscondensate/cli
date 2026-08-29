@@ -39,7 +39,7 @@ type Ledger struct {
 }
 
 // LegacyPublication represents optional publication metadata retained by the
-// upstream v1.1.0 schema. The CLI does not require Git and provides no Git
+// upstream v1.2.0 schema. The CLI does not require Git and provides no Git
 // automation; this type exists only for schema-compatible document handling.
 type LegacyPublication struct {
 	History       string       `json:"history" yaml:"history"`
@@ -299,19 +299,24 @@ type ForecastTarget struct {
 	Digest           Digest       `json:"digest" yaml:"digest"`
 }
 
-type OTSTimestampState string
+type RFC3161TimestampState string
 
 const (
-	OTSPending   OTSTimestampState = "pending"
-	OTSConfirmed OTSTimestampState = "confirmed"
+	RFC3161Pending  RFC3161TimestampState = "pending"
+	RFC3161Verified RFC3161TimestampState = "verified"
 )
 
-type OTSTimestamp struct {
-	Type               string            `json:"type" yaml:"type"`
-	ProofPath          RelativePath      `json:"proof_path" yaml:"proof_path"`
-	State              OTSTimestampState `json:"state" yaml:"state"`
-	AnchoredBefore     *Timestamp        `json:"anchored_before,omitempty" yaml:"anchored_before,omitempty"`
-	BitcoinBlockHeight *int64            `json:"bitcoin_block_height,omitempty" yaml:"bitcoin_block_height,omitempty"`
+type RFC3161Timestamp struct {
+	Type          string                `json:"type" yaml:"type"`
+	RequestPath   RelativePath          `json:"request_path" yaml:"request_path"`
+	ResponsePath  RelativePath          `json:"response_path" yaml:"response_path"`
+	TSAURL        string                `json:"tsa_url" yaml:"tsa_url"`
+	HashAlgorithm string                `json:"hash_algorithm" yaml:"hash_algorithm"`
+	State         RFC3161TimestampState `json:"state" yaml:"state"`
+	GenTime       *Timestamp            `json:"gen_time,omitempty" yaml:"gen_time,omitempty"`
+	PolicyOID     *string               `json:"policy_oid,omitempty" yaml:"policy_oid,omitempty"`
+	SerialNumber  *string               `json:"serial_number,omitempty" yaml:"serial_number,omitempty"`
+	CABundlePath  *RelativePath         `json:"ca_bundle_path,omitempty" yaml:"ca_bundle_path,omitempty"`
 }
 
 type ExternalAnchorKind string
@@ -351,25 +356,25 @@ type UnanchoredIntegrity struct {
 }
 
 type PendingIntegrity struct {
-	Status          IntegrityStatus   `json:"status" yaml:"status"`
-	Target          ForecastTarget    `json:"target" yaml:"target"`
-	Timestamps      []OTSTimestamp    `json:"timestamps" yaml:"timestamps"`
-	ExternalAnchors *[]ExternalAnchor `json:"external_anchors,omitempty" yaml:"external_anchors,omitempty"`
+	Status          IntegrityStatus    `json:"status" yaml:"status"`
+	Target          ForecastTarget     `json:"target" yaml:"target"`
+	Timestamps      []RFC3161Timestamp `json:"timestamps" yaml:"timestamps"`
+	ExternalAnchors *[]ExternalAnchor  `json:"external_anchors,omitempty" yaml:"external_anchors,omitempty"`
 }
 
 type VerifiedIntegrity struct {
-	Status          IntegrityStatus   `json:"status" yaml:"status"`
-	Target          ForecastTarget    `json:"target" yaml:"target"`
-	Timestamps      []OTSTimestamp    `json:"timestamps" yaml:"timestamps"`
-	VerifiedAt      Timestamp         `json:"verified_at" yaml:"verified_at"`
-	ExternalAnchors *[]ExternalAnchor `json:"external_anchors,omitempty" yaml:"external_anchors,omitempty"`
+	Status          IntegrityStatus    `json:"status" yaml:"status"`
+	Target          ForecastTarget     `json:"target" yaml:"target"`
+	Timestamps      []RFC3161Timestamp `json:"timestamps" yaml:"timestamps"`
+	VerifiedAt      Timestamp          `json:"verified_at" yaml:"verified_at"`
+	ExternalAnchors *[]ExternalAnchor  `json:"external_anchors,omitempty" yaml:"external_anchors,omitempty"`
 }
 
 type FailedIntegrity struct {
-	Status        IntegrityStatus `json:"status" yaml:"status"`
-	FailureReason string          `json:"failure_reason" yaml:"failure_reason"`
-	Target        *ForecastTarget `json:"target,omitempty" yaml:"target,omitempty"`
-	Timestamps    *[]OTSTimestamp `json:"timestamps,omitempty" yaml:"timestamps,omitempty"`
+	Status        IntegrityStatus     `json:"status" yaml:"status"`
+	FailureReason string              `json:"failure_reason" yaml:"failure_reason"`
+	Target        *ForecastTarget     `json:"target,omitempty" yaml:"target,omitempty"`
+	Timestamps    *[]RFC3161Timestamp `json:"timestamps,omitempty" yaml:"timestamps,omitempty"`
 }
 
 func (v Integrity) MarshalJSON() ([]byte, error) {

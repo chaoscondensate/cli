@@ -18,7 +18,6 @@ import (
 	"github.com/chaoscondensate/cli/internal/presentation"
 	"github.com/chaoscondensate/cli/internal/service"
 	"github.com/chaoscondensate/cli/internal/storage"
-	"github.com/chaoscondensate/cli/internal/timestamp/ots"
 	urfavecli "github.com/urfave/cli/v3"
 )
 
@@ -900,46 +899,27 @@ func formatTargetInspection(mode presentation.Mode, result service.TargetOperati
 }
 
 func timestampCommand() *urfavecli.Command {
-	stamp := timestampLeaf("stamp", "Submit a blinded target commitment to OpenTimestamps calendars", false, true)
+	stamp := timestampLeaf("stamp", "Request and retain an RFC 3161 timestamp", false, true)
 	stamp.Action = timestampStampAction
-	upgrade := timestampLeaf("upgrade", "Upgrade a pending OpenTimestamps receipt", false, true)
-	upgrade.Action = timestampUpgradeAction
-	status := timestampLeaf("status", "Show local OpenTimestamps receipt status", true, false)
+	status := timestampLeaf("status", "Show local RFC 3161 evidence status", true, false)
 	status.Action = timestampStatusAction
-	verify := timestampLeaf("verify", "Verify Bitcoin evidence and record the result", false, false)
-	verify.Flags = append(verify.Flags,
-		&urfavecli.StringFlag{Name: "bitcoin-core", Usage: "Explicit Bitcoin Core RPC URL (advanced)"},
-		&urfavecli.StringFlag{Name: "bitcoin-auth-file", TakesFile: true, Usage: "Protected JSON file with Bitcoin Core username and password"},
-		&urfavecli.StringFlag{Name: "verified-at", Usage: "Exact RFC 3339 verification time; defaults to now"},
-	)
-	verify.Description += "\n\nExpected pending, unavailable, inconclusive, budget-limited, mismatch, and verified outcomes are structured reports. Observation acquisition failure is not reported as proof mismatch."
+	verify := timestampLeaf("verify", "Verify retained RFC 3161 evidence locally", false, false)
 	verify.Action = timestampVerifyAction
-	command := group("timestamp", "Manage experimental OpenTimestamps receipts", stamp, upgrade, status, verify)
-	profile := ots.Profile()
-	command.Description = fmt.Sprintf("Experimental profile %s submits to four fixed calendars and needs %d valid responses. Public Bitcoin verification requires both fixed sources to agree; limits per invocation: %d heights/%d requests/%d concurrent.", profile.ID, profile.CalendarMinimum, profile.MaximumUniqueHeights, profile.MaximumHTTPRequests, profile.MaximumConcurrentHTTP)
+	command := group("timestamp", "Manage experimental RFC 3161 request and response evidence", stamp, status, verify)
+	command.Description = "Stamp requires an explicit public HTTPS TSA and retained ledger-relative PEM CA bundle. Status and verification are local and make no timestamp-service network request."
 	return command
 }
 
-func timestampLeaf(name, usage string, readOnly, calendarOptions bool) *urfavecli.Command {
+func timestampLeaf(name, usage string, readOnly, stampOptions bool) *urfavecli.Command {
 	flags := []urfavecli.Flag{fileFlag(false), questionFlag(), forecastFlag()}
-	if name != "status" {
+	if stampOptions {
 		flags = append(flags, &urfavecli.BoolFlag{Name: "offline", Usage: "Open no network connection"})
-	}
-	if calendarOptions {
 		flags = append(flags,
-			&urfavecli.StringSliceFlag{Name: "calendar", Usage: "Custom public HTTPS calendar origin; repeat to replace built-in calendars"},
-			&urfavecli.IntFlag{Name: "calendar-min-success", Usage: "Required valid custom calendar responses"},
+			&urfavecli.StringFlag{Name: "tsa-url", Required: true, Usage: "Public HTTPS RFC 3161 timestamp authority URL"},
+			&urfavecli.StringFlag{Name: "ca-bundle", Required: true, TakesFile: true, Usage: "Retained ledger-relative PEM CA bundle"},
 		)
 	}
 	command := leaf(name, usage, fmt.Sprintf("forecast-ledger timestamp %s --file ledger.yaml --question q-launch --forecast f-001", name), readOnly, flags)
-	command.Before = func(ctx context.Context, command *urfavecli.Command) (context.Context, error) {
-		calendars := command.StringSlice("calendar")
-		minimum := command.Int("calendar-min-success")
-		if (len(calendars) == 0) != (minimum == 0) {
-			return ctx, app.NewError(app.CodeUsage, "--calendar and --calendar-min-success must be supplied together", nil)
-		}
-		return ctx, nil
-	}
 	return command
 }
 
@@ -948,33 +928,30 @@ func timestampStampAction(ctx context.Context, command *urfavecli.Command) error
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
 	result, err := service.CommitTimestampStamp(operationContext, command.String("file"), ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast")), service.TimestampStampOptions{
-		DryRun: runtime.DryRun, Offline: command.Bool("offline"), CustomCalendars: command.StringSlice("calendar"), CalendarMinimum: command.Int("calendar-min-success"), Effects: service.ProductionEffects(),
+		DryRun: runtime.DryRun, Offline: command.Bool("offline"), TSAURL: command.String("tsa-url"), CABundlePath: command.String("ca-bundle"), Effects: service.ProductionEffects(),
 	})
-	if err != nil {
+	if err != nil && result.FailureCode == "" {
 		return withRecovery(err, result.Recovery)
 	}
-	code, message := "timestamp.pending", "OpenTimestamps receipt was stored as pending"
+	code, message := "timestamp.verified", "RFC 3161 response was verified and retained"
+	if result.FailureCode == app.CodeNetwork {
+		code, message = "timestamp.not_checked", "The timestamp authority request did not complete"
+	}
+	if result.State == service.TimestampPending {
+		if result.FailureCode != app.CodeNetwork {
+			code, message = "timestamp.pending", "RFC 3161 response was retained as pending"
+		}
+	}
 	if runtime.DryRun {
 		code, message = "timestamp.stamp.planned", "Timestamp stamp is valid; no entropy, network request, or file write occurred"
 	}
-	return presenterFor(command).Success(code, message, result)
-}
-
-func timestampUpgradeAction(ctx context.Context, command *urfavecli.Command) error {
-	runtime := RuntimeFromCommand(command)
-	operationContext, cancel := runtime.Context(ctx)
-	defer cancel()
-	result, err := service.CommitTimestampUpgrade(operationContext, command.String("file"), ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast")), service.TimestampUpgradeOptions{
-		DryRun: runtime.DryRun, Offline: command.Bool("offline"), CustomCalendars: command.StringSlice("calendar"), CalendarMinimum: command.Int("calendar-min-success"),
-	})
+	if presentErr := presenterFor(command).Success(code, message, result); presentErr != nil {
+		return presentErr
+	}
 	if err != nil {
-		return err
+		return presentedApplicationError{err}
 	}
-	code, message := "timestamp.upgraded", "OpenTimestamps receipt was upgraded"
-	if runtime.DryRun {
-		code, message = "timestamp.upgrade.planned", "Timestamp upgrade is valid; no network request or file write occurred"
-	}
-	return presenterFor(command).Success(code, message, result)
+	return nil
 }
 
 func timestampStatusAction(ctx context.Context, command *urfavecli.Command) error {
@@ -985,38 +962,23 @@ func timestampStatusAction(ctx context.Context, command *urfavecli.Command) erro
 	if err != nil {
 		return err
 	}
-	return presenterFor(command).Success("timestamp.status", "OpenTimestamps local status: "+string(result.State), result)
+	return presenterFor(command).Success("timestamp.status", "RFC 3161 local status: "+string(result.State), result)
 }
 
 func timestampVerifyAction(ctx context.Context, command *urfavecli.Command) error {
 	runtime := RuntimeFromCommand(command)
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
-	var verifiedAt ledger.Timestamp
-	if command.String("verified-at") != "" {
-		verifiedAt = ledger.Timestamp(command.String("verified-at"))
-		if _, err := service.ParseTimestamp(verifiedAt, "verified_at"); err != nil {
-			return err
-		}
-	}
-	var observer ots.BitcoinObserver
-	var err error
-	if !runtime.DryRun {
-		observer, err = service.ProtectedCoreObserver(command.String("bitcoin-core"), command.String("bitcoin-auth-file"))
-		if err != nil {
-			return err
-		}
-	}
-	result, err := service.CommitTimestampVerify(operationContext, command.String("file"), ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast")), service.TimestampVerifyOptions{DryRun: runtime.DryRun, Offline: command.Bool("offline"), VerifiedAt: verifiedAt, Observer: observer})
+	result, err := service.CommitTimestampVerify(operationContext, command.String("file"), ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast")), service.TimestampVerifyOptions{DryRun: runtime.DryRun, Effects: service.ProductionEffects()})
 	if err != nil {
 		return err
 	}
 	code, message := "timestamp.verification."+string(result.Verification.State), "Timestamp verification completed with status "+string(result.Verification.State)
 	if result.Verification.State == service.LayerPass {
-		code, message = "timestamp.verified", "OpenTimestamps Bitcoin evidence was verified"
+		code, message = "timestamp.verified", "RFC 3161 evidence was verified locally"
 	}
 	if runtime.DryRun {
-		code, message = "timestamp.verify.planned", "Timestamp verification is valid; network observation and ledger update were deferred"
+		code, message = "timestamp.verify.planned", "Timestamp verification is valid; the ledger update was deferred"
 	}
 	presenter := presenterFor(command)
 	if presenter.Mode() != presentation.ModeJSON && presenter.Mode() != presentation.ModeQuiet {
@@ -1036,17 +998,12 @@ func verifyCommand() *urfavecli.Command {
 		fileFlag(false),
 		&urfavecli.StringFlag{Name: "question", Usage: "Optional question ID"},
 		&urfavecli.StringFlag{Name: "forecast", Usage: "Optional forecast ID; requires --question"},
-		&urfavecli.BoolFlag{Name: "offline", Usage: "Run local checks without opening a network connection"},
+		&urfavecli.BoolFlag{Name: "offline", Usage: "Do not retrieve optional outcome sources; timestamp checks remain local"},
 		&urfavecli.BoolFlag{Name: "check-sources", Usage: "Check outcome source reachability and stored digests"},
-		&urfavecli.StringFlag{Name: "bitcoin-core", Usage: "Explicit Bitcoin Core RPC URL (advanced)"},
-		&urfavecli.StringFlag{Name: "bitcoin-auth-file", TakesFile: true, Usage: "Protected JSON file with Bitcoin Core username and password"},
 	})
 	command.Before = func(ctx context.Context, command *urfavecli.Command) (context.Context, error) {
 		if command.String("forecast") != "" && command.String("question") == "" {
 			return ctx, app.NewError(app.CodeUsage, "--forecast requires --question", nil)
-		}
-		if command.Bool("offline") && (command.String("bitcoin-core") != "" || command.String("bitcoin-auth-file") != "") {
-			return ctx, app.NewError(app.CodeUsage, "--offline cannot be combined with Bitcoin Core options", nil)
 		}
 		return ctx, nil
 	}
@@ -1059,12 +1016,8 @@ func verificationAction(ctx context.Context, command *urfavecli.Command) error {
 	runtime := RuntimeFromCommand(command)
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
-	observer, err := service.ProtectedCoreObserver(command.String("bitcoin-core"), command.String("bitcoin-auth-file"))
-	if err != nil {
-		return err
-	}
 	report, err := service.VerifyLedgerEvidence(operationContext, command.String("file"), service.VerificationOptions{
-		Offline: command.Bool("offline"), CheckSources: command.Bool("check-sources"), Observer: observer,
+		Offline: command.Bool("offline"), CheckSources: command.Bool("check-sources"),
 		QuestionID: ledger.Slug(command.String("question")), ForecastID: ledger.Slug(command.String("forecast")),
 	})
 	if err != nil {
@@ -1090,21 +1043,8 @@ func publishCommand() *urfavecli.Command {
 	verify := leaf("verify", "Verify an evidence package", "forecast-ledger publish verify --file package/ledger/ledger.yaml --manifest package/manifest.json", true, []urfavecli.Flag{
 		fileFlag(false),
 		&urfavecli.StringFlag{Name: "manifest", Required: true, TakesFile: true, Usage: "Package manifest file"},
-		&urfavecli.BoolFlag{Name: "online", Usage: "Recheck Bitcoin timing with network sources"},
-		&urfavecli.BoolFlag{Name: "offline", Usage: "Verify package bytes without opening a network connection (default)"},
-		&urfavecli.StringFlag{Name: "bitcoin-core", Usage: "Explicit Bitcoin Core RPC URL (advanced; requires --online)"},
-		&urfavecli.StringFlag{Name: "bitcoin-auth-file", TakesFile: true, Usage: "Protected JSON file with Bitcoin Core username and password"},
 	})
-	verify.Before = func(ctx context.Context, command *urfavecli.Command) (context.Context, error) {
-		if command.Bool("online") && command.Bool("offline") {
-			return ctx, app.NewError(app.CodeUsage, "--online and --offline cannot be combined", nil)
-		}
-		if !command.Bool("online") && (command.String("bitcoin-core") != "" || command.String("bitcoin-auth-file") != "") {
-			return ctx, app.NewError(app.CodeUsage, "Bitcoin Core options require --online", nil)
-		}
-		return ctx, nil
-	}
-	verify.Description += "\n\nManifest and file integrity remain visible separately. Pass requires at least one applicable forecast-evidence layer; an empty package returns no_evidence."
+	verify.Description += "\n\nRFC 3161 target, request, response, and retained CA-bundle checks are always local. Manifest and file integrity remain visible separately."
 	verify.Action = publicationVerifyAction
 	return group("publish", "Build or verify portable evidence packages", build, verify)
 }
@@ -1128,13 +1068,7 @@ func publicationVerifyAction(ctx context.Context, command *urfavecli.Command) er
 	runtime := RuntimeFromCommand(command)
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
-	observer, err := service.ProtectedCoreObserver(command.String("bitcoin-core"), command.String("bitcoin-auth-file"))
-	if err != nil {
-		return err
-	}
-	result, err := service.VerifyPublicationPackage(operationContext, command.String("file"), command.String("manifest"), service.PublicationVerifyOptions{
-		Online: command.Bool("online"), Offline: !command.Bool("online"), Observer: observer,
-	})
+	result, err := service.VerifyPublicationPackage(operationContext, command.String("file"), command.String("manifest"))
 	if err != nil {
 		return err
 	}
@@ -1199,7 +1133,7 @@ func versionCommand() *urfavecli.Command {
 				encoder.SetEscapeHTML(false)
 				return encoder.Encode(info)
 			}
-			_, err := fmt.Fprintf(command.Root().Writer, "%s %s\nsource revision: %s\ngo: %s\nforecast ledger schema: %s (%s, sha256:%s)\nmcp protocol: %s\ntimestamp profile: %s (experimental; %d-of-%d calendars; %d Bitcoin sources; limits per invocation: %d heights/%d requests/%d concurrent)\n", info.Binary, info.Version, info.SourceRevision, info.GoVersion, info.Schema.Version, info.Schema.Commit, info.Schema.SHA256, info.MCPProtocol, info.TimestampProfile.ID, info.TimestampProfile.CalendarMinimum, len(info.TimestampProfile.Calendars), len(info.TimestampProfile.BitcoinSources), info.TimestampProfile.MaximumUniqueHeights, info.TimestampProfile.MaximumHTTPRequests, info.TimestampProfile.MaximumConcurrentHTTP)
+			_, err := fmt.Fprintf(command.Root().Writer, "%s %s\nsource revision: %s\ngo: %s\nforecast ledger schema: %s (%s, sha256:%s)\nmcp protocol: %s\ntimestamp support: %s/%s (experimental; explicit TSA and retained CA bundle; local verification)\n", info.Binary, info.Version, info.SourceRevision, info.GoVersion, info.Schema.Version, info.Schema.Commit, info.Schema.SHA256, info.MCPProtocol, info.Timestamp.Protocol, info.Timestamp.HashAlgorithm)
 			return err
 		}}
 }
@@ -1310,31 +1244,16 @@ func formatVerificationReport(mode presentation.Mode, report service.Verificatio
 
 func formatTimestampVerification(mode presentation.Mode, result service.TimestampVerifyResult) string {
 	if mode == presentation.ModePlain {
-		return fmt.Sprintf("state\t%s\nverification\t%s\t%s\theight=%s\nnetwork\t%s\nsources\t%s\nrequests\t%s",
-			result.State, result.Verification.State, strings.Join(result.Verification.ReasonCodes, ","), compactPublicJSON(result.BitcoinHeight),
-			result.NetworkProfile.ID, strings.Join(observationSourceIDs(result), ","), compactPublicJSON(result.RequestSummary))
+		return fmt.Sprintf("state\t%s\nverification\t%s\t%s\ntimestamps\t%s",
+			result.State, result.Verification.State, strings.Join(result.Verification.ReasonCodes, ","), compactPublicJSON(result.Entries))
 	}
 	var output strings.Builder
 	fmt.Fprintf(&output, "State: %s\nVerification: %s", result.State, result.Verification.State)
 	if len(result.Verification.ReasonCodes) > 0 {
 		fmt.Fprintf(&output, " (%s)", strings.Join(result.Verification.ReasonCodes, ", "))
 	}
-	if result.BitcoinHeight != nil {
-		fmt.Fprintf(&output, "\nBitcoin height: %d", *result.BitcoinHeight)
-	}
-	fmt.Fprintf(&output, "\nNetwork profile: %s", result.NetworkProfile.ID)
-	if sourceIDs := observationSourceIDs(result); len(sourceIDs) > 0 {
-		fmt.Fprintf(&output, "\nAffected sources: %s", strings.Join(sourceIDs, ", "))
-	}
-	fmt.Fprintf(&output, "\nRequest summary: %s", compactPublicJSON(result.RequestSummary))
+	fmt.Fprintf(&output, "\nTimestamp entries: %s", compactPublicJSON(result.Entries))
 	return output.String()
-}
-
-func observationSourceIDs(result service.TimestampVerifyResult) []string {
-	if result.ObservationIssue == nil {
-		return nil
-	}
-	return result.ObservationIssue.SourceIDs
 }
 
 func formatPublicationVerification(mode presentation.Mode, result service.PublicationVerifyResult) string {
@@ -1403,7 +1322,18 @@ func leaf(name, usage, example string, readOnly bool, flags []urfavecli.Flag) *u
 	if !readOnly {
 		flags = append(flags, &urfavecli.BoolFlag{Name: "dry-run", Usage: "Validate and show the planned change without writing"})
 	}
-	return &urfavecli.Command{Name: name, Usage: usage, Description: "Example:\n  " + example, Flags: flags}
+	return &urfavecli.Command{Name: name, Usage: usage, Description: "Example:\n  " + example, Flags: flags, Before: admitSupportedLedger}
+}
+
+func admitSupportedLedger(ctx context.Context, command *urfavecli.Command) (context.Context, error) {
+	path := command.String("file")
+	if command.Name == "init" || path == "" || path == "-" {
+		return ctx, nil
+	}
+	operationContext, cancel := RuntimeFromCommand(command).Context(ctx)
+	defer cancel()
+	_, err := service.LoadAndValidateLedger(operationContext, path, nil)
+	return ctx, err
 }
 
 func fileFlag(allowStdin bool) *urfavecli.StringFlag {

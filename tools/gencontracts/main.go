@@ -174,7 +174,7 @@ func resultSchema() map[string]any {
 				"code": map[string]any{"type": "string"}, "message": map[string]any{"type": "string"}, "details": map[string]any{"type": "object"},
 			})},
 			"effects": map[string]any{"type": "array", "items": closedRecord([]string{"kind", "action", "status"}, map[string]any{
-				"kind":   map[string]any{"enum": []string{"ledger", "target", "receipt", "key", "package", "network"}},
+				"kind":   map[string]any{"enum": []string{"ledger", "target", "timestamp_request", "timestamp_response", "key", "package", "network"}},
 				"action": map[string]any{"enum": []string{"read", "create", "replace", "remove", "contact"}},
 				"status": map[string]any{"enum": []string{"planned", "deferred", "completed", "unchanged"}},
 				"root":   map[string]any{"type": "string"}, "path": map[string]any{"type": "string"}, "source_id": map[string]any{"type": "string"},
@@ -191,36 +191,34 @@ func resultSchema() map[string]any {
 
 func resultDefinitions() map[string]any {
 	stringList := stringArray()
-	requestSummary := closedRecord([]string{"unique_heights", "http_requests", "max_heights", "max_requests", "max_concurrent"}, map[string]any{
-		"unique_heights": map[string]any{"type": "integer", "minimum": 0}, "http_requests": map[string]any{"type": "integer", "minimum": 0},
-		"max_heights": map[string]any{"type": "integer", "minimum": 0}, "max_requests": map[string]any{"type": "integer", "minimum": 0}, "max_concurrent": map[string]any{"type": "integer", "minimum": 0},
-	})
-	networkProfile := closedRecord([]string{"mode"}, map[string]any{
-		"mode": map[string]any{"enum": []string{"offline", "builtin", "custom", "bitcoin_core"}}, "id": map[string]any{"type": "string"},
-		"source_ids": stringList, "minimum_success": map[string]any{"type": "integer", "minimum": 0}, "max_unique_heights": map[string]any{"type": "integer", "minimum": 0},
-		"max_requests": map[string]any{"type": "integer", "minimum": 0}, "max_concurrent": map[string]any{"type": "integer", "minimum": 0},
-		"trust_limitations": stringList, "privacy_limitations": stringList,
+	requestSummary := closedRecord([]string{"request_count"}, map[string]any{
+		"request_count": map[string]any{"type": "integer", "minimum": 0, "maximum": 1},
+		"tsa_origin":    map[string]any{"type": "string"},
 	})
 	verificationLayer := closedRecord([]string{"name", "state"}, map[string]any{
 		"name": map[string]any{"type": "string"}, "state": map[string]any{"enum": []string{"pass", "fail", "pending", "not_applicable", "not_checked"}},
 		"reason_codes": stringList, "evidence": map[string]any{"type": "object"}, "limitations": stringList,
 	})
-	observationIssue := closedRecord([]string{"kind"}, map[string]any{
-		"kind": map[string]any{"enum": []string{"source_unavailable", "observation_inconclusive", "observation_budget_exhausted"}}, "source_ids": stringList,
+	timestampEntry := closedRecord([]string{"tsa_url", "state", "request_path", "response_path", "request_present", "response_present", "ca_bundle_present", "check_state"}, map[string]any{
+		"tsa_url": map[string]any{"type": "string", "format": "uri"}, "state": map[string]any{"enum": []string{"pending", "verified"}},
+		"request_path": map[string]any{"type": "string"}, "response_path": map[string]any{"type": "string"}, "ca_bundle_path": map[string]any{"type": "string"},
+		"request_present": map[string]any{"type": "boolean"}, "response_present": map[string]any{"type": "boolean"}, "ca_bundle_present": map[string]any{"type": "boolean"},
+		"check_state": map[string]any{"enum": []string{"pass", "fail", "pending", "not_applicable", "not_checked"}}, "reason_codes": stringList,
+		"gen_time": map[string]any{"type": "string", "format": "date-time"}, "policy_oid": map[string]any{"type": "string"}, "serial_number": map[string]any{"type": "string"},
+		"signer_subject": map[string]any{"type": "string"}, "signer_fingerprint_sha256": map[string]any{"type": "string"}, "ca_bundle_sha256": map[string]any{"type": "string"},
 	})
-	timestampData := closedRecord([]string{"question_id", "forecast_id", "state", "target_path", "target_sha256", "receipt_path", "target_present", "receipt_present", "network_profile", "request_summary", "verification"}, map[string]any{
+	timestampData := closedRecord([]string{"question_id", "forecast_id", "state", "target_path", "target_sha256", "target_present", "verification"}, map[string]any{
 		"question_id": map[string]any{"type": "string"}, "forecast_id": map[string]any{"type": "string"},
-		"state":       map[string]any{"enum": []string{"unanchored", "pending", "confirmed_unverified", "verified", "failed", "inconsistent"}},
-		"target_path": map[string]any{"type": "string"}, "target_sha256": map[string]any{"type": "string"}, "receipt_path": map[string]any{"type": "string"},
-		"target_present": map[string]any{"type": "boolean"}, "receipt_present": map[string]any{"type": "boolean"}, "calendar_source_ids": stringList, "calendar_identities": stringList,
-		"bitcoin_height": map[string]any{"type": "integer", "minimum": 0}, "anchored_before": map[string]any{"type": "string", "format": "date-time"},
-		"network_profile": networkProfile, "request_summary": requestSummary, "next_actions": stringList,
+		"state":       map[string]any{"enum": []string{"unanchored", "pending", "verified", "failed", "inconsistent"}},
+		"target_path": map[string]any{"type": "string"}, "target_sha256": map[string]any{"type": "string"},
+		"target_present": map[string]any{"type": "boolean"}, "timestamps": map[string]any{"type": "array", "items": timestampEntry},
+		"request_summary": requestSummary, "next_actions": stringList,
 		"warnings": map[string]any{"type": "array"}, "effects": map[string]any{"type": "array"}, "recovery": map[string]any{"type": "object"},
-		"verification": verificationLayer, "observation_issue": observationIssue,
+		"verification": verificationLayer,
 	})
 	return map[string]any{
 		"verificationOverall": map[string]any{"enum": []string{"pass", "fail", "pending", "incomplete", "no_evidence"}},
-		"verificationLayer":   verificationLayer, "bitcoinObservationIssue": observationIssue, "networkProfile": networkProfile,
+		"verificationLayer":   verificationLayer, "timestampEntry": timestampEntry,
 		"requestSummary": requestSummary, "timestampVerificationData": timestampData,
 	}
 }

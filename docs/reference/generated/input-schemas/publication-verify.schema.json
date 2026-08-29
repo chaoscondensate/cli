@@ -2,57 +2,7 @@
   "$defs": {
     "publication-verify": {
       "additionalProperties": false,
-      "allOf": [
-        {
-          "not": {
-            "properties": {
-              "offline": {
-                "const": true
-              },
-              "online": {
-                "const": true
-              }
-            },
-            "required": [
-              "online",
-              "offline"
-            ]
-          }
-        },
-        {
-          "if": {
-            "required": [
-              "bitcoin_core"
-            ]
-          },
-          "then": {
-            "required": [
-              "bitcoin_auth_file"
-            ]
-          }
-        },
-        {
-          "if": {
-            "required": [
-              "bitcoin_auth_file"
-            ]
-          },
-          "then": {
-            "required": [
-              "bitcoin_core"
-            ]
-          }
-        }
-      ],
       "properties": {
-        "bitcoin_auth_file": {
-          "minLength": 1,
-          "type": "string"
-        },
-        "bitcoin_core": {
-          "format": "uri",
-          "type": "string"
-        },
         "file": {
           "minLength": 1,
           "type": "string"
@@ -60,12 +10,6 @@
         "manifest": {
           "minLength": 1,
           "type": "string"
-        },
-        "offline": {
-          "type": "boolean"
-        },
-        "online": {
-          "type": "boolean"
         }
       },
       "required": [

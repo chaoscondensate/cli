@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/chaoscondensate/schema/v1.1.0/schema/forecast-ledger.schema.json",
+  "$id": "https://raw.githubusercontent.com/chaoscondensate/schema/v1.2.0/schema/forecast-ledger.schema.json",
   "title": "Forecast Ledger",
   "description": "A portable, machine-verifiable ledger for quantitative forecasts made by one individual or team forecasting identity.",
   "type": "object",
@@ -21,7 +21,7 @@
       "description": "A tooling pointer to this JSON Schema."
     },
     "schema_version": {
-      "const": "1.1.0",
+      "const": "1.2.0",
       "description": "The exact Forecast Ledger contract version used by this document."
     },
     "ledger_id": {
@@ -553,38 +553,62 @@
         }
       }
     },
-    "otsTimestamp": {
+    "rfc3161Timestamp": {
       "type": "object",
-      "required": ["type", "proof_path", "state"],
+      "required": [
+        "type",
+        "request_path",
+        "response_path",
+        "tsa_url",
+        "hash_algorithm",
+        "state"
+      ],
       "additionalProperties": false,
       "properties": {
         "type": {
-          "const": "opentimestamps"
+          "const": "rfc3161"
         },
-        "proof_path": {
+        "request_path": {
           "$ref": "#/$defs/relativePath"
         },
-        "state": {
-          "enum": ["pending", "confirmed"]
+        "response_path": {
+          "$ref": "#/$defs/relativePath"
         },
-        "anchored_before": {
+        "tsa_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "hash_algorithm": {
+          "const": "sha256"
+        },
+        "state": {
+          "enum": ["pending", "verified"]
+        },
+        "gen_time": {
           "$ref": "#/$defs/timestamp"
         },
-        "bitcoin_block_height": {
-          "type": "integer",
-          "minimum": 0
+        "policy_oid": {
+          "type": "string",
+          "pattern": "^[0-2](?:\\.(?:0|[1-9][0-9]*))+$"
+        },
+        "serial_number": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ca_bundle_path": {
+          "$ref": "#/$defs/relativePath"
         }
       },
       "if": {
         "properties": {
           "state": {
-            "const": "confirmed"
+            "const": "verified"
           }
         },
         "required": ["state"]
       },
       "then": {
-        "required": ["anchored_before", "bitcoin_block_height"]
+        "required": ["gen_time", "policy_oid", "serial_number", "ca_bundle_path"]
       }
     },
     "externalAnchor": {
@@ -633,7 +657,7 @@
           "type": "array",
           "minItems": 1,
           "items": {
-            "$ref": "#/$defs/otsTimestamp"
+            "$ref": "#/$defs/rfc3161Timestamp"
           }
         },
         "external_anchors": {
@@ -659,16 +683,16 @@
           "type": "array",
           "minItems": 1,
           "items": {
-            "$ref": "#/$defs/otsTimestamp"
+            "$ref": "#/$defs/rfc3161Timestamp"
           },
           "contains": {
             "type": "object",
             "properties": {
               "type": {
-                "const": "opentimestamps"
+                "const": "rfc3161"
               },
               "state": {
-                "const": "confirmed"
+                "const": "verified"
               }
             },
             "required": ["type", "state"]
@@ -704,7 +728,7 @@
         "timestamps": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/otsTimestamp"
+            "$ref": "#/$defs/rfc3161Timestamp"
           }
         }
       }

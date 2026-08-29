@@ -5,7 +5,6 @@ import (
 	"runtime"
 
 	ledgerschema "github.com/chaoscondensate/cli/internal/schema"
-	"github.com/chaoscondensate/cli/internal/timestamp/ots"
 )
 
 const (
@@ -25,15 +24,21 @@ type Schema struct {
 	SHA256  string `json:"sha256"`
 }
 
+type TimestampSupport struct {
+	Protocol      string `json:"protocol"`
+	HashAlgorithm string `json:"hash_algorithm"`
+	Experimental  bool   `json:"experimental"`
+}
+
 // Info is the stable machine-readable version result.
 type Info struct {
-	Binary           string            `json:"binary"`
-	Version          string            `json:"version"`
-	SourceRevision   string            `json:"source_revision"`
-	GoVersion        string            `json:"go_version"`
-	Schema           Schema            `json:"schema"`
-	MCPProtocol      string            `json:"mcp_protocol"`
-	TimestampProfile ots.PublicProfile `json:"timestamp_profile"`
+	Binary         string           `json:"binary"`
+	Version        string           `json:"version"`
+	SourceRevision string           `json:"source_revision"`
+	GoVersion      string           `json:"go_version"`
+	Schema         Schema           `json:"schema"`
+	MCPProtocol    string           `json:"mcp_protocol"`
+	Timestamp      TimestampSupport `json:"timestamp"`
 }
 
 // Current returns metadata for the running binary.
@@ -48,7 +53,7 @@ func Current() Info {
 			Commit:  ledgerschema.Commit,
 			SHA256:  ledgerschema.SchemaSHA256,
 		},
-		MCPProtocol:      MCPProtocolVersion,
-		TimestampProfile: ots.Profile(),
+		MCPProtocol: MCPProtocolVersion,
+		Timestamp:   TimestampSupport{Protocol: "rfc3161", HashAlgorithm: "sha256", Experimental: true},
 	}
 }

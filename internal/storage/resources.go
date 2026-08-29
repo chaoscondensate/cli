@@ -21,11 +21,12 @@ import (
 type ResourceKind string
 
 const (
-	ResourceLedger  ResourceKind = "ledger"
-	ResourceTarget  ResourceKind = "target"
-	ResourceReceipt ResourceKind = "receipt"
-	ResourceKey     ResourceKind = "key"
-	ResourcePackage ResourceKind = "package"
+	ResourceLedger            ResourceKind = "ledger"
+	ResourceTarget            ResourceKind = "target"
+	ResourceTimestampRequest  ResourceKind = "timestamp_request"
+	ResourceTimestampResponse ResourceKind = "timestamp_response"
+	ResourceKey               ResourceKind = "key"
+	ResourcePackage           ResourceKind = "package"
 )
 
 type ResourceType string
@@ -352,7 +353,7 @@ func replaceResourceJournal(path string, journal resourceJournal) error {
 
 func validateResourceEntry(entry ResourceEntry) error {
 	switch entry.Kind {
-	case ResourceLedger, ResourceTarget, ResourceReceipt, ResourceKey, ResourcePackage:
+	case ResourceLedger, ResourceTarget, ResourceTimestampRequest, ResourceTimestampResponse, ResourceKey, ResourcePackage:
 	default:
 		return app.NewError(app.CodeInvalidData, "resource plan kind is invalid", nil)
 	}

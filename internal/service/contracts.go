@@ -37,7 +37,6 @@ const (
 	OperationTargetBuild           OperationName = "target.build"
 	OperationTargetCheck           OperationName = "target.check"
 	OperationTimestampStamp        OperationName = "timestamp.stamp"
-	OperationTimestampUpgrade      OperationName = "timestamp.upgrade"
 	OperationTimestampStatus       OperationName = "timestamp.status"
 	OperationTimestampVerify       OperationName = "timestamp.verify"
 	OperationVerificationRun       OperationName = "verification.run"
@@ -87,7 +86,6 @@ const (
 	NetworkOffline NetworkMode = "offline"
 	NetworkBuiltin NetworkMode = "builtin"
 	NetworkCustom  NetworkMode = "custom"
-	NetworkCore    NetworkMode = "bitcoin_core"
 )
 
 // NetworkProfile is public metadata about a bounded network policy. Source IDs
@@ -128,12 +126,13 @@ type EffectKind string
 type EffectAction string
 
 const (
-	EffectLedger  EffectKind = "ledger"
-	EffectTarget  EffectKind = "target"
-	EffectReceipt EffectKind = "receipt"
-	EffectKey     EffectKind = "key"
-	EffectPackage EffectKind = "package"
-	EffectNetwork EffectKind = "network"
+	EffectLedger            EffectKind = "ledger"
+	EffectTarget            EffectKind = "target"
+	EffectTimestampRequest  EffectKind = "timestamp_request"
+	EffectTimestampResponse EffectKind = "timestamp_response"
+	EffectKey               EffectKind = "key"
+	EffectPackage           EffectKind = "package"
+	EffectNetwork           EffectKind = "network"
 )
 
 const (

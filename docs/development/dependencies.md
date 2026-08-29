@@ -10,7 +10,7 @@ prerequisites: ../../AGENTS.md
 next: build.md
 -->
 
-Reviewed: 2026-08-25
+Reviewed: 2026-08-29
 
 Runtime dependencies are pinned to stable tagged releases in `go.mod`. The
 project uses Go 1.27.0 as its module language floor and reviewed toolchain.
@@ -27,6 +27,7 @@ in the test matrix.
 | JSON Schema ECMA-262 patterns | `github.com/dlclark/regexp2` | `v1.11.0` | MIT | Required for the pinned schema's lookaheads; matches use a fixed timeout. |
 | YAML | `go.yaml.in/yaml/v3` | `v3.0.5` | Apache-2.0 and MIT | Maintained v3 import path. Parsing requires explicit size/depth/alias limits and source-node golden tests. |
 | File locks | `github.com/gofrs/flock` | `v0.13.0` | BSD-3-Clause | Cross-platform advisory locking behind a project interface; never treated as a security boundary or atomic-write replacement. |
+| RFC 3161 | `github.com/notaryproject/tspclient-go` | `v1.0.0` | Apache-2.0 | Exact commit `543cd58803b6c7260bad9bc78973a47ab02f249a`; isolated behind bounded project-owned request, CMS, X.509, and HTTP policy. |
 | ChaCha20-Poly1305 | `golang.org/x/crypto` | `v0.55.0` | BSD-3-Clause | Go team module; only the published standard-nonce profile is exposed. Randomness and SHA-256 use the standard library. |
 
 The MCP SDK brings additional pinned modules for JSON schemas, URI templates,
@@ -48,6 +49,9 @@ third-party notices, including the MCP SDK's mixed-license history.
   and presentation-preservation review.
 - `gofrs/flock` remains pre-v1, so project code must isolate it behind a narrow
   interface and test native Windows and Unix behavior.
+- The RFC 3161 module is not the product trust policy. Project code restricts
+  algorithms and sizes, requires an explicit retained CA bundle, excludes
+  system roots and revocation lookup, and checks OpenSSL interoperability.
 
 A clean scan is not a security guarantee. Run these commands after every module
 update and before release:

@@ -32,7 +32,7 @@ The command selector contract SHALL be:
 | `forecast key-hint update` | `--file --question --forecast` |
 | `forecast list` | `--file --question` |
 | `target build|check` | `--file` plus `--all` or both `--question --forecast` |
-| `timestamp stamp|upgrade|status|verify` | `--file --question --forecast` |
+| `timestamp stamp|status|verify` | `--file --question --forecast` |
 | `verify` | `--file`; optional `--question`, and optional `--forecast` only with `--question` |
 | `publish build` | `--file --output` |
 | `publish verify` | `--file --manifest` |
@@ -100,16 +100,16 @@ Temporal validation messages SHALL describe the actual inclusive boundary. A val
 - **WHEN** `recorded_at` equals `forecasted_at`
 - **THEN** validation accepts the inclusive boundary, while a value before it is rejected with wording that says it must not be before `forecasted_at`
 
-### Requirement: Consistent zero-config and offline network behavior
-Every action that can contact the network SHALL identify the built-in profile or explicit advanced source mode it will use and SHALL support `--offline`. Offline mode SHALL override automatic protocol-source use and explicit outcome-source checking, open no socket, and either continue with documented local-only results or fail before side effects when the action inherently requires a network response. Ordinary OpenTimestamps and Bitcoin public verification MUST NOT require calendar/explorer configuration. Only timestamp stamp/upgrade MAY accept the documented explicit CLI custom-calendar mode, and only timestamp/layered/package verification MAY accept the documented CLI Bitcoin Core override; MCP accepts neither arbitrary calendar nor Bitcoin endpoint URLs in v1.
+### Requirement: Explicit and offline network behavior
+Every action that can contact the network SHALL identify the explicit remote input it will use and SHALL support the applicable offline boundary. General `--offline` SHALL override optional outcome-source checking and open no socket. Timestamp stamp SHALL require explicit `--tsa-url` and `--ca-bundle`; its `--offline` mode SHALL fail before request generation or side effects because stamping inherently requires a response. Timestamp status, timestamp verify, layered timestamp verification, and package verification SHALL use retained request, response, target, and CA-bundle bytes locally and SHALL never contact a TSA or blockchain service.
 
 #### Scenario: Offline layered verification
 - **WHEN** a user runs `verify --offline`
 - **THEN** all local layers run, network-dependent layers remain pending or not checked, and no source URL is contacted
 
-#### Scenario: Visible automatic profile
-- **WHEN** a network-capable command uses the embedded public profile
-- **THEN** human and JSON results identify its stable profile ID and safe contacted source IDs
+#### Scenario: Explicit timestamp provider
+- **WHEN** timestamp stamp contacts the selected TSA
+- **THEN** human and JSON results identify the safe normalized TSA identity and bounded request count without exposing response bytes or credentials
 
 ### Requirement: Transactional mutation and format preservation
 Every ledger mutation SHALL acquire the cross-platform ledger lock, parse and fully validate the current document, apply a minimal source-tree patch, fully validate the prospective document with access to the same safely resolved target and receipt artifacts required to validate the current document, and perform a recoverable same-directory replacement. A valid retained artifact MUST NOT make an otherwise permitted authoring mutation fail merely because prospective validation omitted its artifact context.
@@ -139,7 +139,7 @@ Newly inserted or replaced business mappings SHALL use the same documented seman
 - **THEN** the new forecast uses the same semantic field order as the initial forecast rather than alphabetic key order, while existing source bytes retain their order
 
 ### Requirement: Dry-run and confirmation
-Every command that mutates a ledger, creates or replaces an artifact, writes a key, or creates a package SHALL support `--dry-run`. A read-only command does not gain dry-run merely because it can observe the network; `--offline` controls network use for layered `verify` and `publish verify`. Dry-run SHALL perform all local parsing, selection, permission, collision, and prospective validation possible without generating a real secret, writing a file, acquiring a remote result, or changing state; it SHALL return a structured plan that identifies deferred checks. Dry-run success MUST NOT claim that a later network or concurrent write will succeed.
+Every command that mutates a ledger, creates or replaces an artifact, writes a key, or creates a package SHALL support `--dry-run`. A read-only command does not gain dry-run. General `--offline` controls optional outcome-source retrieval; timestamp verification and package verification are always local. Dry-run SHALL perform all local parsing, selection, permission, collision, and prospective validation possible without generating a real secret, writing a file, acquiring a remote result, or changing state; it SHALL return a structured plan that identifies deferred checks. Dry-run success MUST NOT claim that a later network or concurrent write will succeed.
 
 Commands that disclose previously sealed material, remove a platform, replace terminal question state, or would overwrite through a separately approved replacement flow SHALL require interactive confirmation or `--yes`. With `--no-input`, non-TTY stdin, or MCP execution, missing explicit approval SHALL fail before side effects.
 
@@ -151,9 +151,9 @@ Commands that disclose previously sealed material, remove a platform, replace te
 - **WHEN** reveal would disclose a sealed forecast and stdin is not interactive without `--yes`
 - **THEN** it fails before reading the key file or changing the ledger
 
-#### Scenario: Read-only online verification
-- **WHEN** layered `verify` or `publish verify --online` is selected
-- **THEN** the command performs no persistent mutation, exposes no `--dry-run`, and uses `--offline` or omission of `--online` as its documented network control
+#### Scenario: Read-only local verification
+- **WHEN** layered `verify` or `publish verify` checks timestamp evidence
+- **THEN** the command performs no persistent mutation, exposes no `--dry-run` for the local check, and opens no timestamp-verification network connection
 
 ### Requirement: Stable result and error envelopes
 Human output SHALL be concise English. JSON success SHALL be one object with `ok: true`, stable operation `code`, plain `message`, and typed `data`; JSON failure SHALL be one object on stderr with `ok: false`, stable error `code`, plain `message`, and optional redacted `details`. Primary success output belongs only on stdout; errors, warnings, progress, and verbose diagnostics belong only on stderr.
@@ -208,7 +208,7 @@ Raw keys, salts, nonces before publication, sealed plaintext, credentials, prote
 ### Requirement: Cancellation and bounded external work
 Every action SHALL honor inherited cancellation and `--timeout`. File and cryptographic loops SHALL check cancellation at bounded intervals; network requests SHALL use the operation context, response-size limits, redirect policy, and the built-in profile or documented CLI Core endpoint. Ledger lock acquisition SHALL remain fail-fast: a held writer lock returns immediate conflict/exit `5`, and `--timeout` MUST NOT turn that conflict into queued lock waiting. Help and maintained documentation SHALL state that callers which intentionally contend must serialize work or implement bounded retry/backoff. Interruption SHALL return exit `130` and preserve or recover the last committed coherent state.
 
-#### Scenario: Interrupt during calendar request
+#### Scenario: Interrupt during TSA request
 - **WHEN** the operation context is canceled while stamping
 - **THEN** outstanding requests stop promptly, no pending ledger state is recorded without a retained valid receipt, and recoverable artifacts are reported
 

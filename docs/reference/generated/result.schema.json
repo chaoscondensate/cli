@@ -1,196 +1,108 @@
 {
   "$defs": {
-    "bitcoinObservationIssue": {
-      "additionalProperties": false,
-      "properties": {
-        "kind": {
-          "enum": [
-            "source_unavailable",
-            "observation_inconclusive",
-            "observation_budget_exhausted"
-          ]
-        },
-        "source_ids": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "kind"
-      ],
-      "type": "object"
-    },
-    "networkProfile": {
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "max_concurrent": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "max_requests": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "max_unique_heights": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "minimum_success": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "mode": {
-          "enum": [
-            "offline",
-            "builtin",
-            "custom",
-            "bitcoin_core"
-          ]
-        },
-        "privacy_limitations": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "source_ids": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "trust_limitations": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "mode"
-      ],
-      "type": "object"
-    },
     "requestSummary": {
       "additionalProperties": false,
       "properties": {
-        "http_requests": {
+        "request_count": {
+          "maximum": 1,
           "minimum": 0,
           "type": "integer"
         },
-        "max_concurrent": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "max_heights": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "max_requests": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "unique_heights": {
-          "minimum": 0,
-          "type": "integer"
+        "tsa_origin": {
+          "type": "string"
         }
       },
       "required": [
-        "unique_heights",
-        "http_requests",
-        "max_heights",
-        "max_requests",
-        "max_concurrent"
+        "request_count"
+      ],
+      "type": "object"
+    },
+    "timestampEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "ca_bundle_path": {
+          "type": "string"
+        },
+        "ca_bundle_present": {
+          "type": "boolean"
+        },
+        "ca_bundle_sha256": {
+          "type": "string"
+        },
+        "check_state": {
+          "enum": [
+            "pass",
+            "fail",
+            "pending",
+            "not_applicable",
+            "not_checked"
+          ]
+        },
+        "gen_time": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "policy_oid": {
+          "type": "string"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "request_path": {
+          "type": "string"
+        },
+        "request_present": {
+          "type": "boolean"
+        },
+        "response_path": {
+          "type": "string"
+        },
+        "response_present": {
+          "type": "boolean"
+        },
+        "serial_number": {
+          "type": "string"
+        },
+        "signer_fingerprint_sha256": {
+          "type": "string"
+        },
+        "signer_subject": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "pending",
+            "verified"
+          ]
+        },
+        "tsa_url": {
+          "format": "uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tsa_url",
+        "state",
+        "request_path",
+        "response_path",
+        "request_present",
+        "response_present",
+        "ca_bundle_present",
+        "check_state"
       ],
       "type": "object"
     },
     "timestampVerificationData": {
       "additionalProperties": false,
       "properties": {
-        "anchored_before": {
-          "format": "date-time",
-          "type": "string"
-        },
-        "bitcoin_height": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "calendar_identities": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "calendar_source_ids": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
         "effects": {
           "type": "array"
         },
         "forecast_id": {
           "type": "string"
-        },
-        "network_profile": {
-          "additionalProperties": false,
-          "properties": {
-            "id": {
-              "type": "string"
-            },
-            "max_concurrent": {
-              "minimum": 0,
-              "type": "integer"
-            },
-            "max_requests": {
-              "minimum": 0,
-              "type": "integer"
-            },
-            "max_unique_heights": {
-              "minimum": 0,
-              "type": "integer"
-            },
-            "minimum_success": {
-              "minimum": 0,
-              "type": "integer"
-            },
-            "mode": {
-              "enum": [
-                "offline",
-                "builtin",
-                "custom",
-                "bitcoin_core"
-              ]
-            },
-            "privacy_limitations": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "source_ids": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "trust_limitations": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "mode"
-          ],
-          "type": "object"
         },
         "next_actions": {
           "items": {
@@ -198,36 +110,8 @@
           },
           "type": "array"
         },
-        "observation_issue": {
-          "additionalProperties": false,
-          "properties": {
-            "kind": {
-              "enum": [
-                "source_unavailable",
-                "observation_inconclusive",
-                "observation_budget_exhausted"
-              ]
-            },
-            "source_ids": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "kind"
-          ],
-          "type": "object"
-        },
         "question_id": {
           "type": "string"
-        },
-        "receipt_path": {
-          "type": "string"
-        },
-        "receipt_present": {
-          "type": "boolean"
         },
         "recovery": {
           "type": "object"
@@ -235,33 +119,17 @@
         "request_summary": {
           "additionalProperties": false,
           "properties": {
-            "http_requests": {
+            "request_count": {
+              "maximum": 1,
               "minimum": 0,
               "type": "integer"
             },
-            "max_concurrent": {
-              "minimum": 0,
-              "type": "integer"
-            },
-            "max_heights": {
-              "minimum": 0,
-              "type": "integer"
-            },
-            "max_requests": {
-              "minimum": 0,
-              "type": "integer"
-            },
-            "unique_heights": {
-              "minimum": 0,
-              "type": "integer"
+            "tsa_origin": {
+              "type": "string"
             }
           },
           "required": [
-            "unique_heights",
-            "http_requests",
-            "max_heights",
-            "max_requests",
-            "max_concurrent"
+            "request_count"
           ],
           "type": "object"
         },
@@ -269,7 +137,6 @@
           "enum": [
             "unanchored",
             "pending",
-            "confirmed_unverified",
             "verified",
             "failed",
             "inconsistent"
@@ -283,6 +150,87 @@
         },
         "target_sha256": {
           "type": "string"
+        },
+        "timestamps": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "ca_bundle_path": {
+                "type": "string"
+              },
+              "ca_bundle_present": {
+                "type": "boolean"
+              },
+              "ca_bundle_sha256": {
+                "type": "string"
+              },
+              "check_state": {
+                "enum": [
+                  "pass",
+                  "fail",
+                  "pending",
+                  "not_applicable",
+                  "not_checked"
+                ]
+              },
+              "gen_time": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "policy_oid": {
+                "type": "string"
+              },
+              "reason_codes": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "request_path": {
+                "type": "string"
+              },
+              "request_present": {
+                "type": "boolean"
+              },
+              "response_path": {
+                "type": "string"
+              },
+              "response_present": {
+                "type": "boolean"
+              },
+              "serial_number": {
+                "type": "string"
+              },
+              "signer_fingerprint_sha256": {
+                "type": "string"
+              },
+              "signer_subject": {
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "pending",
+                  "verified"
+                ]
+              },
+              "tsa_url": {
+                "format": "uri",
+                "type": "string"
+              }
+            },
+            "required": [
+              "tsa_url",
+              "state",
+              "request_path",
+              "response_path",
+              "request_present",
+              "response_present",
+              "ca_bundle_present",
+              "check_state"
+            ],
+            "type": "object"
+          },
+          "type": "array"
         },
         "verification": {
           "additionalProperties": false,
@@ -331,11 +279,7 @@
         "state",
         "target_path",
         "target_sha256",
-        "receipt_path",
         "target_present",
-        "receipt_present",
-        "network_profile",
-        "request_summary",
         "verification"
       ],
       "type": "object"
@@ -415,7 +359,8 @@
             "enum": [
               "ledger",
               "target",
-              "receipt",
+              "timestamp_request",
+              "timestamp_response",
               "key",
               "package",
               "network"

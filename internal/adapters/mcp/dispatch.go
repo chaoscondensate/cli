@@ -34,11 +34,11 @@ type toolInput struct {
 	Output         string          `json:"output,omitempty"`
 	Manifest       string          `json:"manifest,omitempty"`
 	RevealedAt     string          `json:"revealed_at,omitempty"`
-	VerifiedAt     string          `json:"verified_at,omitempty"`
+	TSAURL         string          `json:"tsa_url,omitempty"`
+	CABundle       string          `json:"ca_bundle,omitempty"`
 	All            bool            `json:"all,omitempty"`
 	DryRun         bool            `json:"dry_run,omitempty"`
 	Confirm        bool            `json:"confirm,omitempty"`
-	Online         bool            `json:"online,omitempty"`
 	CheckSources   bool            `json:"check_sources,omitempty"`
 }
 
@@ -123,6 +123,11 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 	if input.File != "" {
 		file, err = s.roots.Resolve(service.RootLedger, input.File, fileMustExist)
 		if err != nil {
+			return nil, "", "", err
+		}
+	}
+	if fileMustExist && file != "" {
+		if _, err := service.LoadAndValidateLedger(ctx, file, nil); err != nil {
 			return nil, "", "", err
 		}
 	}
@@ -243,26 +248,34 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 		}
 		return result, code, message, nil
 	case service.OperationTimestampStamp:
-		result, err := service.CommitTimestampStamp(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), service.TimestampStampOptions{DryRun: input.DryRun, Offline: s.config.Mode.Offline, Effects: s.effects})
-		return result, "timestamp.pending", "OpenTimestamps receipt was stored as pending", err
-	case service.OperationTimestampUpgrade:
-		result, err := service.CommitTimestampUpgrade(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), service.TimestampUpgradeOptions{DryRun: input.DryRun, Offline: s.config.Mode.Offline})
-		return result, "timestamp.upgraded", "OpenTimestamps receipt was upgraded", err
-	case service.OperationTimestampStatus:
-		result, err := service.TimestampStatusFor(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast))
-		return result, "timestamp.status", "OpenTimestamps local status was read", err
-	case service.OperationTimestampVerify:
-		verifiedAt, err := optionalTimestamp(input.VerifiedAt, "verified_at")
-		if err != nil {
-			return nil, "", "", err
+		result, err := service.CommitTimestampStamp(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), service.TimestampStampOptions{DryRun: input.DryRun, Offline: s.config.Mode.Offline, TSAURL: input.TSAURL, CABundlePath: input.CABundle, Effects: s.effects})
+		code, message := "timestamp.stamped", "RFC 3161 timestamp evidence was stored and verified locally"
+		if result.FailureCode == app.CodeNetwork {
+			code, message = "timestamp.not_checked", "The timestamp authority request did not complete"
 		}
-		result, err := service.CommitTimestampVerify(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), service.TimestampVerifyOptions{DryRun: input.DryRun, Offline: s.config.Mode.Offline, VerifiedAt: verifiedAt, Observer: s.bitcoinObserver})
-		code, message := "timestamp.verification."+string(result.Verification.State), "Timestamp verification completed with status "+string(result.Verification.State)
-		if result.Verification.State == service.LayerPass {
-			code, message = "timestamp.verified", "OpenTimestamps Bitcoin evidence was verified"
+		if result.State == service.TimestampPending {
+			if result.FailureCode != app.CodeNetwork {
+				code, message = "timestamp.pending", "RFC 3161 timestamp evidence was retained as pending"
+			}
 		}
 		if input.DryRun {
-			code, message = "timestamp.verify.planned", "Timestamp verification is valid; network observation and ledger update were deferred"
+			code, message = "timestamp.stamp.planned", "RFC 3161 timestamp request is valid; no entropy, network, or files were used"
+		}
+		if err != nil && result.FailureCode == "" {
+			return result, code, message, err
+		}
+		return result, code, message, nil
+	case service.OperationTimestampStatus:
+		result, err := service.TimestampStatusFor(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast))
+		return result, "timestamp.status", "RFC 3161 local status was read", err
+	case service.OperationTimestampVerify:
+		result, err := service.CommitTimestampVerify(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), service.TimestampVerifyOptions{DryRun: input.DryRun, Effects: s.effects})
+		code, message := "timestamp.verification."+string(result.Verification.State), "Timestamp verification completed with status "+string(result.Verification.State)
+		if result.Verification.State == service.LayerPass {
+			code, message = "timestamp.verified", "RFC 3161 evidence was verified locally"
+		}
+		if input.DryRun {
+			code, message = "timestamp.verify.planned", "Timestamp verification completed locally; ledger update was deferred"
 		}
 		return result, code, message, err
 	case service.OperationVerificationRun:
@@ -280,10 +293,7 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 		if err != nil {
 			return nil, "", "", err
 		}
-		if input.Online && s.config.Mode.Offline {
-			return nil, "", "", app.NewError(app.CodeNetworkDisabled, "online package verification is disabled by server offline mode", nil)
-		}
-		result, err := service.VerifyPublicationPackage(ctx, file, manifest, service.PublicationVerifyOptions{Online: input.Online, Offline: !input.Online})
+		result, err := service.VerifyPublicationPackage(ctx, file, manifest)
 		return result, "publication.verification." + string(result.Overall), "Package verification completed with status " + string(result.Overall), err
 	default:
 		return nil, "", "", app.NewError(app.CodeUnavailable, "operation is not registered", nil)
@@ -588,6 +598,8 @@ func resultFailureCode(data any) app.ErrorCode {
 	case service.PublicationVerifyResult:
 		return value.FailureCode
 	case service.TimestampVerifyResult:
+		return value.FailureCode
+	case service.TimestampArtifactResult:
 		return value.FailureCode
 	default:
 		return ""

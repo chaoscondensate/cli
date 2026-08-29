@@ -201,7 +201,7 @@ A superseded ID MUST identify an earlier forecast in the same question. Adding a
 ### Requirement: List and show forecasts
 `forecast list` SHALL return the selected question's forecasts in recorded order with stable ID, times, visibility, a concise type-aware value summary when public or revealed, supersession link, and integrity status. `forecast show` SHALL return the exact selected public/revealed forecast including its type-aware value, rationale, key factors, comment, public note, supersession link, and a safe redacted integrity projection, or a redacted sealed summary containing only fields already public in the ledger.
 
-The integrity projection SHALL include status and applicable target scope/path/digest metadata plus each retained OpenTimestamps receipt's safe path and state. When the ledger stores confirmed evidence, human, plain, JSON, and MCP show results SHALL expose `bitcoin_block_height`, `anchored_before`, and `verified_at`. These are local retained observations: show MUST NOT contact the network, invent the prior verification source, or imply that it has just reverified the chain. Revealed keys, private bundle fields, and protected paths SHALL remain redacted even though the v1 ledger stores a disclosed key. Human output SHALL render these record and integrity details rather than repeating only the compact list row. Neither list nor show SHALL decrypt, contact the network, or change integrity metadata.
+The integrity projection SHALL include status and applicable target scope/path/digest metadata plus each retained RFC 3161 entry's safe request, response, and CA-bundle paths, TSA identity, state, and verified metadata. When the ledger stores confirmed evidence, human, plain, JSON, and MCP show results SHALL expose `gen_time`, policy OID, serial number, and `verified_at`. These are retained parsed values: show MUST NOT contact the network or imply that it has just rerun cryptographic and certificate checks. Revealed keys, private bundle fields, and protected paths SHALL remain redacted even though the v1 ledger stores a disclosed key. Human output SHALL render these record and integrity details rather than repeating only the compact list row. Neither list nor show SHALL decrypt, contact the network, or change integrity metadata.
 
 #### Scenario: List append-only history
 - **WHEN** three forecasts form a supersession chain
@@ -211,12 +211,12 @@ The integrity projection SHALL include status and applicable target scope/path/d
 - **WHEN** a user runs `forecast show` for a public forecast without a machine-output mode
 - **THEN** output includes its value, rationale, key factors, comment, supersession relationship, and integrity state instead of only ID/time/status summary fields
 
-#### Scenario: Show retained Bitcoin anchoring details locally
-- **WHEN** a forecast has confirmed OpenTimestamps integrity with stored block height, conservative anchored-before time, and verification time
+#### Scenario: Show retained RFC 3161 details locally
+- **WHEN** a forecast has confirmed RFC 3161 integrity with stored TSA, generation time, policy, serial, and verification time
 - **THEN** `forecast show` exposes those safe values in human, plain, JSON, and MCP forms without a network request and labels them as retained rather than freshly reverified evidence
 
 ### Requirement: Preserve imported evidence states outside the authoring surface
-v1 authoring commands SHALL not create or edit schema-supported `external_anchors`; every pending-to-verified transition SHALL preserve them byte-for-byte and verification SHALL report them only as external claims, never as OpenTimestamps proof. v1 commands SHALL not create `integrity.status: failed` automatically. An imported failed integrity state is terminal for that forecast: target, timestamp, seal, and integrity mutation commands SHALL refuse to replace it, while list/show/status/verify remain available. Recovery SHALL append a new forecast revision with a new globally unique ID and optional supersession link, preserving the failed record as history.
+v1 authoring commands SHALL not create or edit schema-supported `external_anchors`; every pending-to-verified transition SHALL preserve them byte-for-byte and verification SHALL report them only as external claims, never as RFC 3161 proof. v1 commands SHALL not create `integrity.status: failed` automatically. An imported failed integrity state is terminal for that forecast: target, timestamp, seal, and integrity mutation commands SHALL refuse to replace it, while list/show/status/verify remain available. Recovery SHALL append a new forecast revision with a new globally unique ID and optional supersession link, preserving the failed record as history.
 
 #### Scenario: Verify imported failed integrity
 - **WHEN** a schema-valid ledger contains a forecast with imported failed integrity
@@ -224,4 +224,4 @@ v1 authoring commands SHALL not create or edit schema-supported `external_anchor
 
 #### Scenario: Preserve external anchors on confirmation
 - **WHEN** timestamp verification promotes pending integrity containing external anchors to verified
-- **THEN** every external anchor is retained byte-for-byte and remains separately labeled from OTS evidence
+- **THEN** every external anchor is retained byte-for-byte and remains separately labeled from RFC 3161 evidence

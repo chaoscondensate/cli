@@ -1,7 +1,7 @@
 # Documentation baseline
 
 <!-- doc-metadata
-coverage: v0.3.1
+coverage: v0.4.0
 reviewed: 2026-08-29
 owner: project-maintainer
 generated: false
@@ -36,7 +36,7 @@ that the corresponding document or test has been implemented.
 
 ## Implementation inventory
 
-This inventory was checked against the source published as release `v0.3.1`.
+This inventory was checked against release `v0.4.0` source.
 
 ### Working CLI surface
 
@@ -50,12 +50,12 @@ The following commands have connected application services:
 | `forecast-ledger question add|update|list|show|resolve|annul|dispute ...` | Creates a typed question with an optional first public or sealed forecast, applies safe patches, reads redacted summaries, and records approved lifecycle claims. List/show accept `--file -`. | None |
 | `forecast-ledger forecast add|list|show|seal|reveal ...`, `forecast key-hint update ...` | Appends public or sealed forecasts, authenticates approved reveal, repairs safe logical hints, or reads redacted history. List/show accept `--file -`. | None |
 | `forecast-ledger target build|check ...` | Builds or checks exact `forecast-envelope/v1` RFC 8785 target bytes at deterministic ledger-relative paths. | None |
-| `forecast-ledger timestamp stamp|upgrade|status|verify ...` | Creates, upgrades, inspects, and verifies experimental pure-Go OpenTimestamps receipts. Built-in stamp is 2-of-4; Bitcoin verification requires two public observers to agree. Acquisition failure is a structured `not_checked` outcome, not proof mismatch. CLI-only custom calendars and Bitcoin Core are advanced overrides. | Built-in profile, explicit custom mode, Core, or offline as applicable |
-| `forecast-ledger verify --file <path> ...` | Reports document, content-binding, existence-timing, reveal, and outcome-evidence layers with stable states, reasons, evidence, and limitations. Pass requires applicable forecast evidence; empty or all-not-applicable selections return `no_evidence`. | Built-in Bitcoin observers unless `--offline`; outcome URLs only with `--check-sources` |
-| `forecast-ledger publish build|verify ...` | Builds a deterministic allowlisted package with canonical manifest and verifies it offline by default. Manifest/file integrity is reported separately from the evidence aggregate. It does not use Git or a hosted publisher. | None by default; verify uses built-in Bitcoin observers only with `--online` |
-| `forecast-ledger mcp serve --ledger-root <name=path> ...` | Starts a protocol-clean stdio server with closed CLI-parity tools and redacted addressed resources. Default is read-write/online within roots; read-only/offline are whole-server modes and reveal is separately default-off. | Built-in profile unless server is offline |
+| `forecast-ledger timestamp stamp|status|verify ...` | Acquires RFC 3161 evidence from an explicit public HTTPS TSA, or inspects and verifies retained target, request, response, and CA-bundle bytes locally. Repeating stamp with another TSA preserves independent entries. | Explicit TSA only for stamp; none for status or verify |
+| `forecast-ledger verify --file <path> ...` | Reports document, content-binding, RFC 3161 existence-timing, reveal, and outcome-evidence layers with stable states, reasons, evidence, and limitations. Pass requires applicable forecast evidence; empty or all-not-applicable selections return `no_evidence`. | Outcome URLs only with `--check-sources`; timestamp checks are local |
+| `forecast-ledger publish build|verify ...` | Builds a deterministic allowlisted package containing the exact RFC 3161 artifacts and verifies it locally. Manifest/file integrity is reported separately from the evidence aggregate. It does not use Git or a hosted publisher. | None |
+| `forecast-ledger mcp serve --ledger-root <name=path> ...` | Starts a protocol-clean stdio server with closed CLI-parity tools and redacted addressed resources. Default is read-write/online within roots; read-only/offline are whole-server modes and reveal is separately default-off. | Explicit TSA only for timestamp stamp unless server is offline |
 | `forecast-ledger validate --file <path>` | Parses and validates an embedded-schema JSON or YAML ledger. Eligible for `--file -`. | None |
-| `forecast-ledger status --file <path>` | Validates a ledger and summarizes questions, forecasts, and receipt states. Eligible for `--file -`. | None |
+| `forecast-ledger status --file <path>` | Validates a ledger and summarizes questions, forecasts, and timestamp states. Eligible for `--file -`. | None |
 | `forecast-ledger version [--json]` | Reports binary, source, Go, schema, and MCP protocol metadata. | None |
 | `forecast-ledger completion <shell>` | Generates Bash, Zsh, Fish, or PowerShell completion text through urfave. | None |
 
@@ -68,17 +68,16 @@ mutually exclusive. Stable application error codes are `usage`,
 `internal/app/errors.go`.
 
 Expected verification reports remain on stdout even when their semantic result
-uses a nonzero exit. Bitcoin observation outage uses `network`/exit 8; proof
-mismatch uses `verification`/exit 6; and `no_evidence` uses `incomplete`/exit 9.
+uses a nonzero exit. TSA acquisition outage uses `network`/exit 8; retained
+evidence failure uses `verification`/exit 6; and `no_evidence` uses
+`incomplete`/exit 9.
 
 ### Availability and maturity
 
 Every visible leaf in the current source has a real action and an availability
 test; the old preview unavailable handler has been removed. This does not make
-every subsystem stable. The OpenTimestamps backend is explicitly experimental
-until official-client differential coverage, real-calendar liveness, complete
-native-platform recovery, budget and malformed-input matrices, and an
-independent review are recorded. Installed releases may expose less than
+every subsystem stable. RFC 3161 support is bounded and OpenSSL-interoperable,
+but no independent security or cryptographic review is recorded. Installed releases may expose less than
 unreleased `main`; candidate-binary help and `version --json` are authoritative
 for an installed artifact.
 
@@ -86,16 +85,16 @@ for an installed artifact.
 
 | Item | Reviewed value |
 | --- | --- |
-| Forecast Ledger schema | `1.1.0` |
-| Schema commit | `c04c72a178c15cd6cbbdd2e8a7b743d58872a94a` |
-| Embedded schema SHA-256 | `c478f0f568c0c746c343a308d0fcb53815f4c8b91b4666f8f784913ad9132d15` |
+| Forecast Ledger schema | `1.2.0` |
+| Schema commit | `6c2fe3df99223945b8d1613a03f95796b3c7d1e2` |
+| Embedded schema SHA-256 | `d609982f0fcea1ce076fdb32b44ef0eebe3265754eea7065de9d78a857dab5b8` |
 | MCP protocol target | `2026-07-28` |
-| Timestamp profile | `opentimestamps-public-v1` (experimental; four calendars, threshold two, two Bitcoin observers; per invocation: 32 heights, 128 requests, four concurrent) |
+| Timestamp protocol | RFC 3161 with SHA-256, explicit TSA URL, retained CA bundle, and no system-root fallback |
 | Go toolchain | `1.27.0` |
 
 Validation uses embedded contract bytes and does not resolve remote schema
 references. Documentation and builds use the exact commit and digest above,
-never a floating tag. This preview cutover is intentionally breaking: v1.0.0
+never a floating tag. This preview cutover is intentionally breaking: v1.1.0
 ledgers receive an `unsupported_schema_version` warning and are rejected before
 side effects. There is no migration or dual-read path.
 
@@ -107,7 +106,7 @@ GoReleaser builds six `CGO_ENABLED=0` archives:
 - Linux arm64 and x86-64 as `.tar.gz`; and
 - Windows arm64 and x86-64 as `.zip`.
 
-Release `v0.3.1` contains those six archives and eight native Linux packages:
+Release `v0.4.0` contains those six archives and eight native Linux packages:
 `deb`, `rpm`, `apk`, and Arch Linux packages for arm64 and x86-64. Each package
 installs the binary in `/usr/bin` and the Apache-2.0 license in
 `/usr/share/licenses/forecast-ledger`. The main checksum manifest covers the
@@ -206,19 +205,19 @@ The maintained maturity labels have these meanings:
 | Deprecated | The behavior still works for a stated period but has a documented replacement and removal version. |
 | Unsupported | The behavior is outside the maintained contract and must not be presented as working. |
 
-Release `v0.3.1` is **Preview**. A stable SemVer tag identifies a reproducible
-release; it does not promote unfinished commands or unaudited components to the
-Stable product maturity label.
+Release `v0.4.0` is **Preview**. A stable SemVer tag identifies a
+reproducible release; it does not promote unfinished commands or unaudited
+components to the Stable product maturity label.
 
 Evidence language is bounded as follows:
 
 - **valid** means that named structural, format, and semantic checks passed;
 - **sealed** means that forecast plaintext was processed by the named sealing
   profile and is not present in the sealed ledger field;
-- **timestamped** names a receipt state and never by itself means independently
-  verified timing;
-- **anchored** means the named receipt was verified against its stated
-  cryptographic trust source;
+- **timestamped** names an RFC 3161 entry state and never by itself means
+  independently verified timing;
+- **trusted timestamp** means the named response passed against its retained CA
+  bundle under the documented verification policy;
 - **verified** must name the layer that passed, failed, is pending, was not
   checked, or does not apply;
 - **revealed** means a disclosed value was checked against the named sealed
@@ -234,18 +233,18 @@ time, or substantive outcome-source correctness.
 
 ### Maturity, audit, and limitations
 
-- The approved public status currently visible in README is **Preview**.
-  `v0.3.1` is published as a stable SemVer release, but version stability does
-  not imply feature completeness or completion of experimental review gates.
+- The approved public status currently visible in README is **Preview**. The
+  `v0.4.0` is published through the explicit release workflow; version
+  stability does not imply feature completeness or audit.
 - No independent security or cryptographic audit is recorded. A pinned
   `govulncheck` run reported no reachable dependency vulnerability on
   2026-08-29; that result is not an audit or a security guarantee.
 - Local validation and status are offline. No telemetry or runtime update check
-  is implemented. Planned OpenTimestamps calendar operations would use the
-  network only at an explicit command and grant boundary, but are unavailable.
-- Sealing, reveal, target generation, OpenTimestamps, layered verification,
-  evidence packages, and MCP tools/resources are not usable from this build.
-- Pending receipts are not verified timing. Validation and release provenance
+  is implemented. Only RFC 3161 stamp uses the network, with an explicit public
+  HTTPS TSA URL; timestamp verification is local.
+- Sealing, reveal, target generation, RFC 3161 timestamping, layered
+  verification, evidence packages, and MCP tools/resources are connected.
+- Pending timestamp entries are not verified timing. Validation and release provenance
   do not prove authorship, completeness, forecast truth, exact self-reported
   time, or outcome-source correctness.
 - The embedded schema and conformance fixtures retain upstream attribution in

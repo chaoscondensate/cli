@@ -1,7 +1,7 @@
 # Verification claims and evidence terms
 
 <!-- doc-metadata
-coverage: v0.3.1
+coverage: v0.4.0
 reviewed: 2026-08-29
 owner: security
 generated: false
@@ -10,15 +10,15 @@ prerequisites: ../getting-started/index.md
 next: ../security/index.md
 -->
 
-Applies to: Forecast Ledger CLI release v0.3.1 (Preview).
+Applies to: Forecast Ledger CLI release v0.4.0 (Preview).
 Last substantive review: 2026-08-29.
 Owner: security and interface owners
 
 This page defines the strongest conclusion the documentation may draw from a
 result. The current source implements sealing, timestamps, layered
 verification, reveal checks, outcome-evidence checks, and publication. Their
-availability does not expand the evidence claims below. OpenTimestamps remains
-experimental and unaudited.
+availability does not expand the evidence claims below. RFC 3161 support is
+unaudited.
 
 ## Result states
 
@@ -32,17 +32,17 @@ Each checked layer reports one of these states:
 
 Do not collapse these states into one boolean named `verified`.
 
-Forecast Ledger v1.1 permits an empty ledger and a question with no forecasts.
+Forecast Ledger v1.2 permits an empty ledger and a question with no forecasts.
 Verification over such an empty selection returns overall `no_evidence`, not
 `pass`, even when the document itself is valid. Overall `pass` is reserved for
 a selection with at least one applicable forecast-evidence layer. Empty
 forecast collections remain explicit in machine output rather than being
 omitted or replaced by placeholder records.
 
-An external observation is input to a cryptographic comparison. Failure to
-acquire that input means `not_checked`; it does not show that the retained proof
-failed. A proof mismatch may be claimed only after the required observation
-completed and the local comparison failed.
+Timestamp acquisition and timestamp verification are separate. Failure to
+obtain a TSA response means `not_checked`; it does not show that other retained
+evidence failed. Once acquired, the request, response, target, and retained CA
+bundle are sufficient for local verification.
 
 ## Approved terms
 
@@ -63,16 +63,17 @@ handling outside the tool, authorship, or timing.
 
 ### Timestamped
 
-Timestamped means that a named timestamp receipt is associated with the exact
-target bytes or digest. Always state whether the receipt is pending, upgraded,
-failed, or verified. A pending receipt is not verified existence timing.
+Timestamped means that a named RFC 3161 response is associated with the exact
+target digest. Always state whether the entry is pending, failed, or verified.
+A pending entry is not verified existence timing.
 
-### Anchored
+### Trusted timestamp
 
-Anchored means that the receipt's cryptographic path was verified against the
-named external trust source, such as a specific Bitcoin block header accepted
-under the documented OpenTimestamps policy. It does not mean the ledger is
-complete or its content is true.
+A trusted timestamp means that the RFC 3161 response signature, request nonce,
+message imprint, signer certificate policy, certificate path, and generation
+time passed against the retained CA bundle. It does not mean the ledger is
+complete, its content is true, or the TSA clock was independently measured by
+this tool.
 
 ### Verified
 
@@ -103,15 +104,16 @@ cryptographic timestamp.
 ### Evidence
 
 Evidence is inspectable material relevant to a bounded claim. Examples include
-ledger bytes, canonical targets, digests, sealed commitments, OTS receipts,
+ledger bytes, canonical targets, digests, sealed commitments, RFC 3161 requests
+and responses,
 reveal inputs, outcome records, manifests, and release attestations. Evidence
 must be named and interpreted through the check that consumes it.
 
 ### Proof
 
-Use proof only with a named protocol and conclusion, such as “a valid
-OpenTimestamps path proving that these target bytes existed no later than the
-verified anchoring bound.” Do not use proof as a synonym for confidence,
+Use proof only with a named protocol and conclusion, such as “a valid RFC 3161
+response from the named TSA supports that this digest existed no later than the
+asserted generation time.” Do not use proof as a synonym for confidence,
 validity, publication, or a passing group of unrelated checks.
 
 ### Authorship
@@ -148,8 +150,8 @@ Keep these conclusions separate in human and JSON results:
    the embedded contract and project semantic rules.
 2. **Content binding** — the selected ledger content matches the exact target,
    digest, commitment, or package manifest being checked.
-3. **Existence timing** — a receipt supports a bounded “existed no later than”
-   claim under its named trust source.
+3. **Existence timing** — a verified RFC 3161 response supports a bounded
+   “existed no later than” claim under its named TSA and retained CA trust.
 4. **Reveal validity** — disclosed material matches the sealed commitment.
 5. **Outcome evidence** — recorded resolution evidence passes only the checks
    actually performed on it.

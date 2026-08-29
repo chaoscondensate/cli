@@ -11,7 +11,7 @@ import (
 )
 
 func TestValidateRelativePathPortableRules(t *testing.T) {
-	for _, valid := range []string{"target.json", "targets/q-one/f-one.json", "proofs/one.ots"} {
+	for _, valid := range []string{"target.json", "targets/q-one/f-one.json", "proofs/one.tsr"} {
 		if err := ValidateRelativePath(valid); err != nil {
 			t.Errorf("valid path %q rejected: %v", valid, err)
 		}
@@ -25,7 +25,7 @@ func TestValidateRelativePathPortableRules(t *testing.T) {
 }
 
 func TestDetectPortablePathCollisions(t *testing.T) {
-	if err := DetectPortablePathCollisions([]string{"proofs/targets/a.json", "proofs/receipts/a.ots"}); err != nil {
+	if err := DetectPortablePathCollisions([]string{"proofs/targets/a.json", "proofs/timestamps/a.tsr"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, paths := range [][]string{
@@ -80,6 +80,19 @@ func TestPathResolverConfinesAndRejectsSymlinks(t *testing.T) {
 		if _, err := resolver.Resolve("linked/escape.json", false); err == nil || !errors.Is(err, ErrUnsafePath) {
 			t.Fatalf("symlink path accepted: %v", err)
 		}
+	}
+}
+
+func TestPathResolverAllowsConfinedFutureDirectorySuffix(t *testing.T) {
+	root := t.TempDir()
+	resolver, err := NewPathResolver(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(resolver.Root(), "proofs", "timestamps", "one", "request.tsq")
+	got, err := resolver.ResolveForCreate("proofs/timestamps/one/request.tsq")
+	if err != nil || got != want {
+		t.Fatalf("future path = %q, %v; want %q", got, err, want)
 	}
 }
 

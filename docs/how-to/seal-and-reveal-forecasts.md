@@ -1,7 +1,7 @@
 # Seal and reveal forecasts
 
 <!-- doc-metadata
-coverage: v0.3.1
+coverage: v0.4.0
 reviewed: 2026-08-29
 owner: interface
 generated: false
@@ -68,7 +68,7 @@ Reveal verifies the protected key file, AEAD, commitment digest, protocol,
 IDs, exact canonical plaintext, typed mirror, and original sealed target before
 changing the ledger. It publishes the value, rationale, factors, comment, and
 key required by schema v1 while retaining ciphertext, commitment, public fields,
-integrity, target, and receipt evidence. Normal and JSON results never print
+integrity, target, and timestamp evidence. Normal and JSON results never print
 the key or private fields. Repeating reveal with the correct key is unchanged.
 Use `--revealed-at` for an explicit reproducible RFC 3339 time.
 

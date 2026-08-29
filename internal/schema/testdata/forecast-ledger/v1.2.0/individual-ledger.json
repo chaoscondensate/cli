@@ -1,6 +1,6 @@
 {
   "$schema": "../../schema/forecast-ledger.schema.json",
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "ledger_id": "alex-example-forecasts",
   "title": "Alex Example's Forecast Ledger",
   "description": "A public example covering every supported quantitative question type.",

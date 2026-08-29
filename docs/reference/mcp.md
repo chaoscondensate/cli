@@ -1,7 +1,7 @@
 # MCP reference
 
 <!-- doc-metadata
-coverage: v0.3.1
+coverage: v0.4.0
 reviewed: 2026-08-29
 owner: interface
 generated: false
@@ -12,12 +12,13 @@ next: generated/index.md
 
 `forecast-ledger mcp serve` uses the official pinned Go SDK and negotiates the
 protocol revisions supported by that SDK. Initialization identifies the binary,
-source/schema pins, `opentimestamps-public-v1`, access and network modes, and
-the experimental timestamp status.
+source/schema pins, RFC 3161 with SHA-256, access and network modes, and the
+timestamp support status.
 
 The server exposes CLI-parity tools named `ledger_init`, `ledger_update`,
 `ledger_validate`, `ledger_status`, every `platform_*`, `question_*`, and
-`forecast_*` action, `target_build`, `target_check`, every `timestamp_*` action,
+`forecast_*` action, `target_build`, `target_check`, `timestamp_stamp`,
+`timestamp_status`, `timestamp_verify`,
 `verification_run`, `publication_build`, and `publication_verify` when their
 required root class and startup capability are available.
 
@@ -27,8 +28,10 @@ work. Every ledger tool requires `file`; selectors match the CLI. Mutations use
 errors are successful MCP protocol responses with `isError: true` and a stable
 application envelope, so one failed call does not terminate the session.
 Timestamp acquisition outcomes retain their structured timing report and safe
-observer issue inside that envelope. Source unavailability is `not_checked` and
-`network`, while a completed proof mismatch is `fail` and `verification`.
+authority issue inside that envelope. Authority unavailability is `not_checked`
+and `network`, while malformed, untrusted, or mismatching retained evidence is
+`fail` and `verification`. Status and verification use only retained target,
+request, response, and CA-bundle bytes; they open no network connection.
 Layered and package verification use overall `no_evidence` with `incomplete`
 when no forecast-evidence layer applies.
 
@@ -48,5 +51,11 @@ The generated [tool catalog](generated/mcp-tool-schemas.json),
 [input schemas](generated/input-schemas/index.md) are the machine-readable
 reference. Startup mode can remove `forecast_reveal` or package tools from
 discovery.
+
+`timestamp_stamp` requires `tsa_url` and ledger-relative `ca_bundle`. It accepts
+only a public HTTPS authority URL, creates an RFC 3161 SHA-256 request, and
+retains all bytes needed for later local verification. Repeating the call with a
+different authority appends independent evidence; it does not replace earlier
+entries. MCP resources expose these artifacts with resource kind `timestamp`.
 
 [Run the MCP server](../how-to/run-mcp.md) · [Reference index](index.md)

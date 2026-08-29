@@ -9,7 +9,7 @@ import (
 )
 
 // InputSchemaName identifies one closed operation input contract. Version 1 is
-// tied to the exact embedded Forecast Ledger 1.1.0 definitions.
+// tied to the exact embedded Forecast Ledger 1.2.0 definitions.
 type InputSchemaName string
 
 const (
@@ -194,16 +194,7 @@ func operationDefinitions() map[InputSchemaName]any {
 		}, nil),
 		InputSchemaPublicationVerify: closedObject([]string{"file", "manifest"}, map[string]any{
 			"file": stringValue(1), "manifest": stringValue(1),
-			"online": map[string]any{"type": "boolean"}, "offline": map[string]any{"type": "boolean"},
-			"bitcoin_core":      map[string]any{"type": "string", "format": "uri"},
-			"bitcoin_auth_file": stringValue(1),
-		}, map[string]any{
-			"allOf": []any{
-				map[string]any{"not": map[string]any{"required": []string{"online", "offline"}, "properties": map[string]any{"online": map[string]any{"const": true}, "offline": map[string]any{"const": true}}}},
-				map[string]any{"if": map[string]any{"required": []string{"bitcoin_core"}}, "then": map[string]any{"required": []string{"bitcoin_auth_file"}}},
-				map[string]any{"if": map[string]any{"required": []string{"bitcoin_auth_file"}}, "then": map[string]any{"required": []string{"bitcoin_core"}}},
-			},
-		}),
+		}, nil),
 	}
 }
 

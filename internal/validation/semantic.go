@@ -158,6 +158,7 @@ func (v *semanticValidator) validateQuestion(index int, question *ledger.Questio
 			v.validateValue(question, forecast.Value, forecastPointer+"/value")
 		}
 		v.validateArtifact(forecast.Integrity, forecastPointer+"/integrity")
+		v.validateTimestampChronology(question, forecast, forecastPointer+"/integrity")
 		v.validateReveal(question, forecast, forecastPointer)
 	}
 	v.validateResolution(question, pointer)
@@ -303,6 +304,19 @@ func (v *semanticValidator) validateArtifact(integrity ledger.Integrity, pointer
 	}
 }
 
+func (v *semanticValidator) validateTimestampChronology(question *ledger.Question, forecast *ledger.Forecast, pointer string) {
+	if question.Resolution == nil || question.Resolution.Resolved == nil || forecast.Integrity.Verified == nil {
+		return
+	}
+	knownAt := parseTimestamp(question.Resolution.Resolved.OutcomeKnownAt)
+	for _, timestamp := range forecast.Integrity.Verified.Timestamps {
+		if timestamp.State == ledger.RFC3161Verified && timestamp.GenTime != nil && parseTimestamp(*timestamp.GenTime).Before(knownAt) {
+			return
+		}
+	}
+	v.add("semantic.timestamp_chronology", pointer+"/timestamps", "verified integrity must contain a verified RFC 3161 timestamp that predates the known outcome")
+}
+
 func (v *semanticValidator) validateReveal(question *ledger.Question, forecast *ledger.Forecast, pointer string) {
 	if forecast.Visibility != ledger.VisibilityRevealed || forecast.Commitment == nil || forecast.Commitment.Revealed == nil {
 		return
@@ -349,9 +363,6 @@ func (v *semanticValidator) validateResolution(question *ledger.Question, pointe
 			v.add("semantic.resolution_option", pointer+"/resolution/outcome", "resolution outcome must reference a question option")
 		}
 	}
-	// A confirmed timestamp at or after outcome_known_at can still be a valid
-	// cryptographic proof. Verification reports it as valid-but-too-late rather
-	// than making the complete ledger structurally or semantically invalid.
 }
 
 func (v *semanticValidator) uniqueSlugs(values []ledger.Slug, pointer, code string) {

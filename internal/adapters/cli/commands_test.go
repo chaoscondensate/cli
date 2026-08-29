@@ -48,7 +48,7 @@ func TestCommandTreeAndLeafLocalFileFlags(t *testing.T) {
 		"question":  {"add", "update", "list", "show", "resolve", "annul", "dispute"},
 		"forecast":  {"add", "list", "show", "seal", "reveal"},
 		"target":    {"build", "check"},
-		"timestamp": {"stamp", "upgrade", "status", "verify"},
+		"timestamp": {"stamp", "status", "verify"},
 		"publish":   {"build", "verify"},
 		"mcp":       {"serve"},
 	}
@@ -89,6 +89,49 @@ func TestEveryVisibleLeafHasARealAction(t *testing.T) {
 		return nil
 	}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestEveryExistingLedgerLeafRunsSchemaAdmissionBeforeItsAction(t *testing.T) {
+	root := NewCommand(strings.NewReader(""), io.Discard, io.Discard)
+	if err := root.Walk(func(command *urfavecli.Command) error {
+		if command == root || command.Hidden || len(command.Commands) > 0 || command.Name == "init" {
+			return nil
+		}
+		hasFile := false
+		for _, flag := range command.Flags {
+			for _, name := range flag.Names() {
+				hasFile = hasFile || name == "file"
+			}
+		}
+		if hasFile && command.Before == nil {
+			t.Errorf("existing-ledger leaf %q has no schema admission hook", command.FullName())
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	directory := t.TempDir()
+	oldLedger := bytes.Replace(fixtureBytes(t, "individual-ledger.json"), []byte(`"schema_version": "1.2.0"`), []byte(`"schema_version": "1.1.0"`), 1)
+	ledgerPath := filepath.Join(directory, "ledger.json")
+	if err := os.WriteFile(ledgerPath, oldLedger, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	caPath := filepath.Join(directory, "tsa.pem")
+	if err := os.WriteFile(caPath, []byte("not consulted"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := runCLI("forecast-ledger", "--json", "timestamp", "stamp", "--file", ledgerPath, "--question", "q-election-coalition", "--forecast", "f-election-coalition-001", "--tsa-url", "https://tsa.example.test", "--ca-bundle", "tsa.pem")
+	if code != 3 || stdout != "" || !strings.Contains(stderr, `"code":"unsupported_schema_version"`) {
+		t.Fatalf("old-schema timestamp admission code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(directory, "proofs")); !os.IsNotExist(err) {
+		t.Fatalf("old-schema admission created artifacts: %v", err)
+	}
+	after, err := os.ReadFile(ledgerPath)
+	if err != nil || !bytes.Equal(after, oldLedger) {
+		t.Fatalf("old-schema admission changed ledger: %v", err)
 	}
 }
 
@@ -223,7 +266,7 @@ func TestValidateJSONOutputAndStableInvalidData(t *testing.T) {
 		t.Fatalf("unexpected success envelope: %#v", success)
 	}
 
-	code, stdout, stderr = runCLIWithStdin(`{"schema_version":"1.1.0","secret":"do-not-print"}`, "forecast-ledger", "--json", "validate", "--file", "-")
+	code, stdout, stderr = runCLIWithStdin(`{"schema_version":"1.2.0","secret":"do-not-print"}`, "forecast-ledger", "--json", "validate", "--file", "-")
 	if code != 3 || stdout != "" {
 		t.Fatalf("invalid JSON mode code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -243,7 +286,7 @@ func TestValidateJSONOutputAndStableInvalidData(t *testing.T) {
 	}
 
 	code, stdout, stderr = runCLIWithStdin(`{}`, "forecast-ledger", "validate", "--file", "-")
-	if code != 3 || stdout != "" || !strings.Contains(stderr, "warning:") || !strings.Contains(stderr, "only 1.1.0") {
+	if code != 3 || stdout != "" || !strings.Contains(stderr, "warning:") || !strings.Contains(stderr, "only 1.2.0") {
 		t.Fatalf("unsupported schema message missing: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 }
@@ -261,7 +304,7 @@ func TestEmptyInitAndQuestionBacklogCLI(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &created); err != nil {
 		t.Fatal(err)
 	}
-	if created.Data["schema_version"] != "1.1.0" || created.Data["question_count"] != float64(0) || created.Data["forecast_count"] != float64(0) || created.Data["question_id"] != nil || created.Data["forecast_id"] != nil {
+	if created.Data["schema_version"] != "1.2.0" || created.Data["question_count"] != float64(0) || created.Data["forecast_count"] != float64(0) || created.Data["question_id"] != nil || created.Data["forecast_id"] != nil {
 		t.Fatalf("empty init result = %#v", created.Data)
 	}
 	contents, err := os.ReadFile(emptyPath)
@@ -562,17 +605,17 @@ func TestHelpSuggestionsCompletionAndVersionJSON(t *testing.T) {
 		if err := json.Unmarshal([]byte(stdout), &got); err != nil {
 			t.Fatal(err)
 		}
-		if got.Binary != "forecast-ledger" || got.Schema.Version != "1.1.0" {
+		if got.Binary != "forecast-ledger" || got.Schema.Version != "1.2.0" {
 			t.Fatalf("unexpected version metadata: %#v", got)
 		}
 	}
 	code, stdout, stderr = runCLI("forecast-ledger", "version")
-	if code != 0 || stderr != "" || !strings.Contains(stdout, "limits per invocation: 32 heights/128 requests/4 concurrent") {
-		t.Fatalf("human version does not scope timestamp limits: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "timestamp support: rfc3161/sha256") || !strings.Contains(stdout, "explicit TSA and retained CA bundle; local verification") {
+		t.Fatalf("human version does not describe RFC 3161 support: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	code, stdout, stderr = runCLI("forecast-ledger", "timestamp", "--help")
-	if code != 0 || stderr != "" || !strings.Contains(stdout, "limits per invocation: 32 heights/128 requests/4 concurrent") {
-		t.Fatalf("timestamp help does not scope limits: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "explicit public HTTPS TSA") || !strings.Contains(stdout, "local and make no timestamp-service network request") {
+		t.Fatalf("timestamp help does not describe RFC 3161 boundaries: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	code, _, stderr = runCLI("forecast-ledger", "--plain", "version", "--json")
 	if code != 2 || !strings.Contains(stderr, "cannot be combined") {
@@ -617,10 +660,23 @@ func TestTimestampStatusOfflineFailureAndPublicationCLI(t *testing.T) {
 		t.Fatalf("timestamp status code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	args = append([]string{"forecast-ledger", "timestamp", "stamp"}, selector...)
-	args = append(args, "--offline")
+	args = append(args, "--tsa-url", "https://tsa.example.test", "--ca-bundle", "tsa.pem", "--offline")
 	code, stdout, stderr = runCLI(args...)
 	if code != 8 || stdout != "" || !strings.Contains(stderr, "network access") {
 		t.Fatalf("offline stamp code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	caBytes, err := os.ReadFile(filepath.Join("..", "..", "timestamp", "rfc3161", "testdata", "root.pem"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "tsa.pem"), caBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	args = append([]string{"forecast-ledger", "--json", "timestamp", "stamp"}, selector...)
+	args = append(args, "--tsa-url", "https://127.0.0.1", "--ca-bundle", "tsa.pem")
+	code, stdout, stderr = runCLI(args...)
+	if code != 8 || stderr != "" || !strings.Contains(stdout, `"code":"timestamp.not_checked"`) || !strings.Contains(stdout, `"timing.tsa_unavailable"`) || !strings.Contains(stdout, `"request_count":1`) {
+		t.Fatalf("safe TSA failure code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 
 	output := filepath.Join(directory, "package")

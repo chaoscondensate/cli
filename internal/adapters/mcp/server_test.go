@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,7 +15,6 @@ import (
 	"github.com/chaoscondensate/cli/internal/app"
 	"github.com/chaoscondensate/cli/internal/service"
 	"github.com/chaoscondensate/cli/internal/storage"
-	"github.com/chaoscondensate/cli/internal/timestamp/ots"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -25,7 +22,7 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	ledgerRoot := t.TempDir()
 	outputRoot := t.TempDir()
 	secretRoot := t.TempDir()
-	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.1.0", "individual-ledger.json"), filepath.Join(ledgerRoot, "ledger.json"))
+	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.2.0", "individual-ledger.json"), filepath.Join(ledgerRoot, "ledger.json"))
 	server, err := New(Config{
 		LedgerRoots: []string{"main=" + ledgerRoot}, OutputRoots: []string{"packages=" + outputRoot}, SecretRoots: []string{"keys=" + secretRoot},
 		Timeout: time.Second,
@@ -117,6 +114,18 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	if err != nil || forecastShow.IsError || !strings.Contains(toolText(forecastShow), `"integrity":{"status":"unanchored"}`) {
 		t.Fatalf("MCP forecast integrity result=%s err=%v", toolText(forecastShow), err)
 	}
+	copyFixture(t, filepath.Join("..", "..", "timestamp", "rfc3161", "testdata", "root.pem"), filepath.Join(ledgerRoot, "tsa.pem"))
+	tsaFailure, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "timestamp_stamp", Arguments: map[string]any{
+		"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-001",
+		"tsa_url": "https://127.0.0.1", "ca_bundle": "tsa.pem",
+	}})
+	if err != nil || !tsaFailure.IsError || !strings.Contains(toolText(tsaFailure), `"code":"network"`) || !strings.Contains(toolText(tsaFailure), `"timing.tsa_unavailable"`) || !strings.Contains(toolText(tsaFailure), `"request_count":1`) {
+		t.Fatalf("MCP safe TSA failure result=%s err=%v", toolText(tsaFailure), err)
+	}
+	sessionStillAlive, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "ledger_validate", Arguments: map[string]any{"file": "main:ledger.json"}})
+	if err != nil || sessionStillAlive.IsError {
+		t.Fatalf("MCP session did not survive TSA failure: result=%s err=%v", toolText(sessionStillAlive), err)
+	}
 	semanticFailure, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{"file": "main:ledger.json", "platform": "invalid-semantic", "input": map[string]any{"name": "   ", "kind": "informal"}}})
 	if err != nil || !semanticFailure.IsError || strings.Contains(toolText(semanticFailure), `"line":0`) || strings.Contains(toolText(semanticFailure), `"column":0`) {
 		t.Fatalf("MCP semantic diagnostic fabricated a span: %s, %v", toolText(semanticFailure), err)
@@ -137,7 +146,7 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 		t.Fatalf("same-ledger writer conflict result=%s err=%v", toolText(conflict), err)
 	}
 
-	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.1.0", "individual-ledger.json"), filepath.Join(ledgerRoot, "second.json"))
+	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.2.0", "individual-ledger.json"), filepath.Join(ledgerRoot, "second.json"))
 	independent, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{
 		"file": "main:second.json", "platform": "independent-platform", "input": map[string]any{"name": "Independent", "kind": "internal"},
 	}})
@@ -177,6 +186,48 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	resource, err := client.ReadResource(ctx, &sdk.ReadResourceParams{URI: "forecast-ledger://v1/ledger/main/ledger.json"})
 	if err != nil || len(resource.Contents) != 1 || !strings.Contains(resource.Contents[0].Text, "ledger_id") {
 		t.Fatalf("ledger resource=%#v err=%v", resource, err)
+	}
+}
+
+func TestEveryMCPExistingLedgerToolRejectsV110AtAdmission(t *testing.T) {
+	ledgerRoot, outputRoot, secretRoot := t.TempDir(), t.TempDir(), t.TempDir()
+	raw, err := os.ReadFile(filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.2.0", "individual-ledger.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldLedger := bytes.Replace(raw, []byte(`"schema_version": "1.2.0"`), []byte(`"schema_version": "1.1.0"`), 1)
+	if err := os.WriteFile(filepath.Join(ledgerRoot, "ledger.json"), oldLedger, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	server, err := New(Config{LedgerRoots: []string{"main=" + ledgerRoot}, OutputRoots: []string{"packages=" + outputRoot}, SecretRoots: []string{"keys=" + secretRoot}, Mode: service.AccessMode{AllowReveal: true}, Timeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := connectClient(t, t.Context(), server)
+	defer client.Close()
+	listed, err := client.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range listed.Tools {
+		if tool.Name == "ledger_init" {
+			continue
+		}
+		arguments := minimumToolArguments(tool.Name)
+		arguments["file"] = "main:ledger.json"
+		result, callErr := callToolForTest(t, client, &sdk.CallToolParams{Name: tool.Name, Arguments: arguments})
+		if callErr != nil || !result.IsError || !strings.Contains(toolText(result), `"code":"unsupported_schema_version"`) {
+			t.Errorf("tool %s bypassed v1.1.0 admission: result=%s err=%v", tool.Name, toolText(result), callErr)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(ledgerRoot, "proofs")); !os.IsNotExist(err) {
+		t.Fatalf("old-schema MCP admission created artifacts: %v", err)
+	}
+	if entries, err := os.ReadDir(outputRoot); err != nil || len(entries) != 0 {
+		t.Fatalf("old-schema MCP admission wrote output: entries=%v err=%v", entries, err)
+	}
+	if entries, err := os.ReadDir(secretRoot); err != nil || len(entries) != 0 {
+		t.Fatalf("old-schema MCP admission wrote secrets: entries=%v err=%v", entries, err)
 	}
 }
 
@@ -226,40 +277,6 @@ func TestMCPEmptyInitAndBacklogQuestion(t *testing.T) {
 	}
 	if !sealed.IsError || !strings.Contains(toolText(sealed), "protected input_file") {
 		t.Fatalf("inline sealed input was not rejected safely: %s", toolText(sealed))
-	}
-}
-
-func TestMCPTimestampObservationFailureReturnsReportAndKeepsSession(t *testing.T) {
-	ledgerRoot := t.TempDir()
-	ledgerPath := filepath.Join(ledgerRoot, "ledger.json")
-	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.1.0", "individual-ledger.json"), ledgerPath)
-	prepareConfirmedMCPReceipt(t, ledgerPath)
-	observer := &mcpObservationFailure{err: ots.NewObservationIssue(ots.ObservationSourceUnavailable, "mempool-space")}
-	server, err := New(Config{LedgerRoots: []string{"main=" + ledgerRoot}, Timeout: time.Second, BitcoinObserver: observer})
-	if err != nil {
-		t.Fatal(err)
-	}
-	client := connectClient(t, t.Context(), server)
-	defer client.Close()
-
-	result, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "timestamp_verify", Arguments: map[string]any{
-		"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-001",
-	}})
-	if err != nil || !result.IsError {
-		t.Fatalf("timestamp outage result=%#v err=%v", result, err)
-	}
-	text := toolText(result)
-	for _, expected := range []string{`"code":"network"`, `"state":"not_checked"`, `"timing.source_unavailable"`, `"kind":"source_unavailable"`, `"source_ids":["mempool-space"]`, `"http_requests":1`} {
-		if !strings.Contains(text, expected) {
-			t.Errorf("MCP outage report missing %q: %s", expected, text)
-		}
-	}
-	if strings.Contains(text, "Bitcoin evidence did not verify") {
-		t.Fatalf("MCP outage retained false verification message: %s", text)
-	}
-	validation, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "ledger_validate", Arguments: map[string]any{"file": "main:ledger.json"}})
-	if err != nil || validation.IsError {
-		t.Fatalf("MCP session did not survive recoverable outage: result=%#v err=%v", validation, err)
 	}
 }
 
@@ -433,54 +450,6 @@ func copyFixture(t *testing.T, source, destination string) {
 	}
 }
 
-type mcpObservationFailure struct {
-	err      error
-	requests int
-}
-
-func (observer *mcpObservationFailure) Observe(context.Context, uint64) (ots.BlockObservation, error) {
-	observer.requests++
-	return ots.BlockObservation{}, observer.err
-}
-
-func (observer *mcpObservationFailure) Summary() ots.RequestSummary {
-	return ots.RequestSummary{UniqueHeights: observer.requests, HTTPRequests: observer.requests, MaxHeights: 32, MaxRequests: 128, MaxConcurrent: 1}
-}
-
-func prepareConfirmedMCPReceipt(t *testing.T, ledgerPath string) {
-	t.Helper()
-	transport := mcpRoundTripper(func(request *http.Request) (*http.Response, error) {
-		var branch []byte
-		var err error
-		if request.Method == http.MethodPost {
-			identity := "https://alice.btc.calendar.opentimestamps.org"
-			if strings.Contains(request.URL.Host, "b.pool") {
-				identity = "https://bob.btc.calendar.opentimestamps.org"
-			}
-			branch, err = ots.SerializeCalendarResponse([]ots.Sequence{{{Attestation: &ots.Attestation{Kind: ots.AttestationPending, Calendar: identity}}}})
-		} else {
-			branch, err = ots.SerializeCalendarResponse([]ots.Sequence{{{Attestation: &ots.Attestation{Kind: ots.AttestationBitcoin, Height: 1}}}})
-		}
-		if err != nil {
-			return nil, err
-		}
-		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(branch)), Header: make(http.Header)}, nil
-	})
-	client := &ots.CalendarClient{HTTPClient: &http.Client{Transport: transport}}
-	if _, err := service.CommitTimestampStamp(context.Background(), ledgerPath, "q-election-coalition", "f-election-coalition-001", service.TimestampStampOptions{CalendarClient: client}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := service.CommitTimestampUpgrade(context.Background(), ledgerPath, "q-election-coalition", "f-election-coalition-001", service.TimestampUpgradeOptions{CalendarClient: client}); err != nil {
-		t.Fatal(err)
-	}
-}
-
-type mcpRoundTripper func(*http.Request) (*http.Response, error)
-
-func (function mcpRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	return function(request)
-}
-
 func containsName(values []string, wanted string) bool {
 	for _, value := range values {
 		if value == wanted {
@@ -528,12 +497,25 @@ func minimumToolArguments(name string) map[string]any {
 		arguments["input"] = map[string]any{}
 	case "forecast_seal":
 		arguments["input_file"], arguments["key_file"] = "keys:missing.json", "keys:new.key"
+	case "forecast_reveal":
+		arguments["key_file"], arguments["confirm"] = "keys:missing.key", true
 	case "forecast_key_hint_update":
 		arguments["key_hint"] = "vault:item"
 	case "publication_build":
 		arguments["output"] = "packages:new-package"
 	case "publication_verify":
 		arguments["manifest"] = "packages:missing-manifest.json"
+	case "timestamp_stamp":
+		arguments["tsa_url"], arguments["ca_bundle"] = "https://tsa.example.test", "tsa.pem"
+	}
+	if name == "platform_list" {
+		delete(arguments, "platform")
+	}
+	if name == "question_list" {
+		delete(arguments, "question")
+	}
+	if name == "forecast_list" {
+		delete(arguments, "forecast")
 	}
 	if name == "question_add" {
 		arguments["type"] = "binary"

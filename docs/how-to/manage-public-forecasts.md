@@ -1,7 +1,7 @@
 # Manage public forecasts
 
 <!-- doc-metadata
-coverage: v0.3.1
+coverage: v0.4.0
 reviewed: 2026-08-29
 owner: interface
 generated: false
@@ -73,13 +73,11 @@ integrity data. A sealed forecast is shown only as a redacted summary, and a
 revealed forecast never prints its stored revealed key. Normal human and plain
 list rows include a type-aware public value summary; show includes all public
 business fields. Show also includes the stored integrity projection: target
-metadata, receipt paths and states, confirmed Bitcoin block height,
-`anchored_before`, and `verified_at` when present. This is retained ledger data,
-not a fresh verification; the command opens no network connection and labels
-stored verified evidence accordingly. Forecast Ledger v1 does not retain the
-identity of the Bitcoin source used by an earlier verification. Because stdin
-contains only ledger bytes, these commands do not resolve or check sibling
-target and receipt files.
+metadata and RFC 3161 entry paths, states, generation times, and authority
+identities when present. This is retained ledger data, not a fresh verification;
+the command opens no network connection and labels stored verified evidence
+accordingly. Because stdin contains only ledger bytes, these commands do not
+resolve or check sibling target or timestamp files.
 
 Quote timestamps in maintained YAML input as shown above. The CLI also accepts
 a YAML timestamp scalar in a known timestamp field, but rejects that implicit

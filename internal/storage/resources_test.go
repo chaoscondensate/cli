@@ -17,13 +17,13 @@ func TestResourceRecoveryUsesOwnershipAndRollbackClass(t *testing.T) {
 		t.Fatal(err)
 	}
 	target := filepath.Join(directory, "target.json")
-	receipt := filepath.Join(directory, "receipt.ots")
+	response := filepath.Join(directory, "response.tsr")
 	key := filepath.Join(directory, "key.json")
 	ledger := filepath.Join(directory, "ledger.json")
 	packageFile := filepath.Join(packageRoot, "manifest.json")
 	unowned := filepath.Join(directory, "existing.txt")
 	files := map[string][]byte{
-		target: []byte("target"), receipt: []byte("receipt"), key: []byte("key"),
+		target: []byte("target"), response: []byte("response"), key: []byte("key"),
 		ledger: []byte("ledger"), packageFile: []byte("manifest"), unowned: []byte("existing"),
 	}
 	for path, data := range files {
@@ -34,7 +34,7 @@ func TestResourceRecoveryUsesOwnershipAndRollbackClass(t *testing.T) {
 	journal := filepath.Join(directory, ".resources.json")
 	plan, err := NewResourcePlan(journal, "timestamp.stamp", []ResourceEntry{
 		{Kind: ResourceTarget, Type: ResourceFile, Path: target, Owned: true, Rollback: ResourceRollbackRemoveOwned, State: ResourcePlanned},
-		{Kind: ResourceReceipt, Type: ResourceFile, Path: receipt, Owned: true, Rollback: ResourceRollbackRemoveOwned, State: ResourcePlanned},
+		{Kind: ResourceTimestampResponse, Type: ResourceFile, Path: response, Owned: true, Rollback: ResourceRollbackRemoveOwned, State: ResourcePlanned},
 		{Kind: ResourceKey, Type: ResourceFile, Path: key, Owned: true, Rollback: ResourceRollbackRetainSecret, State: ResourcePlanned},
 		{Kind: ResourceLedger, Type: ResourceFile, Path: ledger, Owned: false, Rollback: ResourceRollbackNone, State: ResourcePlanned},
 		{Kind: ResourcePackage, Type: ResourceFile, Path: packageFile, Owned: true, Rollback: ResourceRollbackRemoveOwned, State: ResourcePlanned},
@@ -47,7 +47,7 @@ func TestResourceRecoveryUsesOwnershipAndRollbackClass(t *testing.T) {
 	if err := plan.Begin(); err != nil {
 		t.Fatal(err)
 	}
-	for path, data := range map[string][]byte{target: files[target], receipt: files[receipt], packageFile: files[packageFile]} {
+	for path, data := range map[string][]byte{target: files[target], response: files[response], packageFile: files[packageFile]} {
 		if err := plan.MarkCreated(path, ResourceDigest(data)); err != nil {
 			t.Fatal(err)
 		}
@@ -73,7 +73,7 @@ func TestResourceRecoveryUsesOwnershipAndRollbackClass(t *testing.T) {
 			t.Fatalf("retained resource %s: %v", retained, err)
 		}
 	}
-	for _, removed := range []string{target, receipt, packageFile, packageRoot} {
+	for _, removed := range []string{target, response, packageFile, packageRoot} {
 		if _, err := os.Stat(removed); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("owned rollback resource %s remains: %v", removed, err)
 		}
@@ -119,15 +119,15 @@ func TestResourceCrashRecoveryAndRetryNeverChangesUnownedFiles(t *testing.T) {
 	directory := t.TempDir()
 	ledgerPath := filepath.Join(directory, "ledger.json")
 	targetPath := filepath.Join(directory, "target.json")
-	receiptPath := filepath.Join(directory, "receipt.ots")
+	responsePath := filepath.Join(directory, "response.tsr")
 	keyPath := filepath.Join(directory, "key.json")
 	journalPath := filepath.Join(directory, ".stamp-resources.json")
 	ledgerBytes := []byte("original ledger\n")
 	targetBytes := []byte("deterministic target")
-	receiptBytes := []byte("pending receipt")
+	responseBytes := []byte("pending response")
 	keyBytes := []byte("durable key")
 	for path, content := range map[string][]byte{
-		ledgerPath: ledgerBytes, targetPath: targetBytes, receiptPath: receiptBytes, keyPath: keyBytes,
+		ledgerPath: ledgerBytes, targetPath: targetBytes, responsePath: responseBytes, keyPath: keyBytes,
 	} {
 		if err := os.WriteFile(path, content, 0o600); err != nil {
 			t.Fatal(err)
@@ -136,7 +136,7 @@ func TestResourceCrashRecoveryAndRetryNeverChangesUnownedFiles(t *testing.T) {
 	plan, err := NewResourcePlan(journalPath, "timestamp.stamp", []ResourceEntry{
 		{Kind: ResourceLedger, Type: ResourceFile, Path: ledgerPath, Owned: false, Rollback: ResourceRollbackNone, State: ResourcePlanned},
 		{Kind: ResourceTarget, Type: ResourceFile, Path: targetPath, Owned: false, Rollback: ResourceRollbackNone, State: ResourcePlanned},
-		{Kind: ResourceReceipt, Type: ResourceFile, Path: receiptPath, Owned: true, Rollback: ResourceRollbackRemoveOwned, State: ResourcePlanned},
+		{Kind: ResourceTimestampResponse, Type: ResourceFile, Path: responsePath, Owned: true, Rollback: ResourceRollbackRemoveOwned, State: ResourcePlanned},
 		{Kind: ResourceKey, Type: ResourceFile, Path: keyPath, Owned: true, Rollback: ResourceRollbackRetainSecret, State: ResourcePlanned},
 	})
 	if err != nil {
@@ -145,7 +145,7 @@ func TestResourceCrashRecoveryAndRetryNeverChangesUnownedFiles(t *testing.T) {
 	if err := plan.Begin(); err != nil {
 		t.Fatal(err)
 	}
-	if err := plan.MarkCreated(receiptPath, ResourceDigest(receiptBytes)); err != nil {
+	if err := plan.MarkCreated(responsePath, ResourceDigest(responseBytes)); err != nil {
 		t.Fatal(err)
 	}
 	if err := plan.MarkCreated(keyPath, ResourceDigest(keyBytes)); err != nil {
@@ -160,17 +160,17 @@ func TestResourceCrashRecoveryAndRetryNeverChangesUnownedFiles(t *testing.T) {
 			t.Fatalf("retained %s = %q, want %q, err=%v", path, got, want, readErr)
 		}
 	}
-	if _, err := os.Stat(receiptPath); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("created receipt survived rollback: %v", err)
+	if _, err := os.Stat(responsePath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("created response survived rollback: %v", err)
 	}
 
 	targetResult, err := EnsureDeterministicFile(targetPath, targetBytes, 0o600, 1024)
 	if err != nil || targetResult.State != DeterministicUnchanged {
 		t.Fatalf("retry target result=%#v err=%v", targetResult, err)
 	}
-	receiptResult, err := EnsureDeterministicFile(receiptPath, receiptBytes, 0o600, 1024)
-	if err != nil || receiptResult.State != DeterministicCreated {
-		t.Fatalf("retry receipt result=%#v err=%v", receiptResult, err)
+	responseResult, err := EnsureDeterministicFile(responsePath, responseBytes, 0o600, 1024)
+	if err != nil || responseResult.State != DeterministicCreated {
+		t.Fatalf("retry response result=%#v err=%v", responseResult, err)
 	}
 	if got, err := os.ReadFile(ledgerPath); err != nil || string(got) != string(ledgerBytes) {
 		t.Fatalf("retry changed original ledger: data=%q err=%v", got, err)

@@ -5,7 +5,7 @@ Defines deterministic, transport-neutral evidence-package creation and local ver
 ## ADDED Requirements
 
 ### Requirement: Build only from an explicit complete ledger
-`forecast-ledger publish build` SHALL require a real `--file` ledger path and a new explicit `--output` directory. It SHALL fully validate the ledger and enumerate every target and OpenTimestamps receipt referenced by the ledger. It MUST NOT inspect source-control metadata, infer an upload destination, contact a remote service, or silently omit a referenced artifact. The package SHALL contain the complete selected ledger rather than a rewritten subset.
+`forecast-ledger publish build` SHALL require a real `--file` ledger path and a new explicit `--output` directory. It SHALL fully validate the ledger and enumerate every target and RFC 3161 receipt referenced by the ledger. It MUST NOT inspect source-control metadata, infer an upload destination, contact a remote service, or silently omit a referenced artifact. The package SHALL contain the complete selected ledger rather than a rewritten subset.
 
 #### Scenario: Standalone ledger outside source control
 - **WHEN** a valid ledger and its referenced artifacts live in an ordinary directory
@@ -16,13 +16,13 @@ Defines deterministic, transport-neutral evidence-package creation and local ver
 - **THEN** build fails before creating the output directory contents and identifies the missing safe relative path
 
 ### Requirement: Include a deterministic allowlisted file set
-The package root SHALL contain `manifest.json`, one ledger at `ledger/<original-base-name>`, targets at their stable `proofs/targets/...` relative paths, and receipts at their stable `proofs/receipts/...` relative paths. Every included file other than the manifest SHALL be represented exactly once in the manifest. Paths SHALL use forward slashes, be relative, normalized, case-collision checked, and sorted by UTF-8 byte order. The closed v1 manifest role vocabulary SHALL be exactly:
+The package root SHALL contain `manifest.json`, one ledger at `ledger/<original-base-name>`, targets at their stable `proofs/targets/...` relative paths, and receipts at their stable `proofs/timestamps/...` relative paths. Every included file other than the manifest SHALL be represented exactly once in the manifest. Paths SHALL use forward slashes, be relative, normalized, case-collision checked, and sorted by UTF-8 byte order. The closed v1 manifest role vocabulary SHALL be exactly:
 
 | Role | Required path and meaning |
 | --- | --- |
 | `ledger` | exactly one `ledger/<original-base-name>` entry containing the byte-exact selected ledger |
 | `forecast_target` | one entry for each referenced `proofs/targets/<forecast-id>.json` target |
-| `opentimestamps_receipt` | one entry for each referenced `proofs/receipts/<forecast-id>.json.ots` detached receipt |
+| `rfc3161_receipt` | one entry for each referenced `proofs/timestamps/<forecast-id>.tsr` detached receipt |
 
 No other entry role is valid in v1. Supporting another public evidence file SHALL require a new reviewed manifest profile rather than accepting an unknown role.
 
@@ -72,7 +72,7 @@ The output path MUST be absent. Build SHALL validate and hash every source, reso
 Before package commit, build SHALL reconstruct and compare every included target, validate every receipt's binding and syntax offline, verify every ledger/reference digest, and run applicable revealed-forecast authentication. Pending receipts MAY be packaged but SHALL remain labeled pending. A failed content/reveal/package-integrity check MUST prevent package creation; unavailable optional network verification MUST NOT trigger implicit network access.
 
 #### Scenario: Package pending proof
-- **WHEN** target and receipt are internally valid but the OTS proof is pending
+- **WHEN** target and receipt are internally valid but the RFC 3161 proof is pending
 - **THEN** build succeeds with pending state preserved and does not describe existence timing as verified
 
 ### Requirement: Return complete package identity
@@ -95,10 +95,10 @@ It SHALL fail if a listed file is missing, a digest/size/role differs, the ledge
 - **WHEN** the package contains an unlisted key or other regular file
 - **THEN** package integrity fails and the unexpected safe relative path is reported without reading secret contents
 
-### Requirement: Keep package verification offline by default
-Package verification SHALL require no original authoring location, source-control repository, hosting service, calendar, or network. `--online` MAY enable existence-timing revalidation through the built-in dual-public-source profile without requiring endpoint configuration; optional Bitcoin Core options MAY replace that profile for independently operated verification. Package integrity and content/reveal results MUST remain independently visible if an online source fails. `--offline` and `--online` MUST be mutually exclusive, and omission of both SHALL remain offline for portable-package verification.
+### Requirement: Keep package timestamp verification local
+Package verification SHALL require no original authoring location, source-control repository, hosting service, TSA, blockchain service, system trust store, or network. It SHALL verify each packaged target, request, response, and retained CA bundle through the shared RFC 3161 verifier. It SHALL expose neither `--online` nor `--offline`, because no timestamp-verification network path exists. Package integrity and content/reveal results MUST remain independently visible when one timestamp branch is pending or fails.
 
-This intentional default differs from layered `forecast-ledger verify`, which is online unless `--offline` is supplied. Help, README, and command references SHALL state the contrast next to both commands. `publish verify` is read-only and SHALL NOT expose `--dry-run`; `--online` opts into network observation while omission or explicit `--offline` keeps portable verification local.
+`publish verify` is read-only and SHALL NOT expose `--dry-run`. Help, README, and command references SHALL state that portable verification uses the packaged trust material and that this does not establish TSA clock honesty, current revocation status, authorship, or long-term legal validity.
 
 #### Scenario: Package copied to removable media
 - **WHEN** a verifier receives only the retained package and runs offline verification

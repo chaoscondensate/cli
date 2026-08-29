@@ -29,10 +29,12 @@ func PolicyForOperation(name OperationName) (OperationPolicy, bool) {
 		OperationPlatformList, OperationPlatformShow,
 		OperationQuestionList, OperationQuestionShow,
 		OperationForecastList, OperationForecastShow,
-		OperationTargetCheck, OperationTimestampStatus:
+		OperationTargetCheck:
 		return OperationPolicy{Network: NetworkNone}, true
-	case OperationVerificationRun, OperationPublicationVerify:
+	case OperationVerificationRun:
 		return OperationPolicy{Network: NetworkOptional}, true
+	case OperationPublicationVerify, OperationTimestampStatus:
+		return OperationPolicy{Network: NetworkNone}, true
 	case OperationLedgerInit, OperationLedgerUpdate,
 		OperationPlatformAdd, OperationPlatformUpdate,
 		OperationQuestionAdd, OperationQuestionUpdate,
@@ -44,10 +46,10 @@ func PolicyForOperation(name OperationName) (OperationPolicy, bool) {
 		OperationQuestionAnnul, OperationQuestionDispute,
 		OperationForecastReveal:
 		return OperationPolicy{PersistentEffect: true, RequiresConfirmation: true, Network: NetworkNone}, true
-	case OperationTimestampStamp, OperationTimestampUpgrade:
+	case OperationTimestampStamp:
 		return OperationPolicy{PersistentEffect: true, Network: NetworkRequired}, true
 	case OperationTimestampVerify:
-		return OperationPolicy{PersistentEffect: true, Network: NetworkOptional}, true
+		return OperationPolicy{PersistentEffect: true, Network: NetworkNone}, true
 	default:
 		return OperationPolicy{}, false
 	}

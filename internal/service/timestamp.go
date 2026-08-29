@@ -3,12 +3,14 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
+	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -16,106 +18,263 @@ import (
 	"github.com/chaoscondensate/cli/internal/document"
 	"github.com/chaoscondensate/cli/internal/ledger"
 	"github.com/chaoscondensate/cli/internal/storage"
-	"github.com/chaoscondensate/cli/internal/timestamp/ots"
+	"github.com/chaoscondensate/cli/internal/timestamp/rfc3161"
 	"github.com/chaoscondensate/cli/internal/validation"
 )
 
-const maxReceiptBytes = ots.MaxReceiptBytes
+const (
+	maxTimestampRequestBytes  = int64(rfc3161.MaxRequestBytes)
+	maxTimestampResponseBytes = int64(rfc3161.MaxResponseBytes)
+	maxTimestampCABundleBytes = int64(rfc3161.MaxCABundleBytes)
+)
 
 type TimestampState string
 
 const (
-	TimestampUnanchored          TimestampState = "unanchored"
-	TimestampPending             TimestampState = "pending"
-	TimestampConfirmedUnverified TimestampState = "confirmed_unverified"
-	TimestampVerified            TimestampState = "verified"
-	TimestampFailed              TimestampState = "failed"
-	TimestampInconsistent        TimestampState = "inconsistent"
+	TimestampUnanchored   TimestampState = "unanchored"
+	TimestampPending      TimestampState = "pending"
+	TimestampVerified     TimestampState = "verified"
+	TimestampFailed       TimestampState = "failed"
+	TimestampInconsistent TimestampState = "inconsistent"
 )
 
-type TimestampArtifactResult struct {
-	QuestionID        ledger.Slug         `json:"question_id"`
-	ForecastID        ledger.Slug         `json:"forecast_id"`
-	State             TimestampState      `json:"state"`
-	TargetPath        ledger.RelativePath `json:"target_path"`
-	TargetSHA256      string              `json:"target_sha256"`
-	ReceiptPath       ledger.RelativePath `json:"receipt_path"`
-	TargetPresent     bool                `json:"target_present"`
-	ReceiptPresent    bool                `json:"receipt_present"`
-	CalendarSourceIDs []string            `json:"calendar_source_ids,omitempty"`
-	CalendarIdentity  []string            `json:"calendar_identities,omitempty"`
-	BitcoinHeight     *uint64             `json:"bitcoin_height,omitempty"`
-	AnchoredBefore    *ledger.Timestamp   `json:"anchored_before,omitempty"`
-	NetworkProfile    NetworkProfile      `json:"network_profile"`
-	RequestSummary    ots.RequestSummary  `json:"request_summary,omitempty"`
-	NextActions       []string            `json:"next_actions,omitempty"`
-	Warnings          []Warning           `json:"warnings,omitempty"`
-	Effects           []SideEffect        `json:"effects,omitempty"`
-	Recovery          Recovery            `json:"recovery,omitempty"`
+type TimestampEntryResult struct {
+	TSAURL            string                       `json:"tsa_url"`
+	State             ledger.RFC3161TimestampState `json:"state"`
+	RequestPath       ledger.RelativePath          `json:"request_path"`
+	ResponsePath      ledger.RelativePath          `json:"response_path"`
+	CABundlePath      *ledger.RelativePath         `json:"ca_bundle_path,omitempty"`
+	RequestPresent    bool                         `json:"request_present"`
+	ResponsePresent   bool                         `json:"response_present"`
+	CABundlePresent   bool                         `json:"ca_bundle_present"`
+	CheckState        LayerState                   `json:"check_state"`
+	ReasonCodes       []string                     `json:"reason_codes,omitempty"`
+	GenTime           *ledger.Timestamp            `json:"gen_time,omitempty"`
+	PolicyOID         *string                      `json:"policy_oid,omitempty"`
+	SerialNumber      *string                      `json:"serial_number,omitempty"`
+	SignerSubject     string                       `json:"signer_subject,omitempty"`
+	SignerFingerprint string                       `json:"signer_fingerprint_sha256,omitempty"`
+	CABundleSHA256    string                       `json:"ca_bundle_sha256,omitempty"`
 }
 
-type BitcoinObservationIssue struct {
-	Kind      ots.ObservationIssueKind `json:"kind"`
-	SourceIDs []string                 `json:"source_ids,omitempty"`
+type TimestampRequestSummary struct {
+	RequestCount int    `json:"request_count"`
+	TSAOrigin    string `json:"tsa_origin,omitempty"`
+}
+
+type TimestampArtifactResult struct {
+	QuestionID     ledger.Slug             `json:"question_id"`
+	ForecastID     ledger.Slug             `json:"forecast_id"`
+	State          TimestampState          `json:"state"`
+	TargetPath     ledger.RelativePath     `json:"target_path"`
+	TargetSHA256   string                  `json:"target_sha256"`
+	TargetPresent  bool                    `json:"target_present"`
+	Entries        []TimestampEntryResult  `json:"timestamps,omitempty"`
+	RequestSummary TimestampRequestSummary `json:"request_summary,omitempty"`
+	NextActions    []string                `json:"next_actions,omitempty"`
+	Warnings       []Warning               `json:"warnings,omitempty"`
+	Effects        []SideEffect            `json:"effects,omitempty"`
+	Recovery       Recovery                `json:"recovery,omitempty"`
+	FailureCode    app.ErrorCode           `json:"-"`
 }
 
 type TimestampVerifyResult struct {
 	TimestampArtifactResult
-	Verification     VerificationLayer        `json:"verification"`
-	ObservationIssue *BitcoinObservationIssue `json:"observation_issue,omitempty"`
-	FailureCode      app.ErrorCode            `json:"-"`
+	Verification VerificationLayer `json:"verification"`
+	FailureCode  app.ErrorCode     `json:"-"`
 }
 
 type TimestampStampOptions struct {
-	DryRun                bool
-	Offline               bool
-	CustomCalendars       []string
-	CalendarMinimum       int
-	Effects               Effects
-	CalendarClient        *ots.CalendarClient
-	ResolvedCalendarInput []string
+	DryRun       bool
+	Offline      bool
+	TSAURL       string
+	CABundlePath string
+	Effects      Effects
+	HTTPClient   *rfc3161.HTTPClient
 }
 
 type TimestampVerifyOptions struct {
-	DryRun     bool
-	Offline    bool
-	VerifiedAt ledger.Timestamp
-	Observer   ots.BitcoinObserver
+	DryRun  bool
+	Effects Effects
 }
 
-type TimestampUpgradeOptions struct {
-	DryRun          bool
-	Offline         bool
-	CustomCalendars []string
-	CalendarMinimum int
-	CalendarClient  *ots.CalendarClient
+type timestampPaths struct {
+	Request  ledger.RelativePath
+	Response ledger.RelativePath
 }
 
-func ReceiptRelativePath(forecastID ledger.Slug) ledger.RelativePath {
-	return ledger.RelativePath(storage.DeterministicRelativePath("proofs/receipts", string(forecastID)+".json.ots"))
+func TimestampEvidencePaths(forecastID ledger.Slug, tsaURL string) (ledger.RelativePath, ledger.RelativePath, error) {
+	normalized, err := rfc3161.NormalizeEndpoint(tsaURL)
+	if err != nil {
+		return "", "", app.NewError(app.CodeInvalidData, "timestamp authority URL is invalid", nil)
+	}
+	digest := sha256.Sum256([]byte(normalized))
+	directory := storage.DeterministicRelativePath("proofs/timestamps", string(forecastID)+"/"+hex.EncodeToString(digest[:8]))
+	return ledger.RelativePath(directory + "/request.tsq"), ledger.RelativePath(directory + "/response.tsr"), nil
 }
 
-func ProtectedCoreObserver(endpoint, authPath string) (ots.BitcoinObserver, error) {
-	if strings.TrimSpace(endpoint) == "" && strings.TrimSpace(authPath) == "" {
-		return nil, nil
+func PlanTimestampStamp(ctx context.Context, path string, questionID, forecastID ledger.Slug, options TimestampStampOptions) (TimestampArtifactResult, error) {
+	if options.Offline {
+		return TimestampArtifactResult{}, app.NewError(app.CodeNetworkDisabled, "timestamp stamp requires network access", nil)
 	}
-	if strings.TrimSpace(endpoint) == "" || strings.TrimSpace(authPath) == "" {
-		return nil, app.NewError(app.CodeUsage, "--bitcoin-core and --bitcoin-auth-file must be supplied together", nil)
-	}
-	data, err := storage.ReadProtectedFile(authPath, 4096)
+	loaded, err := LoadAndValidateLedger(ctx, path, nil)
 	if err != nil {
-		return nil, err
+		return TimestampArtifactResult{}, err
 	}
-	defer clear(data)
-	auth, err := ots.DecodeCoreAuth(data)
+	artifact, forecast, err := timestampPreflight(loaded.Model, questionID, forecastID)
 	if err != nil {
-		return nil, app.NewError(app.CodeInvalidData, "Bitcoin Core auth file is invalid", err)
+		return TimestampArtifactResult{}, err
 	}
-	observer, err := ots.NewCoreObserver(endpoint, auth, nil)
+	normalizedTSA, err := rfc3161.NormalizeEndpoint(options.TSAURL)
 	if err != nil {
-		return nil, app.NewError(app.CodeInvalidData, "Bitcoin Core configuration is invalid", err)
+		return TimestampArtifactResult{}, app.NewError(app.CodeInvalidData, "--tsa-url must name a public HTTPS timestamp authority without credentials, query, or fragment", nil)
 	}
-	return observer, nil
+	if err := storage.ValidateRelativePath(options.CABundlePath); err != nil {
+		return TimestampArtifactResult{}, app.NewError(app.CodeInvalidData, "--ca-bundle must be a safe ledger-relative PEM file", err)
+	}
+	requestPath, responsePath, err := TimestampEvidencePaths(forecastID, normalizedTSA)
+	if err != nil {
+		return TimestampArtifactResult{}, err
+	}
+	root := filepath.Dir(loaded.Path)
+	resolver, err := storage.NewPathResolver(root)
+	if err != nil {
+		return TimestampArtifactResult{}, err
+	}
+	caAbsolute, err := resolver.Resolve(options.CABundlePath, true)
+	if err != nil {
+		return TimestampArtifactResult{}, app.NewError(app.CodeInvalidData, "timestamp CA bundle cannot be resolved inside the ledger root", err)
+	}
+	caBytes, err := readBoundedFile(caAbsolute, maxTimestampCABundleBytes)
+	if err != nil {
+		return TimestampArtifactResult{}, err
+	}
+	if err := rfc3161.ValidateCABundle(caBytes, rfc3161.DefaultLimits()); err != nil {
+		return TimestampArtifactResult{}, app.NewError(app.CodeInvalidData, "timestamp CA bundle is invalid", nil)
+	}
+	if _, err := resolver.ResolveForCreate(string(requestPath)); err != nil {
+		return TimestampArtifactResult{}, err
+	}
+	if _, err := resolver.ResolveForCreate(string(responsePath)); err != nil {
+		return TimestampArtifactResult{}, err
+	}
+	if _, err := preflightTargetFile(root, artifact); err != nil {
+		return TimestampArtifactResult{}, err
+	}
+	result := baseTimestampResult(artifact)
+	entry := TimestampEntryResult{TSAURL: normalizedTSA, State: ledger.RFC3161Pending, RequestPath: requestPath, ResponsePath: responsePath, CABundlePath: relativePathPointer(ledger.RelativePath(options.CABundlePath)), CheckState: LayerNotChecked, CABundlePresent: true}
+	requestAbsolute := filepath.Join(root, filepath.FromSlash(string(requestPath)))
+	responseAbsolute := filepath.Join(root, filepath.FromSlash(string(responsePath)))
+	if data, readErr := readOptionalBoundedFile(requestAbsolute, maxTimestampRequestBytes); readErr != nil {
+		return result, readErr
+	} else if data != nil {
+		entry.RequestPresent = true
+		if _, parseErr := rfc3161.ParseRequest(data, artifact.Bytes, rfc3161.DefaultLimits()); parseErr != nil {
+			return result, app.NewError(app.CodeConflict, "existing timestamp request does not match the selected target", nil)
+		}
+	}
+	if data, readErr := readOptionalBoundedFile(responseAbsolute, maxTimestampResponseBytes); readErr != nil {
+		return result, readErr
+	} else if data != nil {
+		entry.ResponsePresent = true
+		if !entry.RequestPresent {
+			return result, app.NewError(app.CodeConflict, "timestamp response exists without its request", nil)
+		}
+	}
+	if forecast.Integrity.Verified != nil || forecast.Integrity.Pending != nil {
+		for _, existing := range integrityTimestamps(forecast.Integrity) {
+			if existing.TSAURL == normalizedTSA && (existing.RequestPath != requestPath || existing.ResponsePath != responsePath) {
+				return result, app.NewError(app.CodeConflict, "timestamp authority already has different retained artifact paths", nil)
+			}
+		}
+	}
+	result.Entries = []TimestampEntryResult{entry}
+	result.Effects = []SideEffect{
+		{Kind: EffectTarget, Action: EffectCreate, Status: deferredOrUnchanged(regularFileExists(filepath.Join(root, filepath.FromSlash(string(artifact.RelativePath))))), Path: string(artifact.RelativePath), Rollback: RollbackCreatedPublic},
+		{Kind: EffectTimestampRequest, Action: EffectCreate, Status: deferredOrUnchanged(entry.RequestPresent), Path: string(requestPath), Rollback: RollbackCreatedPublic},
+		{Kind: EffectNetwork, Action: EffectContact, Status: EffectDeferred, SourceID: safeTSAOrigin(normalizedTSA)},
+		{Kind: EffectTimestampResponse, Action: EffectCreate, Status: deferredOrUnchanged(entry.ResponsePresent), Path: string(responsePath), Rollback: RollbackCreatedPublic},
+		{Kind: EffectLedger, Action: EffectReplace, Status: EffectDeferred, Path: filepath.Base(loaded.Path)},
+	}
+	return result, nil
+}
+
+func CommitTimestampStamp(ctx context.Context, path string, questionID, forecastID ledger.Slug, options TimestampStampOptions) (TimestampArtifactResult, error) {
+	planned, err := PlanTimestampStamp(ctx, path, questionID, forecastID, options)
+	if err != nil || options.DryRun {
+		return planned, err
+	}
+	if err := options.Effects.Validate(); err != nil {
+		options.Effects = ProductionEffects()
+	}
+	loaded, err := LoadAndValidateLedger(ctx, path, nil)
+	if err != nil {
+		return planned, err
+	}
+	artifact, _, err := timestampPreflight(loaded.Model, questionID, forecastID)
+	if err != nil {
+		return planned, err
+	}
+	root := filepath.Dir(loaded.Path)
+	entry := planned.Entries[0]
+	resolver, err := storage.NewPathResolver(root)
+	if err != nil {
+		return planned, err
+	}
+	caAbsolute, err := resolver.Resolve(string(*entry.CABundlePath), true)
+	if err != nil {
+		return planned, err
+	}
+	caBytes, err := readBoundedFile(caAbsolute, maxTimestampCABundleBytes)
+	if err != nil {
+		return planned, err
+	}
+	requestAbsolute := filepath.Join(root, filepath.FromSlash(string(entry.RequestPath)))
+	responseAbsolute := filepath.Join(root, filepath.FromSlash(string(entry.ResponsePath)))
+	requestBytes, err := readOptionalBoundedFile(requestAbsolute, maxTimestampRequestBytes)
+	if err != nil {
+		return planned, err
+	}
+	if requestBytes == nil {
+		requestBytes, _, err = rfc3161.CreateRequest(artifact.Bytes, &effectsReader{ctx: ctx, random: options.Effects.Random}, rfc3161.DefaultLimits())
+		if err != nil {
+			return planned, app.NewError(app.CodeIO, "timestamp request nonce could not be generated", nil)
+		}
+	}
+	responseBytes, err := readOptionalBoundedFile(responseAbsolute, maxTimestampResponseBytes)
+	if err != nil {
+		return planned, err
+	}
+	if responseBytes == nil {
+		client := rfc3161.HTTPClient{}
+		if options.HTTPClient != nil {
+			client = *options.HTTPClient
+		}
+		submitted, submitErr := client.Submit(ctx, entry.TSAURL, requestBytes)
+		if submitErr != nil {
+			planned.State = TimestampPending
+			planned.Entries[0].CheckState = LayerNotChecked
+			planned.Entries[0].ReasonCodes = []string{"timing.tsa_unavailable"}
+			planned.RequestSummary = TimestampRequestSummary{RequestCount: 1, TSAOrigin: safeTSAOrigin(entry.TSAURL)}
+			planned.NextActions = []string{"retry timestamp stamp"}
+			planned.FailureCode = app.CodeNetwork
+			return planned, app.NewError(app.CodeNetwork, "timestamp authority request failed", nil)
+		}
+		responseBytes = submitted.Response
+		planned.RequestSummary = TimestampRequestSummary{RequestCount: submitted.RequestCount, TSAOrigin: submitted.TSAOrigin}
+	}
+	metadata, verifyErr := rfc3161.Verify(ctx, artifact.Bytes, requestBytes, responseBytes, caBytes, rfc3161.DefaultLimits())
+	verifiedAt := ledger.Timestamp(options.Effects.Clock.Now().UTC().Format(time.RFC3339Nano))
+	committed, commitErr := commitTimestampEvidence(ctx, loaded.Path, questionID, forecastID, artifact, entry, requestBytes, responseBytes, caBytes, metadata, verifiedAt, verifyErr == nil, planned)
+	if commitErr != nil {
+		return committed, commitErr
+	}
+	if verifyErr != nil {
+		committed.Warnings = append(committed.Warnings, Warning{Code: string(rfc3161.SafeReason(verifyErr)), Message: "The response was retained as pending because complete local verification did not pass."})
+		committed.FailureCode = app.CodePending
+		return committed, app.NewError(app.CodePending, "timestamp response was retained but is not verified", nil)
+	}
+	return committed, nil
 }
 
 func TimestampStatusFor(ctx context.Context, path string, questionID, forecastID ledger.Slug) (TimestampArtifactResult, error) {
@@ -123,517 +282,92 @@ func TimestampStatusFor(ctx context.Context, path string, questionID, forecastID
 	if err != nil {
 		return TimestampArtifactResult{}, err
 	}
-	artifact, err := BuildForecastTarget(loaded.Model, questionID, forecastID)
-	if err != nil {
-		return TimestampArtifactResult{}, err
-	}
-	_, _, _, forecast, err := selectForecast(loaded.Model, questionID, forecastID)
+	artifact, forecast, err := timestampPreflight(loaded.Model, questionID, forecastID)
 	if err != nil {
 		return TimestampArtifactResult{}, err
 	}
 	result := baseTimestampResult(artifact)
 	root := filepath.Dir(loaded.Path)
 	result.TargetPresent = regularFileExists(filepath.Join(root, filepath.FromSlash(string(artifact.RelativePath))))
-	result.ReceiptPresent = regularFileExists(filepath.Join(root, filepath.FromSlash(string(result.ReceiptPath))))
 	switch {
 	case forecast.Integrity.Unanchored != nil:
 		result.State = TimestampUnanchored
-		result.NextActions = []string{"timestamp stamp"}
+		result.NextActions = []string{"timestamp stamp --tsa-url <url> --ca-bundle <relative.pem>"}
 		return result, nil
 	case forecast.Integrity.Failed != nil:
 		result.State = TimestampFailed
 		result.NextActions = []string{"forecast add --supersedes-forecast-id " + string(forecastID)}
 		return result, nil
-	case forecast.Integrity.Pending == nil && forecast.Integrity.Verified == nil:
-		result.State = TimestampInconsistent
-		return result, app.NewError(app.CodeVerification, "forecast integrity state is inconsistent", nil)
 	}
-	if !result.TargetPresent || !result.ReceiptPresent {
-		result.State = TimestampInconsistent
-		return result, app.NewError(app.CodeVerification, "timestamp metadata references a missing artifact", nil)
-	}
-	if _, err := CheckTargets(ctx, loaded.Path, false, questionID, forecastID); err != nil {
-		result.State = TimestampInconsistent
-		return result, err
-	}
-	receiptBytes, err := readBoundedFile(filepath.Join(root, filepath.FromSlash(string(result.ReceiptPath))), maxReceiptBytes)
-	if err != nil {
-		result.State = TimestampInconsistent
-		return result, err
-	}
-	receipt, err := ots.ParseReceipt(receiptBytes)
-	if err != nil || receipt.VerifyBinding(artifact.Bytes) != nil {
-		result.State = TimestampInconsistent
-		return result, app.NewError(app.CodeVerification, "OpenTimestamps receipt does not bind the selected target", err)
-	}
-	evaluated, err := receipt.Evaluate()
-	if err != nil {
-		result.State = TimestampInconsistent
-		return result, app.NewError(app.CodeVerification, "OpenTimestamps receipt cannot be evaluated", err)
-	}
-	for _, item := range evaluated {
-		if item.Attestation.Kind == ots.AttestationBitcoin {
-			height := item.Attestation.Height
-			result.BitcoinHeight = &height
-		}
-	}
-	if forecast.Integrity.Verified != nil {
-		if err := verifiedTimestampMatchesReceipt(forecast, evaluated); err != nil {
-			result.State = TimestampInconsistent
-			return result, err
-		}
-		result.State = TimestampVerified
-		for _, timestamp := range forecast.Integrity.Verified.Timestamps {
-			if timestamp.Type == "opentimestamps" && timestamp.AnchoredBefore != nil {
-				bound := *timestamp.AnchoredBefore
-				result.AnchoredBefore = &bound
-			}
-		}
-		result.NextActions = []string{"verify --offline", "timestamp verify"}
-	} else if result.BitcoinHeight != nil {
-		result.State = TimestampConfirmedUnverified
+	result.Entries = inspectTimestampEntries(ctx, root, artifact.Bytes, integrityTimestamps(forecast.Integrity))
+	result.State = stateFromEntries(result.Entries)
+	if result.State == TimestampPending || result.State == TimestampInconsistent {
 		result.NextActions = []string{"timestamp verify"}
-	} else {
-		result.State = TimestampPending
-		result.NextActions = []string{"timestamp upgrade", "timestamp status"}
-	}
-	return result, nil
-}
-
-func PlanTimestampStamp(ctx context.Context, path string, questionID, forecastID ledger.Slug) (TimestampArtifactResult, error) {
-	loaded, err := LoadAndValidateLedger(ctx, path, nil)
-	if err != nil {
-		return TimestampArtifactResult{}, err
-	}
-	artifact, forecast, err := timestampPreflight(loaded.Model, questionID, forecastID)
-	if err != nil {
-		return TimestampArtifactResult{}, err
-	}
-	if forecast.Integrity.Unanchored == nil {
-		status, statusErr := TimestampStatusFor(ctx, path, questionID, forecastID)
-		return status, statusErr
-	}
-	root := filepath.Dir(loaded.Path)
-	if _, err := preflightTargetFile(root, artifact); err != nil {
-		return TimestampArtifactResult{}, err
-	}
-	receiptPath := filepath.Join(root, filepath.FromSlash(string(ReceiptRelativePath(forecastID))))
-	if info, err := os.Lstat(receiptPath); err == nil {
-		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
-			return TimestampArtifactResult{}, app.NewError(app.CodeConflict, "receipt destination is not a regular file", nil)
-		}
-		data, err := readBoundedFile(receiptPath, maxReceiptBytes)
-		if err != nil {
-			return TimestampArtifactResult{}, err
-		}
-		receipt, err := ots.ParseReceipt(data)
-		if err != nil || receipt.VerifyBinding(artifact.Bytes) != nil {
-			return TimestampArtifactResult{}, app.NewError(app.CodeConflict, "existing receipt does not match the selected target", err)
-		}
-	} else if !os.IsNotExist(err) {
-		return TimestampArtifactResult{}, app.NewError(app.CodeIO, "receipt destination cannot be inspected", err)
-	}
-	result := baseTimestampResult(artifact)
-	result.Effects = []SideEffect{{Kind: EffectTarget, Action: EffectCreate, Status: EffectDeferred, Path: string(result.TargetPath), Rollback: RollbackCreatedPublic}, {Kind: EffectNetwork, Action: EffectContact, Status: EffectDeferred, SourceID: ots.PublicProfileID}, {Kind: EffectReceipt, Action: EffectCreate, Status: EffectDeferred, Path: string(result.ReceiptPath), Rollback: RollbackCreatedPublic}, {Kind: EffectLedger, Action: EffectReplace, Status: EffectDeferred, Path: filepath.Base(loaded.Path)}}
-	return result, nil
-}
-
-func CommitTimestampStamp(ctx context.Context, path string, questionID, forecastID ledger.Slug, options TimestampStampOptions) (TimestampArtifactResult, error) {
-	if options.Offline {
-		return TimestampArtifactResult{}, app.NewError(app.CodeNetworkDisabled, "timestamp stamp requires network access", nil)
-	}
-	if options.DryRun {
-		return PlanTimestampStamp(ctx, path, questionID, forecastID)
-	}
-	if err := options.Effects.Validate(); err != nil {
-		options.Effects = ProductionEffects()
-	}
-	planned, err := PlanTimestampStamp(ctx, path, questionID, forecastID)
-	if err != nil {
-		return planned, err
-	}
-	loaded, err := LoadAndValidateLedger(ctx, path, nil)
-	if err != nil {
-		return planned, err
-	}
-	artifact, _, err := timestampPreflight(loaded.Model, questionID, forecastID)
-	if err != nil {
-		return planned, err
-	}
-	root := filepath.Dir(loaded.Path)
-	receiptAbsolute := filepath.Join(root, filepath.FromSlash(string(planned.ReceiptPath)))
-	var receiptBytes []byte
-	if existing, readErr := readBoundedFile(receiptAbsolute, maxReceiptBytes); readErr == nil {
-		receipt, parseErr := ots.ParseReceipt(existing)
-		if parseErr != nil || receipt.VerifyBinding(artifact.Bytes) != nil {
-			return planned, app.NewError(app.CodeConflict, "existing receipt does not match the selected target", parseErr)
-		}
-		receiptBytes = existing
-	} else if app.ErrorCodeOf(readErr) != app.CodeNotFound {
-		return planned, readErr
-	}
-	if len(receiptBytes) == 0 {
-		var nonce [16]byte
-		if err := options.Effects.Random.ReadFull(ctx, nonce[:]); err != nil {
-			return planned, app.NewError(app.CodeIO, "timestamp nonce could not be generated", err)
-		}
-		client := options.CalendarClient
-		if client == nil {
-			client = ots.NewCalendarClient()
-		}
-		commitment := ots.Blind(mustDigest32(artifact.SHA256), nonce)
-		var responses []ots.CalendarResult
-		if len(options.CustomCalendars) > 0 {
-			responses, err = client.StampCustom(ctx, options.CustomCalendars, options.CalendarMinimum, commitment)
-			planned.NetworkProfile = customCalendarProfile(responses, options.CalendarMinimum)
-		} else {
-			responses, err = client.StampPublic(ctx, commitment)
-		}
-		for _, response := range responses {
-			if response.Err == nil {
-				planned.CalendarSourceIDs = append(planned.CalendarSourceIDs, response.SourceID)
-				planned.CalendarIdentity = append(planned.CalendarIdentity, response.Identity)
-			}
-		}
-		if err != nil {
-			return planned, app.NewError(app.CodeNetwork, "calendar submission threshold was not reached", err)
-		}
-		branches := make([]ots.Sequence, 0, len(responses))
-		for _, response := range responses {
-			if response.Err == nil {
-				branches = append(branches, response.Branch)
-			}
-		}
-		receipt, err := ots.NewPendingReceipt(mustDigest32(artifact.SHA256), nonce, branches)
-		if err != nil {
-			return planned, app.NewError(app.CodeVerification, "calendar receipts could not be merged", err)
-		}
-		receiptBytes, err = receipt.Serialize()
-		if err != nil {
-			return planned, app.NewError(app.CodeVerification, "OpenTimestamps receipt could not be encoded", err)
-		}
-	}
-	return commitTimestampPending(ctx, loaded.Path, questionID, forecastID, artifact, receiptBytes, planned)
-}
-
-func CommitTimestampUpgrade(ctx context.Context, path string, questionID, forecastID ledger.Slug, options TimestampUpgradeOptions) (TimestampArtifactResult, error) {
-	if options.Offline {
-		return TimestampArtifactResult{}, app.NewError(app.CodeNetworkDisabled, "timestamp upgrade requires network access", nil)
-	}
-	loaded, err := LoadAndValidateLedger(ctx, path, nil)
-	if err != nil {
-		return TimestampArtifactResult{}, err
-	}
-	artifact, forecast, err := timestampPreflight(loaded.Model, questionID, forecastID)
-	if err != nil {
-		return TimestampArtifactResult{}, err
-	}
-	result := baseTimestampResult(artifact)
-	if forecast.Integrity.Pending == nil {
-		return result, app.NewError(app.CodeConflict, "timestamp upgrade requires pending forecast integrity", nil)
-	}
-	if _, err := CheckTargets(ctx, loaded.Path, false, questionID, forecastID); err != nil {
-		return result, err
-	}
-	receiptAbsolute := filepath.Join(filepath.Dir(loaded.Path), filepath.FromSlash(string(result.ReceiptPath)))
-	receiptBytes, err := readBoundedFile(receiptAbsolute, maxReceiptBytes)
-	if err != nil {
-		return result, err
-	}
-	receipt, err := ots.ParseReceipt(receiptBytes)
-	if err != nil || receipt.VerifyBinding(artifact.Bytes) != nil {
-		return result, app.NewError(app.CodeVerification, "receipt does not bind the selected target", err)
-	}
-	evaluated, err := receipt.Evaluate()
-	if err != nil {
-		return result, app.NewError(app.CodeVerification, "receipt cannot be evaluated", err)
-	}
-	allowed := make(map[string]struct{})
-	if len(options.CustomCalendars) > 0 {
-		validated, validationErr := ots.ValidateCustomCalendars(ctx, nil, options.CustomCalendars, options.CalendarMinimum)
-		if validationErr != nil {
-			return result, app.NewError(app.CodeInvalidData, "custom calendar configuration is invalid", validationErr)
-		}
-		for _, endpoint := range validated {
-			allowed[strings.TrimRight(endpoint, "/")] = struct{}{}
-		}
-		result.NetworkProfile = NetworkProfile{Mode: NetworkCustom, ID: "custom", SourceIDs: validated, MinimumSuccess: options.CalendarMinimum, TrustLimitations: []string{"Custom calendar endpoints are caller-selected and are not reviewed by the built-in profile."}, PrivacyLimitations: []string{"Calendar services learn request timing and blinded commitments."}}
-	} else {
-		for _, source := range ots.Profile().Calendars {
-			for _, identity := range source.AcceptedIdentities {
-				allowed[strings.TrimRight(identity, "/")] = struct{}{}
-			}
-		}
-	}
-	client := options.CalendarClient
-	if client == nil {
-		client = ots.NewCalendarClient()
-	}
-	additions := make([]ots.Sequence, 0)
-	for _, item := range evaluated {
-		if item.Attestation.Kind != ots.AttestationPending {
-			continue
-		}
-		calendar := strings.TrimRight(item.Attestation.Calendar, "/")
-		if _, ok := allowed[calendar]; !ok {
-			result.Warnings = append(result.Warnings, Warning{Code: "calendar.not_checked", Message: "A pending calendar identity is outside the selected profile."})
-			continue
-		}
-		if options.DryRun {
-			result.Effects = append(result.Effects, SideEffect{Kind: EffectNetwork, Action: EffectContact, Status: EffectDeferred, SourceID: calendar})
-			continue
-		}
-		tails, upgradeErr := client.Upgrade(ctx, calendar, item.Message)
-		if upgradeErr != nil {
-			continue
-		}
-		prefix := cloneOTSSequenceWithoutAttestation(item.Sequence)
-		for _, tail := range tails {
-			candidate := append(prefix, tail...)
-			additions = append(additions, candidate)
-		}
-	}
-	if options.DryRun {
-		result.Effects = append(result.Effects, SideEffect{Kind: EffectReceipt, Action: EffectReplace, Status: EffectDeferred, Path: string(result.ReceiptPath)})
-		return result, nil
-	}
-	if len(additions) == 0 {
-		return result, app.NewError(app.CodePending, "no calendar upgrade is ready", nil)
-	}
-	addition := &ots.Receipt{Digest: receipt.Digest, Sequences: additions}
-	merged, err := ots.Merge(receipt, addition)
-	if err != nil || !ots.IsSemanticSuperset(merged, receipt) {
-		return result, app.NewError(app.CodeVerification, "calendar upgrade is not a semantic proof superset", err)
-	}
-	updated, err := merged.Serialize()
-	if err != nil {
-		return result, app.NewError(app.CodeVerification, "upgraded receipt cannot be encoded", err)
-	}
-	if bytes.Equal(updated, receiptBytes) {
-		return result, app.NewError(app.CodePending, "no new calendar proof branch was available", nil)
-	}
-	if _, err := storage.ReplaceDeterministicFile(receiptAbsolute, updated, 0o644, maxReceiptBytes); err != nil {
-		return result, err
-	}
-	result.ReceiptPresent = true
-	result.Effects = []SideEffect{{Kind: EffectReceipt, Action: EffectReplace, Status: EffectCompleted, Path: string(result.ReceiptPath)}}
-	for _, sequence := range additions {
-		if len(sequence) > 0 && sequence[len(sequence)-1].Attestation != nil && sequence[len(sequence)-1].Attestation.Kind == ots.AttestationBitcoin {
-			height := sequence[len(sequence)-1].Attestation.Height
-			result.BitcoinHeight = &height
-			result.State = TimestampConfirmedUnverified
-		}
-	}
-	if result.BitcoinHeight == nil {
-		result.State = TimestampPending
 	}
 	return result, nil
 }
 
 func CommitTimestampVerify(ctx context.Context, path string, questionID, forecastID ledger.Slug, options TimestampVerifyOptions) (TimestampVerifyResult, error) {
+	if err := options.Effects.Validate(); err != nil {
+		options.Effects = ProductionEffects()
+	}
 	loaded, err := LoadAndValidateLedger(ctx, path, nil)
 	if err != nil {
 		return TimestampVerifyResult{}, err
 	}
-	artifact, _, err := timestampPreflight(loaded.Model, questionID, forecastID)
+	artifact, forecast, err := timestampPreflight(loaded.Model, questionID, forecastID)
 	if err != nil {
 		return TimestampVerifyResult{}, err
 	}
-	result := baseTimestampVerifyResult(artifact)
-	if _, err := CheckTargets(ctx, loaded.Path, false, questionID, forecastID); err != nil {
-		return result, err
+	result := TimestampVerifyResult{TimestampArtifactResult: baseTimestampResult(artifact)}
+	root := filepath.Dir(loaded.Path)
+	result.TargetPresent = regularFileExists(filepath.Join(root, filepath.FromSlash(string(artifact.RelativePath))))
+	entries := integrityTimestamps(forecast.Integrity)
+	if len(entries) == 0 {
+		result.State = TimestampUnanchored
+		result.Verification = VerificationLayer{Name: "existence_timing", State: LayerNotApplicable, ReasonCodes: []string{"timing.no_evidence"}}
+		return result, nil
 	}
-	result.TargetPresent = true
-	receiptBytes, err := readBoundedFile(filepath.Join(filepath.Dir(loaded.Path), filepath.FromSlash(string(result.ReceiptPath))), maxReceiptBytes)
-	if err != nil {
-		return result, err
-	}
-	result.ReceiptPresent = true
-	receipt, err := ots.ParseReceipt(receiptBytes)
-	if err != nil || receipt.VerifyBinding(artifact.Bytes) != nil {
-		return result, app.NewError(app.CodeVerification, "receipt does not bind the selected target", err)
-	}
-	evaluated, err := receipt.Evaluate()
-	if err != nil {
-		return result, app.NewError(app.CodeVerification, "receipt cannot be evaluated", err)
-	}
-	bitcoin := make([]ots.EvaluatedAttestation, 0)
-	for _, item := range evaluated {
-		if item.Attestation.Kind == ots.AttestationBitcoin {
-			bitcoin = append(bitcoin, item)
+	result.Entries = inspectTimestampEntries(ctx, root, artifact.Bytes, entries)
+	verified := make(map[string]rfc3161.Metadata)
+	hasPending := false
+	allFailed := true
+	for index, item := range result.Entries {
+		key := timestampEntryKey(entries[index])
+		switch item.CheckState {
+		case LayerPass:
+			metadata, verifyErr := verifyTimestampEntry(ctx, root, artifact.Bytes, entries[index])
+			if verifyErr == nil {
+				verified[key] = metadata
+				allFailed = false
+			}
+		case LayerPending, LayerNotChecked:
+			hasPending = true
+			allFailed = false
 		}
 	}
-	if len(bitcoin) == 0 {
-		result.State = TimestampPending
-		result.Verification = VerificationLayer{Name: "existence_timing", State: LayerPending, ReasonCodes: []string{"timing.calendar_pending"}}
-		result.FailureCode = app.CodePending
-		return result, nil
-	}
-	sort.Slice(bitcoin, func(i, j int) bool { return bitcoin[i].Attestation.Height < bitcoin[j].Attestation.Height })
-	firstHeight := bitcoin[0].Attestation.Height
-	result.BitcoinHeight = &firstHeight
-	result.State = TimestampConfirmedUnverified
-	if options.DryRun {
-		result.Verification = VerificationLayer{Name: "existence_timing", State: LayerNotChecked, ReasonCodes: []string{"timing.deferred"}, Evidence: map[string]any{"height": firstHeight}}
-		result.Effects = []SideEffect{{Kind: EffectNetwork, Action: EffectContact, Status: EffectDeferred, SourceID: result.NetworkProfile.ID}, {Kind: EffectLedger, Action: EffectReplace, Status: EffectDeferred, Path: filepath.Base(loaded.Path)}}
-		return result, nil
-	}
-	if options.Offline {
-		result.NetworkProfile = networkProfileForObserver(nil, true)
-		result.Verification = VerificationLayer{Name: "existence_timing", State: LayerNotChecked, ReasonCodes: []string{"timing.offline"}, Evidence: map[string]any{"height": firstHeight}}
-		result.FailureCode = app.CodeIncomplete
-		return result, nil
-	}
-	observer := options.Observer
-	if observer == nil {
-		observer = ots.NewPublicBitcoinObserver(nil)
-	}
-	result.NetworkProfile = networkProfileForObserver(observer, false)
-	candidates, err := observeBitcoinCandidates(ctx, observer, bitcoin)
-	result.RequestSummary = observer.Summary()
-	if err != nil {
-		return result, err
-	}
-	if candidates.Verified.Attestation.Height == 0 {
-		if len(candidates.Issues) > 0 {
-			issue, failureCode, reason := reduceObservationIssues(candidates.Issues)
-			result.ObservationIssue = &issue
-			result.FailureCode = failureCode
-			result.Verification = VerificationLayer{Name: "existence_timing", State: LayerNotChecked, ReasonCodes: []string{reason}, Evidence: map[string]any{"height": firstHeight}}
+	if len(verified) == 0 {
+		if hasPending || !allFailed {
+			result.State = TimestampPending
+			result.Verification = VerificationLayer{Name: "existence_timing", State: LayerPending, ReasonCodes: []string{"timing.local_evidence_incomplete"}, Evidence: map[string]any{"timestamps": result.Entries}}
+			result.FailureCode = app.CodePending
 			return result, nil
 		}
+		result.State = TimestampInconsistent
+		result.Verification = VerificationLayer{Name: "existence_timing", State: LayerFail, ReasonCodes: []string{"timing.all_responses_failed"}, Evidence: map[string]any{"timestamps": result.Entries}}
 		result.FailureCode = app.CodeVerification
-		result.Verification = VerificationLayer{Name: "existence_timing", State: LayerFail, ReasonCodes: []string{"timing.bitcoin_mismatch"}, Evidence: map[string]any{"heights": candidates.MismatchedHeights}}
 		return result, nil
 	}
-	height := candidates.Verified.Attestation.Height
-	bound := ledger.Timestamp(candidates.Observation.BlockTime.Format(time.RFC3339))
-	result.BitcoinHeight, result.AnchoredBefore, result.State = &height, &bound, TimestampVerified
-	result.Verification = VerificationLayer{Name: "existence_timing", State: LayerPass, ReasonCodes: []string{"timing.bitcoin_verified"}, Evidence: map[string]any{"height": height, "block_hash": candidates.Observation.Hash, "anchored_before": bound, "source_ids": candidates.Observation.SourceIDs}}
-	_, question, selectErr := selectQuestion(loaded.Model, questionID)
-	if selectErr == nil && question.Resolution != nil && question.Resolution.Resolved != nil {
-		outcomeKnownAt, parseErr := ParseTimestamp(question.Resolution.Resolved.OutcomeKnownAt, "outcome_known_at")
-		if parseErr == nil && !candidates.Observation.BlockTime.Before(outcomeKnownAt) {
-			result.Warnings = append(result.Warnings, Warning{Code: "timestamp.valid_but_too_late", Message: "The Bitcoin evidence is valid, but its conservative time bound is not before the recorded outcome became known."})
-		}
+	result.State = TimestampVerified
+	result.Verification = VerificationLayer{Name: "existence_timing", State: LayerPass, ReasonCodes: []string{"timing.rfc3161_verified"}, Evidence: map[string]any{"timestamps": result.Entries}, Limitations: timestampLimitations()}
+	if options.DryRun {
+		result.Effects = []SideEffect{{Kind: EffectLedger, Action: EffectReplace, Status: EffectDeferred, Path: filepath.Base(loaded.Path)}}
+		return result, nil
 	}
-	if options.VerifiedAt == "" {
-		options.VerifiedAt = ledger.Timestamp(time.Now().Format(time.RFC3339))
-	}
-	committed, err := commitTimestampVerified(ctx, loaded.Path, questionID, forecastID, artifact, candidates.Verified.Attestation.Height, bound, options.VerifiedAt, result.TimestampArtifactResult)
+	verifiedAt := ledger.Timestamp(options.Effects.Clock.Now().UTC().Format(time.RFC3339Nano))
+	committed, err := promoteTimestampEntries(ctx, loaded.Path, questionID, forecastID, artifact, verified, verifiedAt, result.TimestampArtifactResult)
 	result.TimestampArtifactResult = committed
 	return result, err
-}
-
-type bitcoinCandidateResult struct {
-	Verified          ots.EvaluatedAttestation
-	Observation       ots.BlockObservation
-	Issues            []BitcoinObservationIssue
-	MismatchedHeights []uint64
-}
-
-func observeBitcoinCandidates(ctx context.Context, observer ots.BitcoinObserver, candidates []ots.EvaluatedAttestation) (bitcoinCandidateResult, error) {
-	result := bitcoinCandidateResult{Issues: []BitcoinObservationIssue{}, MismatchedHeights: []uint64{}}
-	for _, item := range candidates {
-		observation, err := observer.Observe(ctx, item.Attestation.Height)
-		if err != nil {
-			if ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				return result, app.NewError(app.CodeInterrupted, "timestamp verification was interrupted", err)
-			}
-			result.Issues = append(result.Issues, publicObservationIssue(err))
-			continue
-		}
-		if err := ots.VerifyBitcoinAttestation(item, observation); err != nil {
-			result.MismatchedHeights = append(result.MismatchedHeights, item.Attestation.Height)
-			continue
-		}
-		result.Verified = item
-		result.Observation = observation
-		return result, nil
-	}
-	return result, nil
-}
-
-func baseTimestampVerifyResult(artifact TargetArtifact) TimestampVerifyResult {
-	return TimestampVerifyResult{
-		TimestampArtifactResult: baseTimestampResult(artifact),
-		Verification:            VerificationLayer{Name: "existence_timing", State: LayerNotChecked, ReasonCodes: []string{"timing.not_started"}},
-	}
-}
-
-func publicObservationIssue(err error) BitcoinObservationIssue {
-	var observationErr *ots.ObservationError
-	if errors.As(err, &observationErr) {
-		return BitcoinObservationIssue{Kind: observationErr.Kind(), SourceIDs: observationErr.SourceIDs()}
-	}
-	return BitcoinObservationIssue{Kind: ots.ObservationInconclusive}
-}
-
-func reduceObservationIssues(issues []BitcoinObservationIssue) (BitcoinObservationIssue, app.ErrorCode, string) {
-	kind := ots.ObservationInconclusive
-	sourceIDs := make([]string, 0)
-	for _, issue := range issues {
-		sourceIDs = append(sourceIDs, issue.SourceIDs...)
-		switch issue.Kind {
-		case ots.ObservationSourceUnavailable:
-			kind = ots.ObservationSourceUnavailable
-		case ots.ObservationBudgetExhausted:
-			if kind != ots.ObservationSourceUnavailable {
-				kind = ots.ObservationBudgetExhausted
-			}
-		}
-	}
-	sort.Strings(sourceIDs)
-	sourceIDs = compactSafeStrings(sourceIDs)
-	switch kind {
-	case ots.ObservationSourceUnavailable:
-		return BitcoinObservationIssue{Kind: kind, SourceIDs: sourceIDs}, app.CodeNetwork, "timing.source_unavailable"
-	case ots.ObservationBudgetExhausted:
-		return BitcoinObservationIssue{Kind: kind, SourceIDs: sourceIDs}, app.CodeIncomplete, "timing.observation_budget_exhausted"
-	default:
-		return BitcoinObservationIssue{Kind: kind, SourceIDs: sourceIDs}, app.CodeIncomplete, "timing.observation_inconclusive"
-	}
-}
-
-func compactSafeStrings(values []string) []string {
-	if len(values) < 2 {
-		return values
-	}
-	result := values[:1]
-	for _, value := range values[1:] {
-		if value != result[len(result)-1] {
-			result = append(result, value)
-		}
-	}
-	return result
-}
-
-func baseTimestampResult(artifact TargetArtifact) TimestampArtifactResult {
-	return TimestampArtifactResult{QuestionID: artifact.QuestionID, ForecastID: artifact.ForecastID, State: TimestampPending, TargetPath: artifact.RelativePath, TargetSHA256: artifact.SHA256, ReceiptPath: ReceiptRelativePath(artifact.ForecastID), NetworkProfile: networkProfileForObserver(nil, false)}
-}
-
-func networkProfileForObserver(observer ots.BitcoinObserver, offline bool) NetworkProfile {
-	profile := ots.Profile()
-	if offline {
-		return NetworkProfile{Mode: NetworkOffline, ID: profile.ID, MaxUniqueHeights: profile.MaximumUniqueHeights, MaxRequests: profile.MaximumHTTPRequests, MaxConcurrent: profile.MaximumConcurrentHTTP, TrustLimitations: []string{profile.TrustLimitation}, PrivacyLimitations: []string{profile.PrivacyLimitation}}
-	}
-	if _, core := observer.(*ots.CoreObserver); core {
-		return NetworkProfile{Mode: NetworkCore, ID: "bitcoin-core", SourceIDs: []string{"bitcoin-core"}, MaxUniqueHeights: profile.MaximumUniqueHeights, MaxRequests: profile.MaximumHTTPRequests, MaxConcurrent: 1, TrustLimitations: []string{"Bitcoin timing is checked against the caller-selected Bitcoin Core node."}, PrivacyLimitations: []string{"The selected Bitcoin Core operator can observe requested block heights unless the node is operated locally."}}
-	}
-	sourceIDs := make([]string, len(profile.BitcoinSources))
-	for index := range profile.BitcoinSources {
-		sourceIDs[index] = profile.BitcoinSources[index].ID
-	}
-	return NetworkProfile{Mode: NetworkBuiltin, ID: profile.ID, SourceIDs: sourceIDs, MinimumSuccess: profile.CalendarMinimum, MaxUniqueHeights: profile.MaximumUniqueHeights, MaxRequests: profile.MaximumHTTPRequests, MaxConcurrent: profile.MaximumConcurrentHTTP, TrustLimitations: []string{profile.TrustLimitation}, PrivacyLimitations: []string{profile.PrivacyLimitation}}
-}
-
-func customCalendarProfile(results []ots.CalendarResult, minimum int) NetworkProfile {
-	ids := make([]string, 0, len(results))
-	for _, result := range results {
-		ids = append(ids, result.SourceID)
-	}
-	sort.Strings(ids)
-	return NetworkProfile{Mode: NetworkCustom, ID: "custom", SourceIDs: ids, MinimumSuccess: minimum, TrustLimitations: []string{"Custom calendar endpoints are caller-selected and are not reviewed by the built-in profile."}, PrivacyLimitations: []string{"Calendar services learn request timing and blinded commitments."}}
 }
 
 func timestampPreflight(model *ledger.Ledger, questionID, forecastID ledger.Slug) (TargetArtifact, ledger.Forecast, error) {
@@ -651,95 +385,177 @@ func timestampPreflight(model *ledger.Ledger, questionID, forecastID ledger.Slug
 	return artifact, forecast, nil
 }
 
-func commitTimestampPending(ctx context.Context, path string, questionID, forecastID ledger.Slug, artifact TargetArtifact, receiptBytes []byte, result TimestampArtifactResult) (TimestampArtifactResult, error) {
+func commitTimestampEvidence(ctx context.Context, path string, questionID, forecastID ledger.Slug, artifact TargetArtifact, entry TimestampEntryResult, requestBytes, responseBytes, caBytes []byte, metadata rfc3161.Metadata, verifiedAt ledger.Timestamp, verified bool, result TimestampArtifactResult) (TimestampArtifactResult, error) {
 	root := filepath.Dir(path)
-	if err := os.MkdirAll(filepath.Join(root, "proofs", "targets"), 0o755); err != nil {
-		return result, app.NewError(app.CodeIO, "target directory cannot be created", err)
-	}
-	if err := os.MkdirAll(filepath.Join(root, "proofs", "receipts"), 0o755); err != nil {
-		return result, app.NewError(app.CodeIO, "receipt directory cannot be created", err)
-	}
-	targetAbsolute := filepath.Join(root, filepath.FromSlash(string(artifact.RelativePath)))
-	receiptAbsolute := filepath.Join(root, filepath.FromSlash(string(result.ReceiptPath)))
-	if _, err := storage.EnsureDeterministicFile(targetAbsolute, artifact.Bytes, 0o644, maxTargetBytes); err != nil {
+	resolver, err := storage.NewPathResolver(root)
+	if err != nil {
 		return result, err
 	}
-	if _, err := storage.EnsureDeterministicFile(receiptAbsolute, receiptBytes, 0o644, maxReceiptBytes); err != nil {
+	caAbsolute, err := resolver.Resolve(string(*entry.CABundlePath), true)
+	if err != nil {
 		return result, err
+	}
+	requestAbsolute, err := resolver.ResolveForCreate(string(entry.RequestPath))
+	if err != nil {
+		return result, err
+	}
+	responseAbsolute, err := resolver.ResolveForCreate(string(entry.ResponsePath))
+	if err != nil {
+		return result, err
+	}
+	targetAbsolute, err := resolver.ResolveForCreate(string(artifact.RelativePath))
+	if err != nil {
+		return result, err
+	}
+	journal := filepath.Join(root, "."+filepath.Base(path)+".timestamp-resources.json")
+	resources := []storage.ResourceEntry{
+		resourceEntry(storage.ResourceTarget, targetAbsolute),
+		resourceEntry(storage.ResourceTimestampRequest, requestAbsolute),
+		resourceEntry(storage.ResourceTimestampResponse, responseAbsolute),
+	}
+	var plan *storage.ResourcePlan
+	finishRetained := func(cause error) (TimestampArtifactResult, error) {
+		if plan == nil {
+			return result, cause
+		}
+		if finishErr := plan.Finish(); finishErr != nil {
+			result.Recovery = Recovery{State: RecoveryRequired, Message: "Timestamp artifacts were retained, but resource journal cleanup needs attention.", Paths: []string{filepath.Base(journal)}}
+			return result, errors.Join(cause, finishErr)
+		}
+		result.Recovery = Recovery{State: RecoveryRetained, Message: "Target, request, and response are durable and can be reused by a retry.", Paths: []string{string(artifact.RelativePath), string(entry.RequestPath), string(entry.ResponsePath)}, Actions: []string{"retry timestamp stamp"}}
+		return result, cause
 	}
 	artifacts := os.DirFS(root)
-	err := storage.UpdateLedger(ctx, path, storage.TransactionOptions{Validate: func(parsed *document.Document) error { return ValidateLedgerDocument(parsed, artifacts) }, Mutate: func(parsed *document.Document) ([]byte, error) {
-		model, err := validation.DecodeLedger(parsed)
-		if err != nil {
-			return nil, err
+	err = storage.UpdateLedger(ctx, path, storage.TransactionOptions{Validate: func(parsed *document.Document) error { return ValidateLedgerDocument(parsed, artifacts) }, Mutate: func(parsed *document.Document) ([]byte, error) {
+		model, decodeErr := validation.DecodeLedger(parsed)
+		if decodeErr != nil {
+			return nil, decodeErr
 		}
-		questionPosition, _, forecastPosition, forecast, err := selectForecast(model, questionID, forecastID)
-		if err != nil {
-			return nil, err
+		questionPosition, _, forecastPosition, forecast, selectErr := selectForecast(model, questionID, forecastID)
+		if selectErr != nil {
+			return nil, selectErr
 		}
-		if forecast.Integrity.Pending != nil {
-			return parsed.Raw, nil
+		if forecast.Integrity.Failed != nil {
+			return nil, app.NewError(app.CodeConflict, "failed integrity is terminal; append a new forecast revision", nil)
 		}
-		if forecast.Integrity.Unanchored == nil {
-			return nil, app.NewError(app.CodeConflict, "forecast integrity is not unanchored", nil)
+		currentArtifact, _, preflightErr := timestampPreflight(model, questionID, forecastID)
+		if preflightErr != nil || currentArtifact.SHA256 != artifact.SHA256 || !bytes.Equal(currentArtifact.Bytes, artifact.Bytes) {
+			return nil, app.NewError(app.CodeConflict, "forecast target changed while the timestamp authority request was in flight", nil)
 		}
-		integrity := ledger.PendingIntegrity{Status: ledger.IntegrityPending, Target: TargetMetadataFor(artifact), Timestamps: []ledger.OTSTimestamp{{Type: "opentimestamps", ProofPath: result.ReceiptPath, State: ledger.OTSPending}}}
-		value, err := jsonPatchValue(integrity)
-		if err != nil {
-			return nil, err
+		currentCA, caErr := readBoundedFile(caAbsolute, maxTimestampCABundleBytes)
+		if caErr != nil || !bytes.Equal(currentCA, caBytes) {
+			return nil, app.NewError(app.CodeConflict, "timestamp CA bundle changed while the request was in flight", nil)
+		}
+		if recordedForecastTarget(model, questionID, forecastID) != nil && !sameTargetMetadata(*recordedForecastTarget(model, questionID, forecastID), TargetMetadataFor(artifact)) {
+			return nil, app.NewError(app.CodeConflict, "recorded target metadata changed before timestamp commit", nil)
+		}
+		if mkdirErr := os.MkdirAll(filepath.Dir(requestAbsolute), 0o755); mkdirErr != nil {
+			return nil, app.NewError(app.CodeIO, "timestamp artifact directory cannot be created", mkdirErr)
+		}
+		if mkdirErr := os.MkdirAll(filepath.Dir(targetAbsolute), 0o755); mkdirErr != nil {
+			return nil, app.NewError(app.CodeIO, "target artifact directory cannot be created", mkdirErr)
+		}
+		plan, decodeErr = storage.NewResourcePlan(journal, string(OperationTimestampStamp), resources)
+		if decodeErr != nil {
+			return nil, decodeErr
+		}
+		if beginErr := plan.Begin(); beginErr != nil {
+			plan = nil
+			return nil, beginErr
+		}
+		for index, item := range []struct {
+			path string
+			data []byte
+			mode os.FileMode
+			max  int64
+		}{{targetAbsolute, artifact.Bytes, 0o644, maxTargetBytes}, {requestAbsolute, requestBytes, 0o644, maxTimestampRequestBytes}, {responseAbsolute, responseBytes, 0o644, maxTimestampResponseBytes}} {
+			written, writeErr := storage.EnsureDeterministicFile(item.path, item.data, item.mode, item.max)
+			if writeErr != nil {
+				return nil, writeErr
+			}
+			if written.State == storage.DeterministicCreated {
+				if markErr := plan.MarkCreated(item.path, written.SHA256); markErr != nil {
+					return nil, markErr
+				}
+			}
+			resources[index].State = storage.ResourceCommitted
+			if markErr := plan.MarkCommitted(item.path); markErr != nil {
+				return nil, markErr
+			}
+		}
+		timestamp := timestampRecord(entry, metadata, verified)
+		updated, updateErr := integrityWithTimestamp(forecast.Integrity, TargetMetadataFor(artifact), timestamp, verifiedAt)
+		if updateErr != nil {
+			return nil, updateErr
+		}
+		value, encodeErr := jsonPatchValue(updated)
+		if encodeErr != nil {
+			return nil, encodeErr
 		}
 		pointer := fmt.Sprintf("/questions/%d/forecasts/%d/integrity", questionPosition, forecastPosition)
 		return document.ApplyPatch(parsed, []document.PatchOperation{{Kind: document.PatchReplace, Pointer: pointer, Value: value}})
 	}})
 	if err != nil {
-		result.Recovery = Recovery{State: RecoveryRetained, Message: "Target and receipt are durable and can be reused by a retry.", Paths: []string{string(result.TargetPath), string(result.ReceiptPath)}, Actions: []string{"retry timestamp stamp"}}
+		return finishRetained(err)
+	}
+	if plan == nil {
+		return result, app.NewError(app.CodeInternal, "timestamp resource plan was not committed", nil)
+	}
+	if err := plan.Finish(); err != nil {
+		result.Recovery = Recovery{State: RecoveryRequired, Message: "Timestamp evidence was committed, but resource journal cleanup needs attention.", Paths: []string{filepath.Base(journal)}}
 		return result, err
 	}
-	result.TargetPresent, result.ReceiptPresent, result.State = true, true, TimestampPending
-	result.Effects = []SideEffect{{Kind: EffectTarget, Action: EffectCreate, Status: EffectCompleted, Path: string(result.TargetPath)}, {Kind: EffectReceipt, Action: EffectCreate, Status: EffectCompleted, Path: string(result.ReceiptPath)}, {Kind: EffectLedger, Action: EffectReplace, Status: EffectCompleted, Path: filepath.Base(path)}}
+	result.State = TimestampPending
+	if verified {
+		result.State = TimestampVerified
+	}
+	result.TargetPresent = true
+	result.Entries = []TimestampEntryResult{entryResultFromMetadata(timestampRecord(entry, metadata, verified), metadata, LayerPass)}
+	if !verified {
+		result.Entries[0].CheckState = LayerFail
+	}
+	result.Effects = []SideEffect{
+		{Kind: EffectTarget, Action: EffectCreate, Status: EffectCompleted, Path: string(artifact.RelativePath)},
+		{Kind: EffectTimestampRequest, Action: EffectCreate, Status: EffectCompleted, Path: string(entry.RequestPath)},
+		{Kind: EffectTimestampResponse, Action: EffectCreate, Status: EffectCompleted, Path: string(entry.ResponsePath)},
+		{Kind: EffectLedger, Action: EffectReplace, Status: EffectCompleted, Path: filepath.Base(path)},
+	}
+	result.Recovery = Recovery{State: RecoveryNone}
 	return result, nil
 }
 
-func commitTimestampVerified(ctx context.Context, path string, questionID, forecastID ledger.Slug, artifact TargetArtifact, height uint64, anchoredBefore, verifiedAt ledger.Timestamp, result TimestampArtifactResult) (TimestampArtifactResult, error) {
+func promoteTimestampEntries(ctx context.Context, path string, questionID, forecastID ledger.Slug, artifact TargetArtifact, verified map[string]rfc3161.Metadata, verifiedAt ledger.Timestamp, result TimestampArtifactResult) (TimestampArtifactResult, error) {
 	root := filepath.Dir(path)
-	artifacts := os.DirFS(root)
-	err := storage.UpdateLedger(ctx, path, storage.TransactionOptions{Validate: func(parsed *document.Document) error { return ValidateLedgerDocument(parsed, artifacts) }, Mutate: func(parsed *document.Document) ([]byte, error) {
-		model, err := validation.DecodeLedger(parsed)
-		if err != nil {
-			return nil, err
+	err := storage.UpdateLedger(ctx, path, storage.TransactionOptions{Validate: func(parsed *document.Document) error { return ValidateLedgerDocument(parsed, os.DirFS(root)) }, Mutate: func(parsed *document.Document) ([]byte, error) {
+		model, decodeErr := validation.DecodeLedger(parsed)
+		if decodeErr != nil {
+			return nil, decodeErr
 		}
-		questionPosition, _, forecastPosition, forecast, err := selectForecast(model, questionID, forecastID)
-		if err != nil {
-			return nil, err
+		questionPosition, _, forecastPosition, forecast, selectErr := selectForecast(model, questionID, forecastID)
+		if selectErr != nil {
+			return nil, selectErr
 		}
-		if forecast.Integrity.Verified != nil {
-			return parsed.Raw, nil
+		if recordedForecastTarget(model, questionID, forecastID) == nil || !sameTargetMetadata(*recordedForecastTarget(model, questionID, forecastID), TargetMetadataFor(artifact)) {
+			return nil, app.NewError(app.CodeVerification, "stored target metadata does not match the selected forecast", nil)
 		}
-		if forecast.Integrity.Pending == nil {
-			return nil, app.NewError(app.CodeConflict, "only pending integrity can become verified", nil)
-		}
-		pending := forecast.Integrity.Pending
-		if pending.Target != TargetMetadataFor(artifact) {
-			return nil, app.NewError(app.CodeVerification, "pending target metadata changed before verification", nil)
-		}
-		timestamps := append([]ledger.OTSTimestamp(nil), pending.Timestamps...)
-		found := false
+		timestamps := integrityTimestamps(forecast.Integrity)
 		for index := range timestamps {
-			if timestamps[index].Type == "opentimestamps" && timestamps[index].ProofPath == ReceiptRelativePath(forecastID) {
-				heightValue := int64(height)
-				timestamps[index].State = ledger.OTSConfirmed
-				timestamps[index].AnchoredBefore = &anchoredBefore
-				timestamps[index].BitcoinBlockHeight = &heightValue
-				found = true
+			metadata, ok := verified[timestampEntryKey(timestamps[index])]
+			if !ok {
+				continue
 			}
+			applyVerifiedMetadata(&timestamps[index], metadata)
 		}
-		if !found {
-			return nil, app.NewError(app.CodeVerification, "pending integrity has no matching OpenTimestamps entry", nil)
+		var external *[]ledger.ExternalAnchor
+		if forecast.Integrity.Pending != nil {
+			external = forecast.Integrity.Pending.ExternalAnchors
+		} else if forecast.Integrity.Verified != nil {
+			external = forecast.Integrity.Verified.ExternalAnchors
 		}
-		verified := ledger.VerifiedIntegrity{Status: ledger.IntegrityVerified, Target: pending.Target, Timestamps: timestamps, VerifiedAt: verifiedAt, ExternalAnchors: pending.ExternalAnchors}
-		value, err := jsonPatchValue(verified)
-		if err != nil {
-			return nil, err
+		updated := ledger.Integrity{Verified: &ledger.VerifiedIntegrity{Status: ledger.IntegrityVerified, Target: TargetMetadataFor(artifact), Timestamps: timestamps, VerifiedAt: verifiedAt, ExternalAnchors: external}}
+		value, encodeErr := jsonPatchValue(updated)
+		if encodeErr != nil {
+			return nil, encodeErr
 		}
 		pointer := fmt.Sprintf("/questions/%d/forecasts/%d/integrity", questionPosition, forecastPosition)
 		return document.ApplyPatch(parsed, []document.PatchOperation{{Kind: document.PatchReplace, Pointer: pointer, Value: value}})
@@ -747,8 +563,185 @@ func commitTimestampVerified(ctx context.Context, path string, questionID, forec
 	if err != nil {
 		return result, err
 	}
+	result.State = TimestampVerified
 	result.Effects = []SideEffect{{Kind: EffectLedger, Action: EffectReplace, Status: EffectCompleted, Path: filepath.Base(path)}}
 	return result, nil
+}
+
+func inspectTimestampEntries(ctx context.Context, root string, target []byte, entries []ledger.RFC3161Timestamp) []TimestampEntryResult {
+	result := make([]TimestampEntryResult, len(entries))
+	for index, entry := range entries {
+		item := TimestampEntryResult{TSAURL: entry.TSAURL, State: entry.State, RequestPath: entry.RequestPath, ResponsePath: entry.ResponsePath, CABundlePath: cloneRelativePath(entry.CABundlePath), GenTime: cloneTimestamp(entry.GenTime), PolicyOID: cloneString(entry.PolicyOID), SerialNumber: cloneString(entry.SerialNumber), CheckState: LayerNotChecked}
+		item.RequestPresent = regularFileExists(filepath.Join(root, filepath.FromSlash(string(entry.RequestPath))))
+		item.ResponsePresent = regularFileExists(filepath.Join(root, filepath.FromSlash(string(entry.ResponsePath))))
+		item.CABundlePresent = entry.CABundlePath != nil && regularFileExists(filepath.Join(root, filepath.FromSlash(string(*entry.CABundlePath))))
+		if !item.RequestPresent || !item.ResponsePresent || !item.CABundlePresent {
+			item.CheckState = LayerPending
+			item.ReasonCodes = []string{"timing.retained_artifact_missing"}
+			result[index] = item
+			continue
+		}
+		metadata, err := verifyTimestampEntry(ctx, root, target, entry)
+		if err != nil {
+			item.CheckState = LayerFail
+			item.ReasonCodes = []string{string(rfc3161.SafeReason(err))}
+			result[index] = item
+			continue
+		}
+		if entry.State == ledger.RFC3161Verified {
+			if entry.GenTime == nil || entry.PolicyOID == nil || entry.SerialNumber == nil || rfc3161.MetadataMatches(metadata, string(*entry.GenTime), *entry.PolicyOID, *entry.SerialNumber, entry.HashAlgorithm) != nil {
+				item.CheckState = LayerFail
+				item.ReasonCodes = []string{string(rfc3161.ReasonMetadata)}
+				result[index] = item
+				continue
+			}
+		}
+		item = entryResultFromMetadata(entry, metadata, LayerPass)
+		result[index] = item
+	}
+	return result
+}
+
+func verifyTimestampEntry(ctx context.Context, root string, target []byte, entry ledger.RFC3161Timestamp) (rfc3161.Metadata, error) {
+	if entry.CABundlePath == nil {
+		return rfc3161.Metadata{}, &rfc3161.Error{Reason: rfc3161.ReasonTrustBundle, Message: "timestamp CA bundle path is missing"}
+	}
+	resolver, err := storage.NewPathResolver(root)
+	if err != nil {
+		return rfc3161.Metadata{}, err
+	}
+	requestPath, err := resolver.Resolve(string(entry.RequestPath), true)
+	if err != nil {
+		return rfc3161.Metadata{}, err
+	}
+	responsePath, err := resolver.Resolve(string(entry.ResponsePath), true)
+	if err != nil {
+		return rfc3161.Metadata{}, err
+	}
+	caPath, err := resolver.Resolve(string(*entry.CABundlePath), true)
+	if err != nil {
+		return rfc3161.Metadata{}, err
+	}
+	request, err := readBoundedFile(requestPath, maxTimestampRequestBytes)
+	if err != nil {
+		return rfc3161.Metadata{}, err
+	}
+	response, err := readBoundedFile(responsePath, maxTimestampResponseBytes)
+	if err != nil {
+		return rfc3161.Metadata{}, err
+	}
+	ca, err := readBoundedFile(caPath, maxTimestampCABundleBytes)
+	if err != nil {
+		return rfc3161.Metadata{}, err
+	}
+	return rfc3161.Verify(ctx, target, request, response, ca, rfc3161.DefaultLimits())
+}
+
+func integrityTimestamps(integrity ledger.Integrity) []ledger.RFC3161Timestamp {
+	switch {
+	case integrity.Pending != nil:
+		return append([]ledger.RFC3161Timestamp(nil), integrity.Pending.Timestamps...)
+	case integrity.Verified != nil:
+		return append([]ledger.RFC3161Timestamp(nil), integrity.Verified.Timestamps...)
+	case integrity.Failed != nil && integrity.Failed.Timestamps != nil:
+		return append([]ledger.RFC3161Timestamp(nil), (*integrity.Failed.Timestamps)...)
+	default:
+		return nil
+	}
+}
+
+func integrityWithTimestamp(current ledger.Integrity, target ledger.ForecastTarget, timestamp ledger.RFC3161Timestamp, verifiedAt ledger.Timestamp) (ledger.Integrity, error) {
+	timestamps := integrityTimestamps(current)
+	replaced := false
+	for index := range timestamps {
+		if timestampEntryKey(timestamps[index]) == timestampEntryKey(timestamp) {
+			timestamps[index] = timestamp
+			replaced = true
+		}
+	}
+	if !replaced {
+		timestamps = append(timestamps, timestamp)
+	}
+	var external *[]ledger.ExternalAnchor
+	var existingVerifiedAt ledger.Timestamp
+	if current.Pending != nil {
+		external = current.Pending.ExternalAnchors
+	}
+	if current.Verified != nil {
+		external = current.Verified.ExternalAnchors
+		existingVerifiedAt = current.Verified.VerifiedAt
+	}
+	hasVerified := false
+	for _, item := range timestamps {
+		hasVerified = hasVerified || item.State == ledger.RFC3161Verified
+	}
+	if hasVerified {
+		if existingVerifiedAt != "" {
+			verifiedAt = existingVerifiedAt
+		}
+		return ledger.Integrity{Verified: &ledger.VerifiedIntegrity{Status: ledger.IntegrityVerified, Target: target, Timestamps: timestamps, VerifiedAt: verifiedAt, ExternalAnchors: external}}, nil
+	}
+	return ledger.Integrity{Pending: &ledger.PendingIntegrity{Status: ledger.IntegrityPending, Target: target, Timestamps: timestamps, ExternalAnchors: external}}, nil
+}
+
+func timestampRecord(entry TimestampEntryResult, metadata rfc3161.Metadata, verified bool) ledger.RFC3161Timestamp {
+	result := ledger.RFC3161Timestamp{Type: "rfc3161", RequestPath: entry.RequestPath, ResponsePath: entry.ResponsePath, TSAURL: entry.TSAURL, HashAlgorithm: rfc3161.HashAlgorithm, State: ledger.RFC3161Pending, CABundlePath: cloneRelativePath(entry.CABundlePath)}
+	if verified {
+		applyVerifiedMetadata(&result, metadata)
+	}
+	return result
+}
+
+func applyVerifiedMetadata(target *ledger.RFC3161Timestamp, metadata rfc3161.Metadata) {
+	genTime := ledger.Timestamp(metadata.GenTime.Format(time.RFC3339Nano))
+	policy, serial := metadata.PolicyOID, metadata.SerialNumber
+	target.State, target.HashAlgorithm = ledger.RFC3161Verified, rfc3161.HashAlgorithm
+	target.GenTime, target.PolicyOID, target.SerialNumber = &genTime, &policy, &serial
+}
+
+func entryResultFromMetadata(entry ledger.RFC3161Timestamp, metadata rfc3161.Metadata, state LayerState) TimestampEntryResult {
+	return TimestampEntryResult{TSAURL: entry.TSAURL, State: entry.State, RequestPath: entry.RequestPath, ResponsePath: entry.ResponsePath, CABundlePath: cloneRelativePath(entry.CABundlePath), RequestPresent: true, ResponsePresent: true, CABundlePresent: entry.CABundlePath != nil, CheckState: state, GenTime: cloneTimestamp(entry.GenTime), PolicyOID: cloneString(entry.PolicyOID), SerialNumber: cloneString(entry.SerialNumber), SignerSubject: metadata.SignerSubject, SignerFingerprint: metadata.SignerFingerprint, CABundleSHA256: metadata.CABundleSHA256}
+}
+
+func baseTimestampResult(artifact TargetArtifact) TimestampArtifactResult {
+	return TimestampArtifactResult{QuestionID: artifact.QuestionID, ForecastID: artifact.ForecastID, State: TimestampPending, TargetPath: artifact.RelativePath, TargetSHA256: artifact.SHA256, Recovery: Recovery{State: RecoveryNone}}
+}
+
+func stateFromEntries(entries []TimestampEntryResult) TimestampState {
+	if len(entries) == 0 {
+		return TimestampUnanchored
+	}
+	for _, entry := range entries {
+		if entry.CheckState == LayerPass && entry.State == ledger.RFC3161Verified {
+			return TimestampVerified
+		}
+	}
+	for _, entry := range entries {
+		if entry.CheckState == LayerPending || entry.CheckState == LayerNotChecked || entry.State == ledger.RFC3161Pending {
+			return TimestampPending
+		}
+	}
+	return TimestampInconsistent
+}
+
+func resourceEntry(kind storage.ResourceKind, path string) storage.ResourceEntry {
+	owned := !regularFileExists(path)
+	return storage.ResourceEntry{Kind: kind, Type: storage.ResourceFile, Path: path, Owned: owned, Rollback: storage.ResourceRollbackNone, State: storage.ResourcePlanned}
+}
+
+func readOptionalBoundedFile(path string, limit int64) ([]byte, error) {
+	data, err := readBoundedFile(path, limit)
+	if app.ErrorCodeOf(err) == app.CodeNotFound {
+		return nil, nil
+	}
+	return data, err
+}
+
+func deferredOrUnchanged(exists bool) EffectStatus {
+	if exists {
+		return EffectUnchanged
+	}
+	return EffectDeferred
 }
 
 func regularFileExists(path string) bool {
@@ -756,59 +749,56 @@ func regularFileExists(path string) bool {
 	return err == nil && info.Mode().IsRegular() && info.Mode()&os.ModeSymlink == 0
 }
 
-func cloneOTSSequenceWithoutAttestation(sequence ots.Sequence) ots.Sequence {
-	if len(sequence) == 0 {
+func safeTSAOrigin(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "tsa"
+	}
+	return strings.ToLower(parsed.Hostname())
+}
+
+func timestampEntryKey(value ledger.RFC3161Timestamp) string {
+	return value.TSAURL + "\x00" + string(value.RequestPath) + "\x00" + string(value.ResponsePath)
+}
+
+func relativePathPointer(value ledger.RelativePath) *ledger.RelativePath { return &value }
+
+func cloneRelativePath(value *ledger.RelativePath) *ledger.RelativePath {
+	if value == nil {
 		return nil
 	}
-	result := make(ots.Sequence, 0, len(sequence)-1)
-	for _, step := range sequence[:len(sequence)-1] {
-		if step.Operation == nil {
-			continue
-		}
-		operation := *step.Operation
-		operation.Argument = append([]byte(nil), operation.Argument...)
-		result = append(result, ots.Step{Operation: &operation})
-	}
-	return result
+	copy := *value
+	return &copy
 }
 
-func verifiedTimestampMatchesReceipt(forecast ledger.Forecast, evaluated []ots.EvaluatedAttestation) error {
-	if forecast.Integrity.Verified == nil {
-		return nil
-	}
-	if _, err := ParseTimestamp(forecast.Integrity.Verified.VerifiedAt, "verified_at"); err != nil {
-		return app.NewError(app.CodeVerification, "stored timestamp verification time is invalid", err)
-	}
-	for _, timestamp := range forecast.Integrity.Verified.Timestamps {
-		if timestamp.Type != "opentimestamps" || timestamp.ProofPath != ReceiptRelativePath(forecast.ID) {
-			continue
-		}
-		if timestamp.State != ledger.OTSConfirmed || timestamp.AnchoredBefore == nil || timestamp.BitcoinBlockHeight == nil || *timestamp.BitcoinBlockHeight < 0 {
-			return app.NewError(app.CodeVerification, "stored verified timestamp metadata is incomplete", nil)
-		}
-		if _, err := ParseTimestamp(*timestamp.AnchoredBefore, "anchored_before"); err != nil {
-			return app.NewError(app.CodeVerification, "stored timestamp bound is invalid", err)
-		}
-		for _, item := range evaluated {
-			if item.Attestation.Kind == ots.AttestationBitcoin && item.Attestation.Height == uint64(*timestamp.BitcoinBlockHeight) {
-				return nil
-			}
-		}
-		return app.NewError(app.CodeVerification, "stored Bitcoin height is absent from the receipt", nil)
-	}
-	return app.NewError(app.CodeVerification, "verified integrity has no matching OpenTimestamps entry", nil)
+func sameTargetMetadata(left, right ledger.ForecastTarget) bool {
+	return left.Scope == right.Scope && left.Canonicalization == right.Canonicalization && left.ArtifactPath == right.ArtifactPath && left.Digest == right.Digest
 }
 
-func mustDigest32(value string) [32]byte {
-	var result [32]byte
-	decoded, _ := hexDecode(value)
-	copy(result[:], decoded)
-	return result
+func timestampLimitations() []string {
+	return []string{
+		"A valid signature and retained certificate chain do not prove that the timestamp authority clock was honest.",
+		"The retained CA bundle does not establish current revocation status or long-term legal validity.",
+		"Timestamp evidence does not prove authorship, forecast completeness, outcome truth, or exact self-reported forecast time.",
+	}
 }
 
-func hexDecode(value string) ([]byte, error) {
-	if len(value) != 64 || strings.ToLower(value) != value {
-		return nil, errors.New("digest is not lowercase SHA-256")
+type effectsReader struct {
+	ctx    context.Context
+	random CSPRNG
+	err    error
+}
+
+func (r *effectsReader) Read(destination []byte) (int, error) {
+	if r.err != nil {
+		return 0, r.err
 	}
-	return hex.DecodeString(value)
+	if r.random == nil {
+		return 0, io.ErrUnexpectedEOF
+	}
+	if err := r.random.ReadFull(r.ctx, destination); err != nil {
+		r.err = err
+		return 0, err
+	}
+	return len(destination), nil
 }

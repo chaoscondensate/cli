@@ -73,7 +73,7 @@ func TestSemanticValidationChecksArtifactDigest(t *testing.T) {
 			ArtifactPath:     "targets/one.json",
 			Digest:           ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(hex.EncodeToString(digest[:]))},
 		},
-		Timestamps: []ledger.OTSTimestamp{{Type: "opentimestamps", ProofPath: "proofs/one.ots", State: ledger.OTSPending}},
+		Timestamps: []ledger.RFC3161Timestamp{{Type: "rfc3161", RequestPath: "proofs/timestamps/one/request.tsq", ResponsePath: "proofs/timestamps/one/response.tsr", TSAURL: "https://tsa.example.test/", HashAlgorithm: "sha256", State: ledger.RFC3161Pending}},
 	}}
 	issues, err := ValidateSemantics(model, nil)
 	if err != nil {
@@ -101,7 +101,7 @@ func TestSemanticValidationChecksArtifactDigest(t *testing.T) {
 	}
 }
 
-func TestSemanticValidationChecksRevealedMirrorWithoutRejectingLateTimestamp(t *testing.T) {
+func TestSemanticValidationChecksRevealedMirrorAndLateTimestamp(t *testing.T) {
 	model := loadValidLedger(t, "team-ledger.yaml")
 	forecast := &model.Questions[0].Forecasts[0]
 	tampered := "changed after reveal"
@@ -112,9 +112,9 @@ func TestSemanticValidationChecksRevealedMirrorWithoutRejectingLateTimestamp(t *
 			Scope: "forecast-envelope/v1", Canonicalization: "RFC8785", ArtifactPath: "target.json",
 			Digest: ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(strings.Repeat("0", 64))},
 		},
-		Timestamps: []ledger.OTSTimestamp{{
-			Type: "opentimestamps", ProofPath: "target.json.ots", State: ledger.OTSConfirmed,
-			AnchoredBefore: timestampPointer("2026-09-30T15:00:00+01:00"), BitcoinBlockHeight: int64Pointer(1),
+		Timestamps: []ledger.RFC3161Timestamp{{
+			Type: "rfc3161", RequestPath: "proofs/timestamps/one/request.tsq", ResponsePath: "proofs/timestamps/one/response.tsr", TSAURL: "https://tsa.example.test/", HashAlgorithm: "sha256", State: ledger.RFC3161Verified,
+			GenTime: timestampPointer("2026-09-30T15:00:00+01:00"), PolicyOID: stringPointer("1.2.3"), SerialNumber: stringPointer("1"), CABundlePath: relativePathPointer("trust/tsa.pem"),
 		}},
 		VerifiedAt: "2026-10-01T09:00:00+01:00",
 	}}
@@ -125,8 +125,8 @@ func TestSemanticValidationChecksRevealedMirrorWithoutRejectingLateTimestamp(t *
 	if !hasSemanticCode(issues, "semantic.revealed_mirror") {
 		t.Fatalf("tampered reveal mirror not reported: %#v", issues)
 	}
-	if hasSemanticCode(issues, "semantic.late_timestamp") {
-		t.Fatalf("cryptographically valid late timestamp made the ledger invalid: %#v", issues)
+	if !hasSemanticCode(issues, "semantic.timestamp_chronology") {
+		t.Fatalf("timestamp after the known outcome was not rejected: %#v", issues)
 	}
 }
 
@@ -172,5 +172,6 @@ func hasSemanticCode(issues []SemanticIssue, code string) bool {
 	return false
 }
 
-func timestampPointer(value ledger.Timestamp) *ledger.Timestamp { return &value }
-func int64Pointer(value int64) *int64                           { return &value }
+func timestampPointer(value ledger.Timestamp) *ledger.Timestamp          { return &value }
+func stringPointer(value string) *string                                 { return &value }
+func relativePathPointer(value ledger.RelativePath) *ledger.RelativePath { return &value }

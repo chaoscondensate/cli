@@ -62,7 +62,7 @@ func TestExecutionTimeoutAndPolicyCoverage(t *testing.T) {
 		OperationPlatformAdd, OperationPlatformUpdate, OperationPlatformList, OperationPlatformShow, OperationPlatformRemove,
 		OperationQuestionAdd, OperationQuestionUpdate, OperationQuestionList, OperationQuestionShow, OperationQuestionResolve, OperationQuestionAnnul, OperationQuestionDispute,
 		OperationForecastAdd, OperationForecastList, OperationForecastShow, OperationForecastSeal, OperationForecastReveal, OperationForecastKeyHintUpdate,
-		OperationTargetBuild, OperationTargetCheck, OperationTimestampStamp, OperationTimestampUpgrade, OperationTimestampStatus, OperationTimestampVerify,
+		OperationTargetBuild, OperationTargetCheck, OperationTimestampStamp, OperationTimestampStatus, OperationTimestampVerify,
 		OperationVerificationRun, OperationPublicationBuild, OperationPublicationVerify,
 	} {
 		if _, ok := PolicyForOperation(operation); !ok {

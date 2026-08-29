@@ -1,7 +1,7 @@
 # Manage questions and resolutions
 
 <!-- doc-metadata
-coverage: v0.3.1
+coverage: v0.4.0
 reviewed: 2026-08-29
 owner: interface
 generated: false

@@ -9,9 +9,9 @@ and `go.sum`.
 
 ## Embedded Forecast Ledger contract
 
-The embedded Forecast Ledger v1.1.0 schema and conformance fixtures were copied
+The embedded Forecast Ledger v1.2.0 schema and conformance fixtures were copied
 from <https://github.com/chaoscondensate/schema> at commit
-`c04c72a178c15cd6cbbdd2e8a7b743d58872a94a` and retain the upstream MIT
+`6c2fe3df99223945b8d1613a03f95796b3c7d1e2` and retain the upstream MIT
 license. Exact file digests, provenance, and license text are stored in
 [`third_party/forecast-ledger`](third_party/forecast-ledger/).
 
@@ -40,6 +40,7 @@ included in that file.
 | `github.com/google/jsonschema-go` | `v0.4.3` | MIT |
 | `github.com/kr/pretty` | `v0.3.1` | MIT |
 | `github.com/modelcontextprotocol/go-sdk` | `v1.7.0` | Apache-2.0 and MIT; documentation CC-BY-4.0 |
+| `github.com/notaryproject/tspclient-go` | `v1.0.0` | Apache-2.0 |
 | `github.com/pmezard/go-difflib` | `v1.0.0` | BSD-3-Clause |
 | `github.com/santhosh-tekuri/jsonschema/v6` | `v6.0.3` | Apache-2.0 |
 | `github.com/segmentio/asm` | `v1.1.3` | MIT |

@@ -1,8 +1,8 @@
 ## Context
 
-See `proposal.md` for motivation and the seven delta specs for observable behavior. The repository already has a pinned v1 schema and seal fixture, bounded JSON/YAML document trees, typed models, semantic validation, canonicalization foundations, recoverable storage primitives, stable presentation/errors, a hidden urfave preview tree, and working `validate`/`status`. Most product actions still share one unavailable handler; MCP contains only a package scaffold; OpenTimestamps and publication contain no production workflow. The older active `build-forecast-ledger-cli-mcp` change contains useful completed foundation tasks but conflicting command specs and is superseded in full by this change.
+See `proposal.md` for motivation and the seven delta specs for observable behavior. The repository already has a pinned v1 schema and seal fixture, bounded JSON/YAML document trees, typed models, semantic validation, canonicalization foundations, recoverable storage primitives, stable presentation/errors, a hidden urfave preview tree, and working `validate`/`status`. Most product actions still share one unavailable handler; MCP contains only a package scaffold; RFC 3161 and publication contain no production workflow. The older active `build-forecast-ledger-cli-mcp` change contains useful completed foundation tasks but conflicting command specs and is superseded in full by this change.
 
-The exact schema commit and digests remain authoritative. Forecast Ledger v1.1.0 permits zero questions in a ledger and zero forecasts in a question, so `init` may create an empty ledger and `question add` may create a backlog question. The `adopt-forecast-ledger-v1-1` change supersedes this design's earlier v1.0.0 minimum-item assumptions. The CLI must remain useful without source control, hosted services, Python at runtime, or a default ledger. macOS, Linux, and Windows must share the same domain behavior despite different filesystem and credential semantics.
+The exact schema commit and digests remain authoritative. Forecast Ledger v1.2.0 permits zero questions in a ledger and zero forecasts in a question, so `init` may create an empty ledger and `question add` may create a backlog question. The `replace-ots-with-rfc3161` change supersedes this design's earlier v1.0.0 minimum-item assumptions. The CLI must remain useful without source control, hosted services, Python at runtime, or a default ledger. macOS, Linux, and Windows must share the same domain behavior despite different filesystem and credential semantics.
 
 ## Goals / Non-Goals
 
@@ -12,21 +12,21 @@ The exact schema commit and digests remain authoritative. Forecast Ledger v1.1.0
 - Cover mutable root metadata through `ledger update` while keeping IDs, creation time, questions, and legacy publication metadata outside that patch.
 - Keep every mutation valid before and after commit while preserving document presentation and append-only forecast history.
 - Make multi-file, secret, network, verification, and package workflows recoverable and testable at each failure boundary.
-- Preserve exact v1 target/seal interoperability and constrain the pure-Go OpenTimestamps subset behind differential and independent-review gates.
+- Preserve exact v1 target/seal interoperability and constrain the pure-Go RFC 3161 subset behind differential and independent-review gates.
 - Unhide actions only when their real implementation, documentation, and acceptance gates pass.
 
 **Non-Goals:**
 
 - Changing the Forecast Ledger schema, authoring its legacy publication object, adding draft/invalid ledgers, or supporting historical v0.5/RFC 3161 protocols.
 - Adding source-control operations, hosted publishing, platform imports, scoring, signatures/authorship claims, HTTP MCP, or automatic credential discovery.
-- Treating a calendar, block explorer, URL response, file timestamp, or self-reported time as stronger evidence than it provides.
+- Treating a TSA, block remote source, URL response, file timestamp, or self-reported time as stronger evidence than it provides.
 - Replacing the existing schema/document/storage foundations without an independently demonstrated defect.
 
 ## Decisions
 
 ### 1. Model every action as one transport-neutral operation
 
-Each business action gets a typed request/result contract and one service entry point under `internal/service`, grouped by ledger, platform, question, forecast, target, timestamp, verification, and publication. Requests carry explicit ledger/input paths or bounded already-parsed input, selectors, observation time, dry-run/confirmation, offline/read-only mode, built-in network-profile selection, and root context. Results carry a stable operation code, typed public data, warnings, changed safe paths, contacted safe source IDs, trust limitations, and side-effect/recovery state.
+Each business action gets a typed request/result contract and one service entry point under `internal/service`, grouped by ledger, platform, question, forecast, target, timestamp, verification, and publication. Requests carry explicit ledger/input paths or bounded already-parsed input, selectors, observation time, dry-run/confirmation, offline/read-only mode, explicit TSA and CA-bundle inputs where applicable, and root context. Results carry a stable operation code, typed public data, warnings, changed safe paths, contacted safe source IDs, trust limitations, and side-effect/recovery state.
 
 CLI actions translate urfave values into requests and present results. MCP handlers translate closed tool schemas into the same requests. Neither adapter performs domain selection, validation, patching, crypto, receipt logic, or package enumeration. `internal/app` remains the lower-level error/contract vocabulary; `internal/service` owns orchestration, avoiding the current storage→app import cycle.
 
@@ -50,7 +50,7 @@ Init parses root identity and optional input, then exclusively creates one valid
 
 Shared builders construct the same typed question and optional forecast records used by later add/seal operations, including explicit clock injection for deterministic tests. This avoids special init-only semantics. When a forecast is supplied, question and forecast creation and any protected-key effect remain atomic.
 
-The earlier v1.0.0 design rejected empty arrays. Forecast Ledger v1.1.0 deliberately removes those minimum-item constraints, so the newer `adopt-forecast-ledger-v1-1` contract supersedes that decision.
+The earlier v1.0.0 design rejected empty arrays. Forecast Ledger v1.2.0 deliberately removes those minimum-item constraints, so the newer `replace-ots-with-rfc3161` contract supersedes that decision.
 
 ### 4. Use selector indexes and immutable-field policies before patching
 
@@ -70,7 +70,7 @@ Both current and prospective validation receive the same confined artifact files
 
 Structural patch rendering is presentation-aware. It derives indentation, newline, collection layout, and JSON/YAML fragment style from the insertion/replacement context, while retaining untouched source slices verbatim. Canonical/JCS serialization is used only where an evidence, manifest, key, or cryptographic profile requires exact bytes; it is not reused to render ledger fragments.
 
-Dry-run is attached to persistent mutation or resource creation, executes through prospective validation, and substitutes a recorder for file/secret/network effects used by that operation. Its result explicitly distinguishes checks performed now from entropy, remote, race, and commit checks deferred to execution. Pure verification does not gain a dry-run mode solely because it observes remote evidence; online/offline selection is its network control.
+Dry-run is attached to persistent mutation or resource creation, executes through prospective validation, and substitutes a recorder for file/secret/network effects used by that operation. Its result explicitly distinguishes checks performed now from entropy, remote, race, and commit checks deferred to execution. Pure verification does not gain a dry-run mode; RFC 3161 verification is local, while general `--offline` controls only optional outcome-source retrieval.
 
 Alternative considered: mutate typed structs and reserialize. Rejected because it destroys YAML presentation and broadens the changed surface.
 
@@ -84,11 +84,11 @@ Alternative considered: pretend several filesystem writes are atomic. Rejected b
 
 ### 7. Fix deterministic artifact profiles
 
-Targets use `proofs/targets/<forecast-id>.json`; receipts use `proofs/receipts/<forecast-id>.json.ots`. Forecast IDs are globally unique, so these paths are deterministic without question names. Resolvers join relative paths against the ledger directory, reject case-folding collisions and escape forms, and never follow an in-root link for creation.
+Targets use `proofs/targets/<forecast-id>.json`; receipts use `proofs/timestamps/<forecast-id>.tsr`. Forecast IDs are globally unique, so these paths are deterministic without question names. Resolvers join relative paths against the ledger directory, reject case-folding collisions and escape forms, and never follow an in-root link for creation.
 
 Target build computes all bytes and collisions before `--all` writes. Same bytes are idempotent; different bytes conflict. Target build does not mutate integrity. Stamp records target metadata only when a valid receipt is durable. A question update precomputes old/new targets and refuses target-covered changes when a matching artifact or integrity reference already exists.
 
-Package layout and a versioned canonical manifest are fixed by the publication spec. Manifest entries use only the closed `ledger`, `forecast_target`, and `opentimestamps_receipt` roles, forward-slash paths, and sorted stable records without time/machine/source-control fields.
+Package layout and a versioned canonical manifest are fixed by the publication spec. Manifest entries use only the closed `ledger`, `forecast_target`, and `rfc3161_receipt` roles, forward-slash paths, and sorted stable records without time/machine/source-control fields.
 
 Alternative considered: user-selected arbitrary artifact paths. Rejected for the primary workflow because it weakens reproducibility and makes cross-ledger/package verification harder; future import/migration can be separately specified.
 
@@ -102,23 +102,23 @@ Secret files use exact JCS `forecast-key/v1` bytes plus LF and OS-specific secur
 
 Alternative considered: general crypto algorithms or configurable canonicalization. Rejected because interoperability and review depend on one exact published profile.
 
-### 9. Implement a constrained OpenTimestamps backend and embedded network profile
+### 9. Implement a constrained RFC 3161 backend with explicit trust inputs
 
-`internal/timestamp/ots` owns bounded detached-proof parsing, lossless representation, supported operations/attestations, deterministic merge/serialization, calendar client, and verification requests. `internal/timestamp` (or service-level timestamp orchestration) owns target/receipt/ledger state transitions. New stamps construct the official-client-compatible blinded path `target digest → append fresh 16-byte nonce → SHA-256` and submit only that calendar commitment; the detached receipt retains the operations required to verify the original target.
+`internal/timestamp/rfc3161` owns bounded request/response parsing, SHA-256 request construction, CSPRNG nonces, CMS signature and signed-attribute checks, X.509 timestamping-EKU and chain verification, supported-algorithm policy, TSA HTTP submission, and normalized errors. Service-level timestamp orchestration owns target, request, response, CA-bundle, and ledger state transitions. Dependency types do not cross the internal boundary.
 
-An immutable `opentimestamps-public-v1` profile embedded in the binary owns the four submission URLs, accepted receipt calendar identities, two-of-four policy, the mempool.space and Blockstream Bitcoin APIs, source IDs, trust text, and exact request/concurrency budgets. Its ID and sources are visible in version/help/results, but it is never downloaded or mutated at runtime; endpoint/identity/limit changes require a reviewed release and a new profile ID. CLI-only explicit custom-calendar mode replaces rather than extends the default set for one stamp/upgrade invocation and applies strict public-HTTPS/SSRF validation; it is labeled custom and never enters MCP schemas.
+Stamp requires one explicit public HTTPS TSA URL and one retained PEM CA bundle inside the permitted ledger root. It sends `application/timestamp-query`, accepts only a bounded timestamp-reply, follows no cross-origin redirect, and rejects credentials, private/link-local/reserved destinations, trailing data, weak algorithms, and unsupported critical structures. The request contains SHA-256 over the exact target, a fresh nonce, and `certReq=true`; it does not add a second blinding construction beyond the RFC request nonce.
 
-Default Bitcoin verification queries both public APIs and requires identical height/hash/header observations before locally checking the header, encoded target, OTS operations, and attestation. One invocation owns a keyed observation cache and singleflight group by `(source,height)`, caps unique heights, HTTP attempts, and concurrency, and shares observations across timestamp/layered/package verification without persisting browsing history. This reduces single-service error but makes availability the conjunction of both services and still trusts them for canonical-chain selection; every result states that trade-off and the block-height privacy leak. Optional CLI-only Bitcoin Core verification implements the same evidence-source interface with protected credential-file reading and a stronger independently operated boundary. MCP never accepts endpoint URLs and uses only the embedded profile or offline mode. Unknown proof nodes are preserved if lossless/safe or cause an explicit unsupported result. The feature remains experimental until official-client differential, nonce/privacy, profile, dual-source, budget, real-calendar, malformed-input, native recovery, and independent-review gates pass.
+Stamp performs network work outside the ledger lock, then re-reads and revalidates the selected immutable forecast under the lock before committing the target, `.tsq`, `.tsr`, retained CA path, and source-preserving ledger patch. Status parses local evidence only. Verify rechecks the complete local chain against the retained CA bundle at `gen_time`; layered and package verification use the same local verifier and require no TSA or other network service. The feature remains experimental until OpenSSL differential fixtures, ASN.1/CMS malformed-input and fuzz coverage, real-TSA interoperability, native recovery, and independent-review gates pass.
 
-Alternatives considered: require every user to configure calendars/explorers, forbid every endpoint override, or shell out to Python `ots`. Required per-user endpoints were rejected because they burden the normal workflow; a total override ban was rejected because a released binary would lose stamping liveness when its fixed set drops below threshold. The compromise is zero-config reviewed defaults plus an explicit CLI-only custom mode with conspicuous trust labeling, while MCP remains pinned/offline. A subprocess was rejected because it violates single-binary distribution and creates version, Windows, cancellation, and error-parity problems.
+Alternatives considered: shell out to OpenSSL, use system roots, embed a default TSA/trust profile, or expose a general authenticated HTTP client. These were rejected to preserve single-binary distribution, reproducible retained trust, explicit provider choice, and a narrow network surface. OpenSSL remains a development-time conformance oracle only.
 
 ### 10. Represent verification as composable layer results
 
-Each verifier returns `{state, reason_codes, evidence, limitations}` for one layer. A deterministic aggregator applies dependency and exit precedence without erasing partial evidence. Ledger verification supplies the embedded invocation-wide Bitcoin observer automatically unless offline or replaced by CLI Bitcoin Core; package verification remains offline unless its online mode is requested. Budget exhaustion yields explicit not-checked layers and incomplete/exit 9 rather than silently skipping or overrunning public services. Outcome-URL retrieval stays explicitly requested and separate from the pinned protocol profile. Report builders consume the same model for human, JSON, MCP, and package verification.
+Each verifier returns `{state, reason_codes, evidence, limitations}` for one layer. A deterministic aggregator applies dependency and exit precedence without erasing partial evidence. Ledger and package verification reconstruct the exact target and verify retained request, response, and CA-bundle bytes locally. Missing or unreadable retained evidence yields explicit not-checked or failure layers rather than an invented pass. Outcome-URL retrieval stays explicitly requested and separate from timestamp verification. Report builders consume the same model for human, JSON, MCP, and package verification.
 
 Human, plain, and JSON presenters all iterate the same ordered layer collection; the human presenter prints the matrix in normal mode rather than reducing it to an overall sentence. Presentation completion is separate from process exit selection: after writing the available report, the adapter returns the original typed pending/incomplete/failure category through an unwrap-compatible path so the central exit mapper cannot turn it into `internal`.
 
-Document failure blocks dependent layers. Content binding precedes OTS proof checks. Reveal authenticates before comparing the mirror. Outcome source checks distinguish metadata/digest/reachability from truth. Limitations are data in every result, not presentation-only prose that adapters can omit.
+Document failure blocks dependent layers. Content binding precedes RFC 3161 proof checks. Reveal authenticates before comparing the mirror. Outcome source checks distinguish metadata/digest/reachability from truth. Limitations are data in every result, not presentation-only prose that adapters can omit.
 
 Alternative considered: one `verified` boolean. Rejected because it conflates distinct claims and cannot express pending/not-checked evidence honestly.
 
@@ -136,15 +136,15 @@ Alternative considered: recursively copy the ledger directory. Rejected because 
 
 The official pinned MCP SDK owns framing and negotiation. A server builder registers closed tool/resource schemas generated from the same operation types only when each tool's availability gate passes. Each operation definition carries a static `read-only` or `mutating` effect plus required root classes; server mode is separate runtime metadata and never rewrites that effect. Startup canonicalizes repeatable named ledger/output/secret roots and selects full versus optional read-only mode and online versus optional offline mode. Read-only startup omits every mutating tool from registration, so discovery and direct-call behavior match the general startup-disabled rule. Tool middleware performs schema validation, root-class checks, root resolution, limits, context timeout, and error conversion before calling services. Root failures retain the stable root class and safe configured root ID while absolute paths remain redacted.
 
-The default server exposes applicable write and built-in-network operations without general grants; missing output/secret roots fail only operations that need those roots. Reveal is the sole capability exception: it is absent unless startup explicitly includes `--allow-reveal`, because a secret root confines files but does not express consent for irreversible publication. Request `confirm: true` remains required but is not an authorization boundary. A held ledger writer lock produces the same immediate conflict in CLI and MCP; the server does not queue writers.
+The default server exposes applicable read/write operations without general grants; missing output/secret roots fail only operations that need those roots. Timestamp stamp accepts explicit TSA and CA-bundle fields and is disabled by server-wide offline mode; timestamp status and verify stay local. Reveal is the sole capability exception: it is absent unless startup explicitly includes `--allow-reveal`, because a secret root confines files but does not express consent for irreversible publication. Request `confirm: true` remains required but is not an authorization boundary. A held ledger writer lock produces the same immediate conflict in CLI and MCP; the server does not queue writers.
 
-Protocol stdout is passed directly to the SDK; all application diagnostics use an injected stderr logger. Resource URIs contain a root ID plus encoded relative path, never an absolute path. Tool schemas contain no calendar, explorer, proxy, or Bitcoin endpoint URL. Real-process tests treat any non-protocol stdout byte as a failure.
+Protocol stdout is passed directly to the SDK; all application diagnostics use an injected stderr logger. Resource URIs contain a root ID plus encoded relative path, never an absolute path. Apart from the explicit public `tsa_url` on timestamp stamp, tool schemas contain no remote source, proxy, credential, or general HTTP configuration. Real-process tests treat any non-protocol stdout byte as a failure.
 
 Alternatives considered: split secret paths into read/write root classes, retain separate write/network/reveal grants, or have MCP handlers invoke CLI subprocesses. Split roots were rejected because seal itself needs protected input reads plus key writes and the resulting policy is hard to explain; broad grants were rejected because roots plus server-wide modes already constrain ordinary effects. A single reveal gate is retained for the asymmetric disclosure risk. Subprocess handlers were rejected because they duplicate serialization, prevent structured cancellation/errors, and leak process-boundary details.
 
 ### 13. Use per-command availability gates
 
-The unavailable handler and hidden flag are removed one action at a time only when operation code, unit/integration tests, CLI JSON/help goldens, dry-run/rollback/cancellation checks, MCP parity where the tool exists, documentation, and native-platform gates applicable to that action pass. Groups become visible when they contain at least one implemented child; help labels experimental OTS behavior honestly.
+The unavailable handler and hidden flag are removed one action at a time only when operation code, unit/integration tests, CLI JSON/help goldens, dry-run/rollback/cancellation checks, MCP parity where the tool exists, documentation, and native-platform gates applicable to that action pass. Groups become visible when they contain at least one implemented child; help labels experimental RFC 3161 behavior honestly.
 
 This allows reviewable increments without again advertising scaffolding as a finished application. Hidden preview flag definitions are corrected before each command is exposed: artifact-dependent reads lose stdin, timestamp verify gains mutation/dry-run semantics, question type remains scalar, root flags become repeatable, general MCP grants disappear, and the reveal gate remains. The final release gate asserts that no planned leaf uses the unavailable handler and every documented/MCP action maps to a service; incomplete or startup-disabled MCP tools are absent from discovery rather than returning application `unavailable`.
 
@@ -152,7 +152,7 @@ Alternative considered: unhide the complete tree after the first implementation 
 
 ### 14. Treat generated reference and conformance as build outputs
 
-Operation definitions drive CLI/MCP input schemas, JSON result schemas, command reference tables, and parity fixtures. CI runs clean-tree regeneration checks. Tests are layered: pure builders/indexes; document patches; transaction fault injection; crypto/target vectors; OTS differential/fuzz; verification matrices; package determinism; CLI goldens; MCP in-memory/real-process; and native filesystem/ACL/replacement tests.
+Operation definitions drive CLI/MCP input schemas, JSON result schemas, command reference tables, and parity fixtures. CI runs clean-tree regeneration checks. Tests are layered: pure builders/indexes; document patches; transaction fault injection; crypto/target vectors; RFC 3161 differential/fuzz; verification matrices; package determinism; CLI goldens; MCP in-memory/real-process; and native filesystem/ACL/replacement tests.
 
 Maintained documentation examples are executable fixtures. CI parses every JSON/YAML input example, including quoted timestamps, and runs representative commands against temporary ledgers so prose cannot advertise syntax that the typed input layer rejects. A dogfooding lifecycle fixture additionally exercises authoring before and after retained timestamp evidence with realistic multi-record formatting.
 
@@ -170,7 +170,7 @@ Source-tree insertions use a declarative semantic field order shared with full-d
 
 Target checking produces one result per selected forecast. A forecast with neither retained target metadata nor a deterministic target artifact is `not_applicable` with reason `content.no_retained_target`, its stable IDs, safe expected relative path, and a `target build` next action. `--all` continues after that result and reports every selected forecast; retained-but-missing, unreadable, or mismatched evidence remains an error. A report containing only `pass` and `not_applicable` results succeeds without claiming that absent targets were checked.
 
-Read-only forecast presentation maps retained integrity into an explicit safe public DTO. Confirmed Bitcoin evidence includes receipt state, `bitcoin_block_height`, `anchored_before`, and `verified_at` in human, plain, JSON, and MCP results. Offline output labels these values as stored evidence whose prior verification-source identity is not retained, while online verification may add fresh source observations.
+Read-only forecast presentation maps retained integrity into an explicit safe public DTO. Confirmed RFC 3161 evidence includes request/response state, TSA identity, `gen_time`, policy OID, serial number, retained CA-bundle path, and `verified_at` in human, plain, JSON, and MCP results. Output distinguishes parsed stored metadata from a complete fresh local cryptographic verification.
 
 MCP root configuration is represented internally by root class, safe route ID, originating flag, and canonical private path. Startup and tool errors expose only the first three. A missing root names the responsible route; an overlap names both conflicting class/ID descriptors, never their absolute paths.
 
@@ -187,12 +187,12 @@ Alternatives considered: retain init-specific clock semantics, emit placeholder 
 - **[Resolution dispute replaces the one v1 resolution object]** → Require confirmation, report prior status, preserve forecasts/evidence, and document that v1 does not provide internal resolution history.
 - **[Protected Windows key ACLs are easy to get wrong]** → Isolate native code, test on Windows runners, fail closed when owner-only protection cannot be proven, and keep seal unavailable until native tests pass.
 - **[Multi-file operations cannot be truly atomic]** → Journal explicit ownership/state, order durable writes conservatively, make retries idempotent, and return recovery state rather than claiming rollback that did not occur.
-- **[Pure-Go OTS may diverge from the official client]** → Constrain the subset, preserve/reject unknown nodes explicitly, differential-test every supported operation, fuzz, run real-calendar tests, and require independent review.
-- **[Calendar pools or returned identities may change and fixed endpoints may fall below two live services]** → Validate returned identities, run nightly profile/liveness tests, expose CLI-only custom calendars, and require a reviewed profile release for default changes.
-- **[Built-in public Bitcoin APIs may fail, disagree, rate-limit, or reveal block-height interest]** → Pin both in a versioned release profile, deduplicate and cap requests, require agreement, fail without a state transition on disagreement/outage, expose source IDs/privacy limitations, and offer optional Bitcoin Core.
+- **[Pure-Go RFC 3161/CMS handling may accept behavior broader than the product profile]** → Constrain and bound the subset, reject unsupported structures and algorithms, differential-test checked-in fixtures with OpenSSL, fuzz malformed inputs, run real-TSA tests, and require independent review.
+- **[A selected TSA may be unavailable or dishonest]** → Require the user to choose it explicitly, make retries safe, preserve verified metadata without overstating clock truth, and allow separate entries from independently selected TSAs.
+- **[A retained CA bundle may expire or omit future revocation evidence]** → Verify the chain at `gen_time`, report the exact retained trust input and its limitation, and make no long-term-validation or legal-validity claim.
 - **[Target evidence freezes question wording and timing]** → Reject ambiguous rewrites and document annul-plus-new-question as the supported correction path.
 - **[Package enumeration can leak secrets]** → Build from a typed allowlisted graph, reject extra roles/paths, scan canaries, and test with adjacent key/private files.
-- **[MCP expands side-effect reach and reveal is irreversible]** → Confine every file class to explicit roots, provide optional whole-server read-only/offline modes, reject arbitrary protocol endpoint URLs, keep reveal default-off behind its sole explicit gate plus confirmation, enforce limits, and share application transactions.
+- **[MCP expands side-effect reach and reveal is irreversible]** → Confine every file class to explicit roots, provide optional whole-server read-only/offline modes, validate the explicit timestamp-stamp TSA URL, keep reveal default-off behind its sole explicit gate plus confirmation, enforce limits, and share application transactions.
 - **[Two active OpenSpec changes overlap]** → Treat this change as the sole replacement contract, map already completed foundation evidence into its tasks, and retire the older change without syncing or archiving its delta specs.
 - **[Stable result schemas can freeze mistakes]** → Version persisted/transport schemas, keep human prose flexible, and require compatibility review for field removal or semantic change.
 - **[Presentation-aware patches can still produce large diffs on unfamiliar source styles]** → Preserve untouched slices, constrain style inference to the local container, and gate realistic expanded JSON/YAML ledgers with diff/readability assertions.
@@ -207,10 +207,10 @@ Alternatives considered: retain init-specific clock semantics, emit placeholder 
 3. Implement schema-valid init, root metadata update, and platform actions; unhide each action only after its gates pass.
 4. Implement question lifecycle and public forecast append-only actions, including initial-forecast atomicity, forecaster-kind transitions, frozen-question guidance, and disputed replacement transitions.
 5. Implement target build/check, protected key files, seal/reveal, safe key-hint repair, and exact vector/cross-platform gates.
-6. Implement the constrained nonce-blinded OTS backend, built-in/custom CLI calendar modes, bounded shared Bitcoin observer, and timestamp commands; keep experimental labeling through conformance and review.
+6. Implement the constrained RFC 3161 backend, explicit TSA/CA-bundle stamping, complete local verification, and timestamp commands; keep experimental labeling through conformance and review.
 7. Implement layered verification and deterministic package build/verify.
 8. Implement MCP roots, read-only/offline/reveal modes, incrementally discovered tools, and resources over the same operations and pass real-process parity/framing tests.
-9. Run full native, race, fuzz, validator/crypto/OTS conformance, documentation-generation, package, and release gates; assert no product leaf remains unavailable.
+9. Run full native, race, fuzz, validator/crypto/RFC 3161 conformance, documentation-generation, package, and release gates; assert no product leaf remains unavailable.
 10. Ship the v0.2.2 dogfooding corrections in a new patch release after CLI/MCP parity, executable documentation, and packaged macOS/Linux/Windows regressions pass; no existing ledger or evidence bytes require migration.
 
 Existing v1 ledgers require no data migration. New actions refuse unsupported schema versions rather than rewriting them. Rollback of an implementation slice re-hides its command/tool and restores the previous known-good binary; it does not downgrade or rewrite ledgers. Any newly persisted artifact/profile schema receives an explicit version and compatibility test before release.

@@ -25,7 +25,7 @@ func TestCurrentIncludesCompatibilityPins(t *testing.T) {
 	if info.MCPProtocol != MCPProtocolVersion {
 		t.Fatalf("unexpected MCP protocol %q", info.MCPProtocol)
 	}
-	if info.TimestampProfile.ID != "opentimestamps-public-v1" || len(info.TimestampProfile.Calendars) != 4 || len(info.TimestampProfile.BitcoinSources) != 2 {
-		t.Fatalf("unexpected timestamp profile: %#v", info.TimestampProfile)
+	if info.Timestamp.Protocol != "rfc3161" || info.Timestamp.HashAlgorithm != "sha256" || !info.Timestamp.Experimental {
+		t.Fatalf("unexpected timestamp support: %#v", info.Timestamp)
 	}
 }

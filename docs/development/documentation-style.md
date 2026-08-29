@@ -36,8 +36,8 @@ introductions, policy files, issue forms, and release notes.
   contract. Do not shorten it to “FL” in public prose.
 - Use **MCP** after writing “Model Context Protocol (MCP)” once on a page for a
   general audience.
-- Use **OpenTimestamps** for the protocol and **OTS receipt** where the shorter
-  technical term is clearer.
+- Use **RFC 3161 timestamp authority (TSA)** on first use and **TSA** afterward.
+  Use **timestamp response** for the signed token returned by the authority.
 - Use **Chaos Condensate** only for the broader project context and link to
   <https://chaoscondensate.com/> when that context is useful.
 - Capitalize maintained maturity labels: Development, Preview, Stable,
@@ -121,7 +121,7 @@ before the command, not after it.
 - Name the exact validation or verification layer and its result.
 - Distinguish structural validity, content binding, existence timing, reveal
   validity, outcome evidence, authorship, completeness, and truth.
-- Do not call a pending receipt anchored or verified.
+- Do not call a pending timestamp response verified.
 - Do not turn source-control, filesystem, hosting, archive, or self-reported
   timestamps into cryptographic evidence.
 - Do not state or imply that successful validation proves authorship,

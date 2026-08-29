@@ -1,7 +1,7 @@
 # Reference
 
 <!-- doc-metadata
-coverage: v0.3.1
+coverage: v0.4.0
 reviewed: 2026-08-29
 owner: interface
 generated: false
@@ -34,7 +34,8 @@ The exact target workflow and projection boundaries are described in
 The cryptographic lifecycle and its security boundaries are described in
 [Seal and reveal forecasts](../how-to/seal-and-reveal-forecasts.md).
 Timestamp, layered verification, publication, and MCP behavior are described in
-their linked how-to guides. OpenTimestamps remains experimental.
+their linked how-to guides. RFC 3161 acquisition uses an explicitly selected
+authority; later verification is local against retained evidence and trust.
 
 The [generated interface reference](generated/index.md) records shared service
 declarations and closed input schemas. Runtime discovery remains authoritative
