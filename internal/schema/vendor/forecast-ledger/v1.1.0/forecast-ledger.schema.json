@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/chaoscondensate/schema/v1.0.0/schema/forecast-ledger.schema.json",
+  "$id": "https://raw.githubusercontent.com/chaoscondensate/schema/v1.1.0/schema/forecast-ledger.schema.json",
   "title": "Forecast Ledger",
   "description": "A portable, machine-verifiable ledger for quantitative forecasts made by one individual or team forecasting identity.",
   "type": "object",
@@ -21,7 +21,7 @@
       "description": "A tooling pointer to this JSON Schema."
     },
     "schema_version": {
-      "const": "1.0.0",
+      "const": "1.1.0",
       "description": "The exact Forecast Ledger contract version used by this document."
     },
     "ledger_id": {
@@ -61,7 +61,7 @@
     },
     "questions": {
       "type": "array",
-      "minItems": 1,
+      "description": "Questions in this ledger. An empty array is a valid newly created ledger.",
       "items": {
         "$ref": "#/$defs/question"
       }
@@ -1027,7 +1027,7 @@
         },
         "forecasts": {
           "type": "array",
-          "minItems": 1,
+          "description": "Forecasts recorded for this question. An empty array is a valid backlog or handoff state.",
           "items": {
             "$ref": "#/$defs/forecast"
           }

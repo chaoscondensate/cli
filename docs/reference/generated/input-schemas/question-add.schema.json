@@ -429,8 +429,7 @@
         "title",
         "resolution_criteria",
         "forecast_window",
-        "expected_resolution_at",
-        "initial_forecast"
+        "expected_resolution_at"
       ],
       "type": "object"
     },

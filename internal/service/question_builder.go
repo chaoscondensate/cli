@@ -30,12 +30,46 @@ func BuildInitialPublicLedgerAt(root *ledger.Ledger, input InitialQuestionInput,
 	return BuildQuestionWithInitialPublicForecast(root, NormalizeInitialQuestion(input), observedAt)
 }
 
+// BuildInitialQuestionLedgerAt appends a validated question shell without a
+// forecast. The stored forecasts member remains an explicit empty array.
+func BuildInitialQuestionLedgerAt(root *ledger.Ledger, input InitialQuestionInput, observedAt ledger.Timestamp) (*ledger.Ledger, error) {
+	if root == nil {
+		return nil, app.NewError(app.CodeInternal, "ledger root is nil", nil)
+	}
+	question, _, err := buildQuestionShell(root, NormalizeInitialQuestion(input), observedAt)
+	if err != nil {
+		return nil, err
+	}
+	return appendProspectiveQuestion(root, question)
+}
+
+// BuildQuestionWithoutForecast appends a validated question shell and emits a
+// source-preserving add patch for the complete question object.
+func BuildQuestionWithoutForecast(model *ledger.Ledger, input NormalizedQuestionCreate, observedAt ledger.Timestamp) (QuestionMutation, error) {
+	question, _, err := buildQuestionShell(model, input, observedAt)
+	if err != nil {
+		return QuestionMutation{}, err
+	}
+	prospective, err := appendProspectiveQuestion(model, question)
+	if err != nil {
+		return QuestionMutation{}, err
+	}
+	value, err := jsonPatchValue(question)
+	if err != nil {
+		return QuestionMutation{}, err
+	}
+	return QuestionMutation{Ledger: prospective, Patches: []document.PatchOperation{{Kind: document.PatchAdd, Pointer: "/questions/-", Value: value}}}, nil
+}
+
 func BuildQuestionWithInitialPublicForecast(model *ledger.Ledger, input NormalizedQuestionCreate, observedAt ledger.Timestamp) (*ledger.Ledger, error) {
 	question, index, err := buildQuestionShell(model, input, observedAt)
 	if err != nil {
 		return nil, err
 	}
-	forecast, err := buildInitialPublicForecast(input.Input.InitialForecast, input.Type, input.Input.Options, question.ForecastWindow, observedAt)
+	if input.Input.InitialForecast == nil {
+		return nil, invalidField("initial_forecast", "this builder requires an initial forecast")
+	}
+	forecast, err := buildInitialPublicForecast(*input.Input.InitialForecast, input.Type, input.Input.Options, question.ForecastWindow, observedAt)
 	if err != nil {
 		return nil, err
 	}

@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: unreleased-main
-reviewed: 2026-08-26
+reviewed: 2026-08-29
 owner: security
 generated: false
 security-critical: true
@@ -11,7 +11,7 @@ next: ../security/index.md
 -->
 
 Applies to: current unreleased Forecast Ledger CLI source (Preview).
-Last substantive review: 2026-08-26.
+Last substantive review: 2026-08-29.
 Owner: security and interface owners
 
 This page defines the strongest conclusion the documentation may draw from a
@@ -31,6 +31,12 @@ Each checked layer reports one of these states:
 - **not checked** — the tool did not run that layer or lacked required input.
 
 Do not collapse these states into one boolean named `verified`.
+
+Forecast Ledger v1.1 permits an empty ledger and a question with no forecasts.
+A verification pass over an empty selection means every applicable check
+completed and nothing failed; it does not mean a forecast, target, timestamp,
+or outcome evidence exists. Empty forecast collections remain explicit in
+machine output rather than being omitted or replaced by placeholder records.
 
 ## Approved terms
 

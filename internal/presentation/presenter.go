@@ -127,6 +127,9 @@ func (p *Presenter) Failure(err error) error {
 	if p.mode == ModeHuman && p.color && p.stderrIsTTY {
 		prefix = "\x1b[31mforecast-ledger:\x1b[0m "
 	}
+	if code == app.CodeUnsupportedSchemaVersion {
+		prefix += "warning: "
+	}
 	if _, writeErr := fmt.Fprintln(p.stderr, prefix+message); writeErr != nil {
 		return writeErr
 	}

@@ -34,6 +34,18 @@ type QuestionFileResult struct {
 
 type questionMutationBuilder func(*ledger.Ledger) (QuestionMutation, error)
 
+func PlanQuestionAddEmptyFile(ctx context.Context, path string, input NormalizedQuestionCreate, observedAt ledger.Timestamp) (QuestionFileResult, error) {
+	return planQuestionMutation(ctx, path, input.ID, func(model *ledger.Ledger) (QuestionMutation, error) {
+		return BuildQuestionAddEmpty(model, input, observedAt)
+	})
+}
+
+func CommitQuestionAddEmptyFile(ctx context.Context, path string, input NormalizedQuestionCreate, observedAt ledger.Timestamp) (QuestionFileResult, error) {
+	return commitQuestionMutation(ctx, path, input.ID, func(model *ledger.Ledger) (QuestionMutation, error) {
+		return BuildQuestionAddEmpty(model, input, observedAt)
+	})
+}
+
 func PlanQuestionAddPublicFile(ctx context.Context, path string, input NormalizedQuestionCreate, observedAt ledger.Timestamp) (QuestionFileResult, error) {
 	return planQuestionMutation(ctx, path, input.ID, func(model *ledger.Ledger) (QuestionMutation, error) {
 		return BuildQuestionAddPublic(model, input, observedAt)

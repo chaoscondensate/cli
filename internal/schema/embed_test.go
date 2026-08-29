@@ -13,10 +13,12 @@ func TestPinnedContractDigests(t *testing.T) {
 	assertDigest(t, "forecast-ledger.schema.json", Contract(), SchemaSHA256)
 
 	fixtures := map[string]string{
-		"forecast-seal-v1.json":  "59f3996b22e135d5c2d1a6977c2e5dfa025d3f2ececd226b6fb4096ddc7272f5",
-		"individual-ledger.json": "b05d3ad403ba85d962e1f8d1e6219b789ff763b81928f120b90926603b67dd68",
-		"invalid-cases.json":     "a7e0275d216f8f81285bfcb2c37e4095395fa2f7bc95b3ebdce51f55d7c29d59",
-		"team-ledger.yaml":       "fc42a7b70c5cef89e6524cf45f8c7be07bedaf1c1368eed761739d835200e4c1",
+		"empty-ledger.json":               "e31ffdf26a63742871686c4cbf6a62ed26dd7289e33d644a315dedba1ddc4a1f",
+		"forecast-seal-v1.json":           "59f3996b22e135d5c2d1a6977c2e5dfa025d3f2ececd226b6fb4096ddc7272f5",
+		"individual-ledger.json":          "1ce53fef071e017bf629c93f4b6304316321933d1b2b47ce95e89c4dde8a35ed",
+		"invalid-cases.json":              "a7e0275d216f8f81285bfcb2c37e4095395fa2f7bc95b3ebdce51f55d7c29d59",
+		"question-without-forecasts.yaml": "f4786c542a11d1bd411f03e6b3246fa3972e9ba1f90ab680262679d82b1d53a5",
+		"team-ledger.yaml":                "68179c3b38ea7a54f0c7d3562c56e1890a975d10d57d7e2dc3c5d880cb04b6db",
 	}
 	for name, expected := range fixtures {
 		data, err := fs.ReadFile(Conformance(), name)
@@ -26,7 +28,7 @@ func TestPinnedContractDigests(t *testing.T) {
 		assertDigest(t, name, data, expected)
 	}
 
-	if ReleaseArchiveSHA256 != "a3d6afcf8a3cd9b9e9a650ebac684cbe2f155a81db309797d77694b5f4b9bbda" {
+	if ReleaseArchiveSHA256 != "edb2e307a7ce55984d17306556f0538f49a3a2a9fa66c9bfec973c90f0cb88dd" {
 		t.Fatalf("unexpected release archive digest %q", ReleaseArchiveSHA256)
 	}
 }

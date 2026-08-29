@@ -223,7 +223,7 @@ func TestValidateJSONOutputAndStableInvalidData(t *testing.T) {
 		t.Fatalf("unexpected success envelope: %#v", success)
 	}
 
-	code, stdout, stderr = runCLIWithStdin(`{"schema_version":"1.0.0","secret":"do-not-print"}`, "forecast-ledger", "--json", "validate", "--file", "-")
+	code, stdout, stderr = runCLIWithStdin(`{"schema_version":"1.1.0","secret":"do-not-print"}`, "forecast-ledger", "--json", "validate", "--file", "-")
 	if code != 3 || stdout != "" {
 		t.Fatalf("invalid JSON mode code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -243,8 +243,89 @@ func TestValidateJSONOutputAndStableInvalidData(t *testing.T) {
 	}
 
 	code, stdout, stderr = runCLIWithStdin(`{}`, "forecast-ledger", "validate", "--file", "-")
-	if code != 3 || stdout != "" || !strings.Contains(stderr, "only 1.0.0") {
+	if code != 3 || stdout != "" || !strings.Contains(stderr, "warning:") || !strings.Contains(stderr, "only 1.1.0") {
 		t.Fatalf("unsupported schema message missing: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+}
+
+func TestEmptyInitAndQuestionBacklogCLI(t *testing.T) {
+	directory := t.TempDir()
+	emptyPath := filepath.Join(directory, "empty.json")
+	code, stdout, stderr := runCLI("forecast-ledger", "--json", "init", "--file", emptyPath, "--ledger-id", "empty", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner")
+	if code != 0 || stderr != "" {
+		t.Fatalf("empty init code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	var created struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &created); err != nil {
+		t.Fatal(err)
+	}
+	if created.Data["schema_version"] != "1.1.0" || created.Data["question_count"] != float64(0) || created.Data["forecast_count"] != float64(0) || created.Data["question_id"] != nil || created.Data["forecast_id"] != nil {
+		t.Fatalf("empty init result = %#v", created.Data)
+	}
+	contents, err := os.ReadFile(emptyPath)
+	if err != nil || !strings.Contains(string(contents), `"questions": []`) {
+		t.Fatalf("empty ledger contents=%s err=%v", contents, err)
+	}
+
+	questionInput := `{"title":"Will it happen?","resolution_criteria":"Resolve from the named source.","forecast_window":{"closes_at":"2026-12-31T00:00:00Z"},"expected_resolution_at":"2027-01-01T00:00:00Z"}`
+	code, stdout, stderr = runCLIWithStdin(questionInput, "forecast-ledger", "--json", "question", "add", "--file", emptyPath, "--question", "q-one", "--type", "binary", "--input", "-")
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"message":"Question was added"`) {
+		t.Fatalf("question add code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	code, stdout, stderr = runCLI("forecast-ledger", "forecast", "list", "--file", emptyPath, "--question", "q-one")
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "No forecasts") {
+		t.Fatalf("forecast list code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	forecastInput := `{"forecasted_at":"2026-09-01T09:00:00Z","recorded_at":"2026-09-01T09:01:00Z","value":{"kind":"binary","probability_bp":6500}}`
+	code, stdout, stderr = runCLIWithStdin(forecastInput, "forecast-ledger", "--json", "forecast", "add", "--file", emptyPath, "--question", "q-one", "--forecast", "f-one", "--input", "-")
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"forecast_id":"f-one"`) {
+		t.Fatalf("first forecast add code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	code, stdout, stderr = runCLI("forecast-ledger", "--plain", "status", "--file", emptyPath)
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "1 questions, 1 forecasts") {
+		t.Fatalf("plain status code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+
+	dryPath := filepath.Join(directory, "dry.json")
+	code, stdout, stderr = runCLI("forecast-ledger", "--json", "init", "--dry-run", "--file", dryPath, "--ledger-id", "dry", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner")
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"question_count":0`) {
+		t.Fatalf("dry init code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if _, err := os.Stat(dryPath); !os.IsNotExist(err) {
+		t.Fatalf("dry run created ledger: %v", err)
+	}
+
+	metadataPath := filepath.Join(directory, "metadata.json")
+	metadataInput := `{"title":"Research backlog","description":"Questions can be added later."}`
+	code, stdout, stderr = runCLIWithStdin(metadataInput, "forecast-ledger", "--json", "init", "--file", metadataPath, "--ledger-id", "metadata", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner", "--input", "-")
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"question_count":0`) {
+		t.Fatalf("metadata-only init code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	metadataContents, err := os.ReadFile(metadataPath)
+	if err != nil || !strings.Contains(string(metadataContents), `"title": "Research backlog"`) || !strings.Contains(string(metadataContents), `"questions": []`) {
+		t.Fatalf("metadata-only ledger=%s err=%v", metadataContents, err)
+	}
+
+	yamlPath := filepath.Join(directory, "backlog.yaml")
+	initInput := `{"question":{"id":"q-yaml","title":"Will it happen?","type":"binary","resolution_criteria":"Resolve from the named source.","forecast_window":{"closes_at":"2026-12-31T00:00:00Z"},"expected_resolution_at":"2027-01-01T00:00:00Z"}}`
+	code, stdout, stderr = runCLIWithStdin(initInput, "forecast-ledger", "--json", "init", "--file", yamlPath, "--ledger-id", "yaml", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner", "--input", "-")
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"question_count":1`) || !strings.Contains(stdout, `"forecast_count":0`) {
+		t.Fatalf("question-only init code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	yamlContents, err := os.ReadFile(yamlPath)
+	if err != nil || !strings.Contains(string(yamlContents), "forecasts: []") {
+		t.Fatalf("question-only YAML=%s err=%v", yamlContents, err)
+	}
+
+	invalidPath := filepath.Join(directory, "invalid.json")
+	code, _, stderr = runCLI("forecast-ledger", "init", "--file", invalidPath, "--ledger-id", "invalid", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner", "--key-file", filepath.Join(directory, "unused.key"))
+	if code != 2 || !strings.Contains(stderr, "only valid for a sealed initial forecast") {
+		t.Fatalf("unexpected key result code=%d stderr=%q", code, stderr)
+	}
+	if _, err := os.Stat(invalidPath); !os.IsNotExist(err) {
+		t.Fatalf("invalid init created ledger: %v", err)
 	}
 }
 
@@ -481,7 +562,7 @@ func TestHelpSuggestionsCompletionAndVersionJSON(t *testing.T) {
 		if err := json.Unmarshal([]byte(stdout), &got); err != nil {
 			t.Fatal(err)
 		}
-		if got.Binary != "forecast-ledger" || got.Schema.Version != "1.0.0" {
+		if got.Binary != "forecast-ledger" || got.Schema.Version != "1.1.0" {
 			t.Fatalf("unexpected version metadata: %#v", got)
 		}
 	}

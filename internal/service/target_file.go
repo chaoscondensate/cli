@@ -45,6 +45,9 @@ func PlanTargetBuild(ctx context.Context, path string, all bool, questionID, for
 	if err != nil {
 		return TargetOperationResult{}, err
 	}
+	if len(artifacts) == 0 {
+		return TargetOperationResult{LedgerID: loaded.Model.LedgerID, Targets: []TargetResult{}, Effects: []SideEffect{}, Recovery: Recovery{State: RecoveryNone}}, nil
+	}
 	root := filepath.Dir(loaded.Path)
 	if _, _, err := inspectTargetDirectories(root); err != nil {
 		return TargetOperationResult{}, err
@@ -78,6 +81,9 @@ func CommitTargetBuild(ctx context.Context, path string, all bool, questionID, f
 	planned, err := PlanTargetBuild(ctx, resolvedLedger, all, questionID, forecastID)
 	if err != nil {
 		return TargetOperationResult{}, err
+	}
+	if len(planned.Targets) == 0 {
+		return planned, nil
 	}
 	loaded, artifacts, err := loadSelectedTargets(ctx, resolvedLedger, all, questionID, forecastID)
 	if err != nil {

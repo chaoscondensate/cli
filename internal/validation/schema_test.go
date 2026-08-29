@@ -23,8 +23,14 @@ func TestEmbeddedSchemaCompilesAndValidatesBothFormats(t *testing.T) {
 		parse  func(string) (*document.Document, error)
 		format string
 	}{
+		{name: "empty-ledger.json", format: "empty-json", parse: func(input string) (*document.Document, error) {
+			return document.ParseJSON(strings.NewReader(input), document.DefaultLimits)
+		}},
 		{name: "individual-ledger.json", format: "json", parse: func(input string) (*document.Document, error) {
 			return document.ParseJSON(strings.NewReader(input), document.DefaultLimits)
+		}},
+		{name: "question-without-forecasts.yaml", format: "backlog-yaml", parse: func(input string) (*document.Document, error) {
+			return document.ParseYAML(strings.NewReader(input), document.DefaultLimits)
 		}},
 		{name: "team-ledger.yaml", format: "yaml", parse: func(input string) (*document.Document, error) {
 			return document.ParseYAML(strings.NewReader(input), document.DefaultLimits)

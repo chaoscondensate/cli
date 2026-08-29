@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: unreleased-main
-reviewed: 2026-08-26
+reviewed: 2026-08-29
 owner: security
 generated: false
 security-critical: true
@@ -13,6 +13,10 @@ next: verify-evidence.md
 OpenTimestamps support is experimental. It binds the exact canonical target
 bytes to a Bitcoin attestation; it does not prove authorship, completeness,
 truth, or the exact self-reported forecast time.
+
+Every timestamp command selects an existing forecast. A question with no
+forecasts is valid, but selecting a forecast under it returns `not_found`
+before entropy, artifact creation, mutation, or network access.
 
 ## Create a pending receipt
 

@@ -217,9 +217,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "question"
-      ],
       "type": "object"
     },
     "initialForecastInput": {
@@ -439,8 +436,7 @@
         "type",
         "resolution_criteria",
         "forecast_window",
-        "expected_resolution_at",
-        "initial_forecast"
+        "expected_resolution_at"
       ],
       "type": "object"
     },

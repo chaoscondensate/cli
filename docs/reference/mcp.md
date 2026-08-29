@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: unreleased-main
-reviewed: 2026-08-26
+reviewed: 2026-08-29
 owner: interface
 generated: false
 security-critical: true
@@ -26,6 +26,12 @@ work. Every ledger tool requires `file`; selectors match the CLI. Mutations use
 `dry_run`, and actions that need approval use `confirm: true`. Expected domain
 errors are successful MCP protocol responses with `isError: true` and a stable
 application envelope, so one failed call does not terminate the session.
+
+`ledger_init` may omit both `input` and `input_file` to create an empty ledger.
+Init input may contain a question without `initial_forecast`. `question_add`
+still requires exactly one of inline `input` or protected `input_file`, but its
+question may also omit `initial_forecast`. A sealed initial forecast remains
+file-only and requires `key_file`; inline secret forecast material is rejected.
 
 All startup roots use explicit `name=path` syntax. There is no inferred default
 root. The default resource limits are 16 concurrent tool calls and 8 MiB of

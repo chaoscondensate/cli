@@ -159,7 +159,7 @@ func unsupportedSchemaVersionError(found string) error {
 		details["declared_schema_version"] = found
 	}
 	return app.WithDetails(
-		app.NewError(app.CodeUnsupportedSchemaVersion, "ledger schema version is not supported; only 1.0.0 is accepted", nil),
+		app.NewError(app.CodeUnsupportedSchemaVersion, "ledger schema version is not supported; only "+ledgerschema.Version+" is accepted", nil),
 		details,
 	)
 }

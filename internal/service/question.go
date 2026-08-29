@@ -76,6 +76,10 @@ func BuildQuestionAddPublic(model *ledger.Ledger, input NormalizedQuestionCreate
 	return QuestionMutation{Ledger: prospective, Patches: []document.PatchOperation{{Kind: document.PatchAdd, Pointer: "/questions/-", Value: value}}}, nil
 }
 
+func BuildQuestionAddEmpty(model *ledger.Ledger, input NormalizedQuestionCreate, observedAt ledger.Timestamp) (QuestionMutation, error) {
+	return BuildQuestionWithoutForecast(model, input, observedAt)
+}
+
 func BuildQuestionUpdate(model *ledger.Ledger, id ledger.Slug, input QuestionPatchInput) (QuestionMutation, error) {
 	position, question, err := selectQuestion(model, id)
 	if err != nil {

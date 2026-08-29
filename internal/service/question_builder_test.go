@@ -156,7 +156,7 @@ func binaryInitialQuestion() InitialQuestionInput {
 		ResolutionCriteria:   "Resolve from the named public source.",
 		ForecastWindow:       ledger.ForecastWindow{ClosesAt: "2026-12-31T00:00:00Z"},
 		ExpectedResolutionAt: "2027-01-01T00:00:00Z",
-		InitialForecast: InitialForecastInput{
+		InitialForecast: &InitialForecastInput{
 			ID: "f-one", Visibility: ledger.VisibilityPublic,
 			ForecastedAt: "2026-01-01T00:00:00Z",
 			Value:        ledger.ForecastValue{Binary: &ledger.BinaryValue{Kind: ledger.ValueBinary, ProbabilityBP: 5000}},

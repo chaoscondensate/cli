@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: unreleased-main
-reviewed: 2026-08-26
+reviewed: 2026-08-29
 owner: interface
 generated: false
 security-critical: true
@@ -11,33 +11,10 @@ next: ../how-to/index.md
 -->
 
 `forecast-ledger init` creates one new JSON or YAML ledger. It never overwrites
-an existing file and makes no network request. Forecast Ledger schema v1.0.0
-requires one initial question and one initial forecast, so init cannot create an
-empty draft.
+an existing file and makes no network request. Forecast Ledger schema v1.1.0
+allows an empty question list, so no input document is required.
 
-Create `initial-question.yaml`:
-
-```yaml
-created_at: "2026-08-26T12:00:00+01:00"
-question:
-  id: q-example
-  title: Will the named event happen by the deadline?
-  type: binary
-  resolution_criteria: Resolve from the named public source.
-  created_at: "2026-08-26T12:00:00+01:00"
-  forecast_window:
-    closes_at: "2026-12-31T23:59:59Z"
-  expected_resolution_at: "2027-01-15T12:00:00Z"
-  initial_forecast:
-    id: f-example-001
-    visibility: public
-    forecasted_at: "2026-08-26T12:00:00+01:00"
-    value:
-      kind: binary
-      probability_bp: 6000
-```
-
-Then create the ledger:
+Create an empty ledger first:
 
 ```sh
 forecast-ledger init \
@@ -45,22 +22,55 @@ forecast-ledger init \
   --ledger-id my-forecasts \
   --timezone Europe/London \
   --forecaster-id me \
-  --forecaster-name "My Name" \
-  --input initial-question.yaml
+  --forecaster-name "My Name"
 ```
 
-Use `--dry-run` to validate the input and both destinations without writing.
-The input may be JSON or YAML; `--input -` reads it from stdin. The ledger
-destination itself never accepts `-`.
+Then create `question.yaml` without an initial forecast:
 
-Init observes the local operation clock once. An omitted ledger, question, or
-initial-forecast time uses that observation where the schema allows a default.
+```yaml
+title: Will the named event happen by the deadline?
+resolution_criteria: Resolve from the named public source.
+created_at: "2026-08-26T12:00:00+01:00"
+forecast_window:
+  closes_at: "2026-12-31T23:59:59Z"
+expected_resolution_at: "2027-01-15T12:00:00Z"
+```
+
+Add the backlog question and, later, its first forecast:
+
+```sh
+forecast-ledger question add \
+  --file ledger.yaml \
+  --question q-example \
+  --type binary \
+  --input question.yaml
+forecast-ledger forecast add \
+  --file ledger.yaml \
+  --question q-example \
+  --forecast f-example-001 \
+  --input forecast.yaml
+```
+
+The forecast input format is shown in [Manage public forecasts](../how-to/manage-public-forecasts.md).
+The first forecast has no implicit `supersedes_forecast_id`. If that field is
+supplied, it must name an existing forecast in the same question.
+
+Use `--dry-run` to validate all supplied input and destinations without
+writing. Optional init input may contain root metadata, one initial question,
+and optionally that question's first forecast. It may be JSON or YAML;
+`--input -` reads it from stdin. The ledger destination itself never accepts
+`-`.
+
+Init observes the local operation clock once. An omitted ledger, supplied
+question, or supplied initial-forecast time uses that observation where the
+schema allows a default.
 An explicit ledger `created_at` is never copied into an omitted question
 `created_at` or initial `recorded_at`; those remain independent facts. If you
 need reproducible historical import times, provide each timestamp explicitly.
 Equality at inclusive forecast-window and recorded-time boundaries is valid.
 
-For a sealed initial forecast, set `visibility: sealed`, include `rationale`,
+To create a question and sealed first forecast during init, supply an init input
+whose `question.initial_forecast.visibility` is `sealed`, include `rationale`,
 `key_factors`, and `comment`, and add an explicit unused key destination:
 
 ```sh

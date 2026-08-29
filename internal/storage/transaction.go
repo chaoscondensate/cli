@@ -183,6 +183,9 @@ func UpdateLedger(ctx context.Context, ledgerPath string, options TransactionOpt
 }
 
 func validationFailure(message string, cause error) error {
+	if app.ErrorCodeOf(cause) == app.CodeUnsupportedSchemaVersion {
+		return cause
+	}
 	wrapped := app.NewError(app.CodeInvalidData, message, cause)
 	var applicationErr *app.Error
 	if errors.As(cause, &applicationErr) && len(applicationErr.Details) > 0 {

@@ -1,6 +1,6 @@
 # Third-party notices
 
-Reviewed: 2026-08-25
+Reviewed: 2026-08-29
 
 This file identifies third-party material represented in the source dependency
 graph. It does not replace the complete license texts distributed by upstream
@@ -9,9 +9,9 @@ and `go.sum`.
 
 ## Embedded Forecast Ledger contract
 
-The embedded Forecast Ledger v1.0.0 schema and conformance fixtures were copied
+The embedded Forecast Ledger v1.1.0 schema and conformance fixtures were copied
 from <https://github.com/chaoscondensate/schema> at commit
-`e409463d702888fefd253b32f21b9b2f864aabed` and retain the upstream MIT
+`c04c72a178c15cd6cbbdd2e8a7b743d58872a94a` and retain the upstream MIT
 license. Exact file digests, provenance, and license text are stored in
 [`third_party/forecast-ledger`](third_party/forecast-ledger/).
 

@@ -143,7 +143,10 @@ func prepareQuestionAddSealed(model *ledger.Ledger, input NormalizedQuestionCrea
 	if err != nil {
 		return ledger.Question{}, InitialForecastInput{}, "", err
 	}
-	private := input.Input.InitialForecast
+	if input.Input.InitialForecast == nil {
+		return ledger.Question{}, InitialForecastInput{}, "", invalidField("initial_forecast", "this builder requires an initial forecast")
+	}
+	private := *input.Input.InitialForecast
 	if private.Visibility != ledger.VisibilitySealed {
 		return ledger.Question{}, InitialForecastInput{}, "", invalidField("initial_forecast.visibility", "this builder requires a sealed initial forecast")
 	}
@@ -184,7 +187,10 @@ func prepareInitialSealedLedger(root *ledger.Ledger, input InitialQuestionInput,
 	if err != nil {
 		return ledger.Question{}, InitialForecastInput{}, "", err
 	}
-	private := input.InitialForecast
+	if input.InitialForecast == nil {
+		return ledger.Question{}, InitialForecastInput{}, "", invalidField("initial_forecast", "this builder requires an initial forecast")
+	}
+	private := *input.InitialForecast
 	if private.Visibility != ledger.VisibilitySealed {
 		return ledger.Question{}, InitialForecastInput{}, "", invalidField("initial_forecast.visibility", "this builder requires a sealed initial forecast")
 	}

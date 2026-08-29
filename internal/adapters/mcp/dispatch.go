@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"time"
 
 	"github.com/chaoscondensate/cli/internal/app"
@@ -287,14 +288,19 @@ func (s *Server) dispatchInit(ctx context.Context, file string, input toolInput,
 		return nil, "", "", app.NewError(app.CodeUsage, "sealed initialization must use a protected input_file reference", nil)
 	}
 	var value service.InitInput
-	if err := s.decodePublicOrProtected(ctx, input, service.InputSchemaInit, &value); err != nil {
-		return nil, "", "", err
+	if len(input.Input) > 0 || input.InputFile != "" {
+		if err := s.decodePublicOrProtected(ctx, input, service.InputSchemaInit, &value); err != nil {
+			return nil, "", "", err
+		}
 	}
 	root, err := service.BuildLedgerRootAt(service.InitRootRequest{LedgerID: ledger.Slug(input.LedgerID), Timezone: input.Timezone, ForecasterID: ledger.Slug(input.ForecasterID), ForecasterName: input.ForecasterName, ForecasterKind: ledger.ForecasterKind(input.ForecasterKind), Input: value}, operationAt)
 	if err != nil {
 		return nil, "", "", err
 	}
-	visibility := value.Question.InitialForecast.Visibility
+	shape, err := service.ClassifyInitInput(value)
+	if err != nil {
+		return nil, "", "", err
+	}
 	var model *ledger.Ledger
 	var sealed service.SealedInitialBuild
 	keyPath := ""
@@ -304,42 +310,57 @@ func (s *Server) dispatchInit(ctx context.Context, file string, input toolInput,
 			return nil, "", "", err
 		}
 	}
-	switch visibility {
-	case ledger.VisibilityPublic:
-		if input.InputFile != "" || keyPath != "" {
-			return nil, "", "", app.NewError(app.CodeUsage, "public initialization uses inline input and no key file", nil)
-		}
-		model, err = service.BuildInitialPublicLedgerAt(root, value.Question, operationAt)
-	case ledger.VisibilitySealed:
+	if shape != service.CreationSealedForecast && keyPath != "" {
+		return nil, "", "", app.NewError(app.CodeUsage, "key_file is only valid for a sealed initial forecast", nil)
+	}
+	switch shape {
+	case service.CreationLedgerOnly:
+		model = root
+	case service.CreationQuestionOnly:
+		model, err = service.BuildInitialQuestionLedgerAt(root, *value.Question, operationAt)
+	case service.CreationPublicForecast:
+		model, err = service.BuildInitialPublicLedgerAt(root, *value.Question, operationAt)
+	case service.CreationSealedForecast:
 		if input.InputFile == "" || keyPath == "" {
 			return nil, "", "", app.NewError(app.CodeUsage, "sealed initialization requires input_file and key_file in a secret root", nil)
 		}
 		if input.DryRun {
-			model, err = service.PlanInitialSealedLedgerAt(root, value.Question, operationAt)
+			model, err = service.PlanInitialSealedLedgerAt(root, *value.Question, operationAt)
 		} else {
-			sealed, err = service.BuildInitialSealedLedgerAt(ctx, root, value.Question, operationAt, s.effects)
+			sealed, err = service.BuildInitialSealedLedgerAt(ctx, root, *value.Question, operationAt, s.effects)
 			model = sealed.Ledger
 		}
-	default:
-		err = app.NewError(app.CodeInvalidData, "initial forecast visibility must be public or sealed", nil)
 	}
 	if err != nil {
 		return nil, "", "", err
 	}
-	data := map[string]any{"ledger_id": model.LedgerID, "schema_version": model.SchemaVersion, "question_id": model.Questions[0].ID, "forecast_id": model.Questions[0].Forecasts[0].ID, "visibility": visibility}
 	if input.DryRun {
 		if _, err := service.EncodeNewLedger(model, file); err != nil {
 			return nil, "", "", err
 		}
-		return data, "ledger.init.planned", "Ledger initialization is valid; no files were written", nil
+		effects := []service.SideEffect{{Kind: service.EffectLedger, Action: service.EffectCreate, Status: service.EffectDeferred, Path: filepath.Base(file), Owned: true, Rollback: service.RollbackCreatedPublic}}
+		if shape == service.CreationSealedForecast {
+			effects = append([]service.SideEffect{{Kind: service.EffectKey, Action: service.EffectCreate, Status: service.EffectDeferred, Path: filepath.Base(keyPath), Owned: true, Rollback: service.RollbackRetainSecret}}, effects...)
+		}
+		return service.NewInitResult(model, effects, service.Recovery{State: service.RecoveryNone}), "ledger.init.planned", "Ledger initialization is valid; no files were written", nil
 	}
-	if visibility == ledger.VisibilitySealed {
+	recovery := service.Recovery{State: service.RecoveryNone}
+	if shape == service.CreationSealedForecast {
 		commit, err := service.CommitInitialSealedFiles(ctx, file, keyPath, sealed, service.InitialCommitOptions{})
-		data["recovery"] = commit.Recovery
-		return data, "ledger.initialized", "Ledger was created", err
+		recovery = commit.Recovery
+		if err != nil {
+			return service.NewInitResult(model, nil, recovery), "", "", err
+		}
+	} else {
+		if _, err = service.CommitNewLedger(file, model); err != nil {
+			return nil, "", "", err
+		}
 	}
-	_, err = service.CommitNewLedger(file, model)
-	return data, "ledger.initialized", "Ledger was created", err
+	effects := []service.SideEffect{{Kind: service.EffectLedger, Action: service.EffectCreate, Status: service.EffectCompleted, Path: filepath.Base(file), Owned: true, Rollback: service.RollbackCreatedPublic}}
+	if shape == service.CreationSealedForecast {
+		effects = append([]service.SideEffect{{Kind: service.EffectKey, Action: service.EffectCreate, Status: service.EffectCompleted, Path: filepath.Base(keyPath), Owned: true, Rollback: service.RollbackRetainSecret}}, effects...)
+	}
+	return service.NewInitResult(model, effects, recovery), "ledger.initialized", "Ledger was created", nil
 }
 
 func dispatchPlatformMutation(ctx context.Context, operation service.OperationName, file string, id ledger.Slug, raw json.RawMessage, dryRun bool) (any, string, string, error) {
@@ -376,11 +397,22 @@ func (s *Server) dispatchQuestionAdd(ctx context.Context, file string, input too
 		return nil, "", "", err
 	}
 	normalized := service.NormalizedQuestionCreate{ID: ledger.Slug(input.Question), Type: ledger.QuestionType(input.Type), Input: value}
-	visibility := value.InitialForecast.Visibility
-	if visibility == ledger.VisibilityPublic {
-		if input.InputFile != "" || input.KeyFile != "" {
-			return nil, "", "", app.NewError(app.CodeUsage, "a public first forecast uses inline input and no key file", nil)
+	shape, err := service.ClassifyQuestionAddInput(value)
+	if err != nil {
+		return nil, "", "", err
+	}
+	if shape != service.CreationSealedForecast && input.KeyFile != "" {
+		return nil, "", "", app.NewError(app.CodeUsage, "key_file is only valid for a sealed initial forecast", nil)
+	}
+	if shape == service.CreationQuestionOnly {
+		if input.DryRun {
+			result, err := service.PlanQuestionAddEmptyFile(ctx, file, normalized, now)
+			return result, "question.add.planned", "Question addition is valid; no file was changed", err
 		}
+		result, err := service.CommitQuestionAddEmptyFile(ctx, file, normalized, now)
+		return result, "question.added", "Question was added", err
+	}
+	if shape == service.CreationPublicForecast {
 		if input.DryRun {
 			result, err := service.PlanQuestionAddPublicFile(ctx, file, normalized, now)
 			return result, "question.add.planned", "Question addition is valid; no file was changed", err
@@ -388,7 +420,7 @@ func (s *Server) dispatchQuestionAdd(ctx context.Context, file string, input too
 		result, err := service.CommitQuestionAddPublicFile(ctx, file, normalized, now)
 		return result, "question.added", "Question and first forecast were added", err
 	}
-	if visibility != ledger.VisibilitySealed || input.InputFile == "" || input.KeyFile == "" {
+	if shape != service.CreationSealedForecast || input.InputFile == "" || input.KeyFile == "" {
 		return nil, "", "", app.NewError(app.CodeUsage, "a sealed first forecast requires input_file and key_file in a secret root", nil)
 	}
 	keyPath, err := s.roots.Resolve(service.RootSecret, input.KeyFile, false)

@@ -20,8 +20,8 @@ SPDX-License-Identifier = "MIT"
 # Ledger schema repository and retain its license and copyright notice.
 [[annotations]]
 path = [
-  "internal/schema/testdata/forecast-ledger/v1.0.0/**",
-  "internal/schema/vendor/forecast-ledger/v1.0.0/**",
+  "internal/schema/testdata/forecast-ledger/v1.1.0/**",
+  "internal/schema/vendor/forecast-ledger/v1.1.0/**",
   "third_party/forecast-ledger/**",
 ]
 precedence = "override"

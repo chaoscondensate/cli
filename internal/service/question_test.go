@@ -22,7 +22,7 @@ func TestQuestionAddUpdateListAndShow(t *testing.T) {
 		Title: "Will the new event happen?", ResolutionCriteria: "Resolve from the named source.",
 		CreatedAt:      timestampPointer("2026-08-20T00:00:00Z"),
 		ForecastWindow: ledger.ForecastWindow{ClosesAt: "2026-12-01T00:00:00Z"}, ExpectedResolutionAt: "2026-12-02T00:00:00Z",
-		InitialForecast: InitialForecastInput{ID: "f-new-001", Visibility: ledger.VisibilityPublic, ForecastedAt: "2026-08-20T00:00:00Z", Value: ledger.ForecastValue{Binary: &ledger.BinaryValue{Kind: ledger.ValueBinary, ProbabilityBP: 5500}}},
+		InitialForecast: &InitialForecastInput{ID: "f-new-001", Visibility: ledger.VisibilityPublic, ForecastedAt: "2026-08-20T00:00:00Z", Value: ledger.ForecastValue{Binary: &ledger.BinaryValue{Kind: ledger.ValueBinary, ProbabilityBP: 5500}}},
 	}}
 	mutation, err := BuildQuestionAddPublic(model, add, "2026-08-20T00:01:00Z")
 	if err != nil {
@@ -76,7 +76,7 @@ func TestQuestionAddSealedCommitsProtectedKeyBeforeValidLedger(t *testing.T) {
 	input := NormalizedQuestionCreate{ID: "q-secret", Type: ledger.QuestionBinary, Input: QuestionAddInput{
 		Title: "Secret forecast question", ResolutionCriteria: "Resolve from the named source.", CreatedAt: timestampPointer("2026-08-20T00:00:00Z"),
 		ForecastWindow: ledger.ForecastWindow{ClosesAt: "2026-12-01T00:00:00Z"}, ExpectedResolutionAt: "2026-12-02T00:00:00Z",
-		InitialForecast: InitialForecastInput{ID: "f-secret", Visibility: ledger.VisibilitySealed, ForecastedAt: "2026-08-20T00:00:00Z", RecordedAt: timestampPointer("2026-08-20T00:01:00Z"), Value: ledger.ForecastValue{Binary: &ledger.BinaryValue{Kind: ledger.ValueBinary, ProbabilityBP: 5100}}, Rationale: &rationale, KeyFactors: &factors, Comment: &comment},
+		InitialForecast: &InitialForecastInput{ID: "f-secret", Visibility: ledger.VisibilitySealed, ForecastedAt: "2026-08-20T00:00:00Z", RecordedAt: timestampPointer("2026-08-20T00:01:00Z"), Value: ledger.ForecastValue{Binary: &ledger.BinaryValue{Kind: ledger.ValueBinary, ProbabilityBP: 5100}}, Rationale: &rationale, KeyFactors: &factors, Comment: &comment},
 	}}
 	plan, err := PlanQuestionAddSealedFile(context.Background(), ledgerPath, keyPath, input, "2026-08-20T00:01:00Z")
 	if err != nil || !plan.Changed || plan.Recovery.State != "" {
@@ -124,7 +124,7 @@ func TestQuestionPublicFileAddThenUpdate(t *testing.T) {
 	input := NormalizedQuestionCreate{ID: "q-new", Type: ledger.QuestionBinary, Input: QuestionAddInput{
 		Title: "New", ResolutionCriteria: "Official source", CreatedAt: timestampPointer("2026-08-20T00:00:00Z"),
 		ForecastWindow: ledger.ForecastWindow{ClosesAt: "2026-12-01T00:00:00Z"}, ExpectedResolutionAt: "2026-12-02T00:00:00Z",
-		InitialForecast: InitialForecastInput{ID: "f-new", Visibility: ledger.VisibilityPublic, ForecastedAt: "2026-08-20T00:00:00Z", RecordedAt: timestampPointer("2026-08-20T00:01:00Z"), Value: ledger.ForecastValue{Binary: &ledger.BinaryValue{Kind: ledger.ValueBinary, ProbabilityBP: 5000}}},
+		InitialForecast: &InitialForecastInput{ID: "f-new", Visibility: ledger.VisibilityPublic, ForecastedAt: "2026-08-20T00:00:00Z", RecordedAt: timestampPointer("2026-08-20T00:01:00Z"), Value: ledger.ForecastValue{Binary: &ledger.BinaryValue{Kind: ledger.ValueBinary, ProbabilityBP: 5000}}},
 	}}
 	if _, err := CommitQuestionAddPublicFile(context.Background(), path, input, "2026-08-20T00:01:00Z"); err != nil {
 		t.Fatal(err)

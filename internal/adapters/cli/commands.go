@@ -122,14 +122,14 @@ func ledgerUpdateAction(ctx context.Context, command *urfavecli.Command) error {
 }
 
 func initCommand() *urfavecli.Command {
-	command := leaf("init", "Create a new ledger", "forecast-ledger init --file ledger.yaml --ledger-id my-forecasts --timezone Europe/London --forecaster-id me --forecaster-name 'My Name' --input initial-question.yaml", false,
+	command := leaf("init", "Create a new ledger", "forecast-ledger init --file ledger.yaml --ledger-id my-forecasts --timezone Europe/London --forecaster-id me --forecaster-name 'My Name'", false,
 		[]urfavecli.Flag{fileFlag(false),
 			&urfavecli.StringFlag{Name: "ledger-id", Required: true, Usage: "Stable ledger ID"},
 			&urfavecli.StringFlag{Name: "timezone", Required: true, Usage: "IANA timezone name"},
 			&urfavecli.StringFlag{Name: "forecaster-id", Required: true, Usage: "Stable forecaster ID"},
 			&urfavecli.StringFlag{Name: "forecaster-name", Required: true, Usage: "Forecaster display name"},
 			&urfavecli.StringFlag{Name: "forecaster-kind", Value: "individual", Usage: "Forecaster kind: individual or team"},
-			inputFlag(),
+			optionalInputFlag(),
 			&urfavecli.StringFlag{Name: "key-file", OnlyOnce: true, TakesFile: true, Usage: "New protected key file; required only for a sealed first forecast"}})
 	command.Action = initAction
 	command.Description += "\n\nOmitted initial times use one operation-clock observation; an explicit ledger created_at is not copied into recorded_at."
@@ -141,8 +141,11 @@ func initAction(ctx context.Context, command *urfavecli.Command) error {
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
 	var input service.InitInput
-	if err := service.DecodeOperationInput(operationContext, command.String("input"), command.Root().Reader, service.InputSchemaInit, &input); err != nil {
-		return err
+	inputPath := command.String("input")
+	if inputPath != "" {
+		if err := service.DecodeOperationInput(operationContext, inputPath, command.Root().Reader, service.InputSchemaInit, &input); err != nil {
+			return err
+		}
 	}
 	effects := service.ProductionEffects()
 	operationAt, err := service.CaptureOperationTime(effects.Clock)
@@ -157,19 +160,26 @@ func initAction(ctx context.Context, command *urfavecli.Command) error {
 	if err != nil {
 		return err
 	}
+	shape, err := service.ClassifyInitInput(input)
+	if err != nil {
+		return err
+	}
 	keyPath := command.String("key-file")
-	visibility := input.Question.InitialForecast.Visibility
+	if shape != service.CreationSealedForecast && keyPath != "" {
+		return app.NewError(app.CodeUsage, "--key-file is only valid for a sealed initial forecast", nil)
+	}
 	var model *ledger.Ledger
 	var sealed service.SealedInitialBuild
-	switch visibility {
-	case ledger.VisibilityPublic:
-		if keyPath != "" {
-			return app.NewError(app.CodeUsage, "--key-file is only valid for a sealed initial forecast", nil)
-		}
-		model, err = service.BuildInitialPublicLedgerAt(root, input.Question, operationAt)
-	case ledger.VisibilitySealed:
-		if command.String("input") != "-" {
-			if err := storage.CheckProtectedFile(command.String("input")); err != nil {
+	switch shape {
+	case service.CreationLedgerOnly:
+		model = root
+	case service.CreationQuestionOnly:
+		model, err = service.BuildInitialQuestionLedgerAt(root, *input.Question, operationAt)
+	case service.CreationPublicForecast:
+		model, err = service.BuildInitialPublicLedgerAt(root, *input.Question, operationAt)
+	case service.CreationSealedForecast:
+		if inputPath != "-" {
+			if err := storage.CheckProtectedFile(inputPath); err != nil {
 				return protectedArgumentError(err, "--input")
 			}
 		}
@@ -177,13 +187,11 @@ func initAction(ctx context.Context, command *urfavecli.Command) error {
 			return app.NewError(app.CodeUsage, "--key-file is required for a sealed initial forecast", nil)
 		}
 		if runtime.DryRun {
-			model, err = service.PlanInitialSealedLedgerAt(root, input.Question, operationAt)
+			model, err = service.PlanInitialSealedLedgerAt(root, *input.Question, operationAt)
 		} else {
-			sealed, err = service.BuildInitialSealedLedgerAt(operationContext, root, input.Question, operationAt, effects)
+			sealed, err = service.BuildInitialSealedLedgerAt(operationContext, root, *input.Question, operationAt, effects)
 			model = sealed.Ledger
 		}
-	default:
-		err = app.NewError(app.CodeInvalidData, "initial forecast visibility must be public or sealed", nil)
 	}
 	if err != nil {
 		return err
@@ -198,7 +206,7 @@ func initAction(ctx context.Context, command *urfavecli.Command) error {
 			return encodeErr
 		}
 		effects := []service.SideEffect{{Kind: service.EffectLedger, Action: service.EffectCreate, Status: service.EffectDeferred, Path: filepath.Base(resolvedLedger), Owned: true, Rollback: service.RollbackCreatedPublic}}
-		if visibility == ledger.VisibilitySealed {
+		if shape == service.CreationSealedForecast {
 			resolvedKey, keyErr := storage.ResolveNewFilePath(keyPath, "key file")
 			if keyErr != nil {
 				return keyErr
@@ -208,10 +216,10 @@ func initAction(ctx context.Context, command *urfavecli.Command) error {
 			}
 			effects = append([]service.SideEffect{{Kind: service.EffectKey, Action: service.EffectCreate, Status: service.EffectDeferred, Path: filepath.Base(resolvedKey), Owned: true, Rollback: service.RollbackRetainSecret}}, effects...)
 		}
-		return presenterFor(command).Success("ledger.init.planned", "Ledger initialization is valid; no files were written", initOutput(model, visibility, effects, service.Recovery{State: service.RecoveryNone}))
+		return presenterFor(command).Success("ledger.init.planned", "Ledger initialization is valid; no files were written", service.NewInitResult(model, effects, service.Recovery{State: service.RecoveryNone}))
 	}
 	recovery := service.Recovery{State: service.RecoveryNone}
-	if visibility == ledger.VisibilitySealed {
+	if shape == service.CreationSealedForecast {
 		commit, commitErr := service.CommitInitialSealedFiles(operationContext, ledgerPath, keyPath, sealed, service.InitialCommitOptions{})
 		recovery = commit.Recovery
 		if commitErr != nil {
@@ -223,18 +231,10 @@ func initAction(ctx context.Context, command *urfavecli.Command) error {
 		}
 	}
 	completedEffects := []service.SideEffect{{Kind: service.EffectLedger, Action: service.EffectCreate, Status: service.EffectCompleted, Path: filepath.Base(ledgerPath), Owned: true, Rollback: service.RollbackCreatedPublic}}
-	if visibility == ledger.VisibilitySealed {
+	if shape == service.CreationSealedForecast {
 		completedEffects = append([]service.SideEffect{{Kind: service.EffectKey, Action: service.EffectCreate, Status: service.EffectCompleted, Path: filepath.Base(keyPath), Owned: true, Rollback: service.RollbackRetainSecret}}, completedEffects...)
 	}
-	return presenterFor(command).Success("ledger.initialized", "Ledger was created", initOutput(model, visibility, completedEffects, recovery))
-}
-
-func initOutput(model *ledger.Ledger, visibility ledger.ForecastVisibility, effects []service.SideEffect, recovery service.Recovery) map[string]any {
-	return map[string]any{
-		"ledger_id": model.LedgerID, "schema_version": model.SchemaVersion,
-		"question_id": model.Questions[0].ID, "forecast_id": model.Questions[0].Forecasts[0].ID,
-		"visibility": visibility, "effects": effects, "recovery": recovery,
-	}
+	return presenterFor(command).Success("ledger.initialized", "Ledger was created", service.NewInitResult(model, completedEffects, recovery))
 }
 
 func withRecovery(err error, recovery service.Recovery) error {
@@ -404,7 +404,7 @@ func platformRemoveAction(ctx context.Context, command *urfavecli.Command) error
 }
 
 func questionCommand() *urfavecli.Command {
-	add := leaf("add", "Add a question with its first forecast", "forecast-ledger question add --file ledger.yaml --question q-launch --type binary --input question.yaml", false, []urfavecli.Flag{fileFlag(false), questionFlag(), &urfavecli.StringFlag{Name: "type", Required: true, Usage: "Question type: binary, multiple_choice, numeric, or date"}, inputFlag(), &urfavecli.StringFlag{Name: "key-file", OnlyOnce: true, TakesFile: true, Usage: "New protected key file; required only for a sealed first forecast"}})
+	add := leaf("add", "Add a question, optionally with its first forecast", "forecast-ledger question add --file ledger.yaml --question q-launch --type binary --input question.yaml", false, []urfavecli.Flag{fileFlag(false), questionFlag(), &urfavecli.StringFlag{Name: "type", Required: true, Usage: "Question type: binary, multiple_choice, numeric, or date"}, inputFlag(), &urfavecli.StringFlag{Name: "key-file", OnlyOnce: true, TakesFile: true, Usage: "New protected key file; required only for a sealed first forecast"}})
 	add.Action = questionAddAction
 	update := leaf("update", "Update allowed question fields", "forecast-ledger question update --file ledger.yaml --question q-launch --input question-patch.yaml", false, []urfavecli.Flag{fileFlag(false), questionFlag(), inputFlag()})
 	update.Action = questionUpdateAction
@@ -433,21 +433,31 @@ func questionAddAction(ctx context.Context, command *urfavecli.Command) error {
 	normalized := service.NormalizedQuestionCreate{ID: ledger.Slug(command.String("question")), Type: ledger.QuestionType(command.String("type")), Input: input}
 	observedAt := ledger.Timestamp(service.ProductionEffects().Clock.Now().Format(time.RFC3339))
 	keyPath := command.String("key-file")
-	visibility := input.InitialForecast.Visibility
+	shape, err := service.ClassifyQuestionAddInput(input)
+	if err != nil {
+		return err
+	}
 	var result service.QuestionFileResult
-	var err error
-	code, message := "question.added", "Question and initial forecast were added"
-	switch visibility {
-	case ledger.VisibilityPublic:
-		if keyPath != "" {
-			return app.NewError(app.CodeUsage, "--key-file is only valid for a sealed initial forecast", nil)
+	code, message := "question.added", "Question was added"
+	if shape != service.CreationSealedForecast && keyPath != "" {
+		return app.NewError(app.CodeUsage, "--key-file is only valid for a sealed initial forecast", nil)
+	}
+	switch shape {
+	case service.CreationQuestionOnly:
+		if runtime.DryRun {
+			result, err = service.PlanQuestionAddEmptyFile(operationContext, command.String("file"), normalized, observedAt)
+		} else {
+			result, err = service.CommitQuestionAddEmptyFile(operationContext, command.String("file"), normalized, observedAt)
 		}
+	case service.CreationPublicForecast:
+		message = "Question and initial forecast were added"
 		if runtime.DryRun {
 			result, err = service.PlanQuestionAddPublicFile(operationContext, command.String("file"), normalized, observedAt)
 		} else {
 			result, err = service.CommitQuestionAddPublicFile(operationContext, command.String("file"), normalized, observedAt)
 		}
-	case ledger.VisibilitySealed:
+	case service.CreationSealedForecast:
+		message = "Question and initial forecast were added"
 		if command.String("input") != "-" {
 			if err := storage.CheckProtectedFile(command.String("input")); err != nil {
 				return protectedArgumentError(err, "--input")
@@ -461,8 +471,6 @@ func questionAddAction(ctx context.Context, command *urfavecli.Command) error {
 		} else {
 			result, err = service.CommitQuestionAddSealedFile(operationContext, command.String("file"), keyPath, normalized, observedAt, service.ProductionEffects())
 		}
-	default:
-		err = app.NewError(app.CodeInvalidData, "initial forecast visibility must be public or sealed", nil)
 	}
 	if err != nil {
 		return withRecovery(err, result.Recovery)
@@ -1391,6 +1399,12 @@ func inputFlag() *urfavecli.StringFlag {
 			}
 			return nil
 		}}
+}
+
+func optionalInputFlag() *urfavecli.StringFlag {
+	flag := inputFlag()
+	flag.Required = false
+	return flag
 }
 func requireTargetSelection(ctx context.Context, command *urfavecli.Command) (context.Context, error) {
 	all := command.Bool("all")

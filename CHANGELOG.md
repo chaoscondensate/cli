@@ -5,8 +5,16 @@ tags and downloadable files are published on GitHub Releases.
 
 ## Unreleased
 
+## 0.3.0 - 2026-08-29
+
 ### Changed
 
+- **Breaking:** adopt the exact Forecast Ledger schema v1.1.0 contract. Empty
+  ledgers and questions without forecasts are now valid; `init --input` and a
+  question's `initial_forecast` are optional.
+- Reject v1.0.0 ledgers with an explicit `unsupported_schema_version` warning
+  before any write, key/artifact creation, or network request. This preview
+  cutover has no migration command or compatibility reader.
 - Clarify in timestamp help and human version output that the Bitcoin observer
   limits apply to each invocation, not to a unit of elapsed time.
 

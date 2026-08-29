@@ -93,6 +93,7 @@ func VerifyLedgerEvidence(ctx context.Context, path string, options Verification
 	report := VerificationReport{
 		LedgerID:    loaded.Model.LedgerID,
 		Document:    VerificationLayer{Name: "document", State: LayerPass, ReasonCodes: []string{"document.valid"}, Evidence: map[string]any{"schema_version": loaded.Model.SchemaVersion, "format": loaded.Document.Format}},
+		Forecasts:   []ForecastVerification{},
 		Limitations: append([]string(nil), verificationLimitations...),
 	}
 	observer := options.Observer

@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: unreleased-main
-reviewed: 2026-08-26
+reviewed: 2026-08-29
 owner: interface
 generated: false
 security-critical: false
@@ -10,12 +10,22 @@ prerequisites: ../getting-started/create-ledger.md
 next: manage-public-forecasts.md
 -->
 
-Forecast Ledger v1 requires every question to contain at least one forecast.
-`question add` therefore creates the typed question and its first public or
-sealed forecast in one operation.
+Forecast Ledger v1.1 allows a question to exist before its first forecast.
+`question add` always creates the typed question and optionally creates its
+first public or sealed forecast in the same atomic operation.
 
 The question type is a required scalar flag. Do not repeat `type` inside the
-closed input document:
+closed input document. For a backlog question, `question.yaml` can contain:
+
+```yaml
+title: Will the launch happen by the deadline?
+resolution_criteria: Resolve from the operator's public launch record.
+forecast_window:
+  closes_at: "2026-12-31T23:59:59Z"
+expected_resolution_at: "2027-01-15T12:00:00Z"
+```
+
+Then run:
 
 ```sh
 forecast-ledger question add \
@@ -31,12 +41,18 @@ require a unit. Binary and date questions accept neither options nor a unit.
 Every referenced platform must already exist, and question and forecast IDs
 must be unique in their respective ledger-wide namespaces.
 
-When `initial_forecast.visibility` is `sealed`, the entire input is private and
+Omit `initial_forecast` to leave `forecasts: []`, then use `forecast add` or
+`forecast seal` when the first forecast is ready. A first forecast does not
+implicitly supersede anything; an explicit supersedes ID must already exist in
+that question.
+
+When a supplied `initial_forecast.visibility` is `sealed`, the entire input is private and
 the command requires a new protected `--key-file`. A public first forecast must
 not supply that flag. The protected key is created before the ledger update; if
 the update fails, the key is retained and recovery output tells you what to do.
 Dry-run validates the destination and prospective shape without generating a
-real key, salt, or nonce.
+real key, salt, or nonce. `--key-file` is invalid when `initial_forecast` is
+absent or public.
 
 Update only the allowed fields with a closed patch:
 

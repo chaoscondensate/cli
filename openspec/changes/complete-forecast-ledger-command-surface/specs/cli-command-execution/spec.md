@@ -77,11 +77,11 @@ Help and maintained documentation SHALL state next to `--file -` that stdin insp
 - **THEN** the command rejects stdin because target and receipt paths require a real ledger directory
 
 ### Requirement: Refuse unsupported ledger contracts
-Every action that reads an existing ledger SHALL inspect the bounded root and require `schema_version` exactly `1.0.0` before domain mutation, artifact creation, crypto, network, or MCP resource publication. An absent, unknown, or future version SHALL return stable code `unsupported_schema_version` in the invalid-data category with exit `3`, identify the supported version, and MUST NOT coerce, migrate, fetch, or validate against a floating remote contract.
+Every action that reads an existing ledger SHALL inspect the bounded root and require `schema_version` exactly `1.1.0` before domain mutation, artifact creation, crypto, network, or MCP resource publication. An absent, old, unknown, or future version SHALL return stable code `unsupported_schema_version` in the invalid-data category with exit `3`, identify the supported version, warn in human/plain CLI output, and MUST NOT coerce, migrate, fetch, or validate against a floating remote contract.
 
 #### Scenario: Future schema version
 - **WHEN** a ledger declares `schema_version: 2.0.0`
-- **THEN** the action returns `unsupported_schema_version`/exit `3` before any side effect and reports that only `1.0.0` is supported
+- **THEN** the action returns `unsupported_schema_version`/exit `3` before any side effect and reports that only `1.1.0` is supported
 
 ### Requirement: Stable time input
 Persisted timestamps SHALL be RFC 3339 values with seconds and an explicit offset. Commands MAY default a write-time field such as `created_at`, `recorded_at`, or `revealed_at` to the operation clock, but MUST report the exact stored value and MUST accept an explicit value for reproducible use and testing. Every command that authors a forecast, including `init`, SHALL use the captured operation clock when that forecast omits `recorded_at`; `init` MUST NOT copy an explicit or defaulted ledger `created_at` into an omitted forecast `recorded_at`. When both fields are omitted, one captured operation time MAY supply both. The CLI MUST NOT present a self-reported timestamp or local clock as cryptographic evidence.

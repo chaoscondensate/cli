@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: unreleased-main
-reviewed: 2026-08-26
+reviewed: 2026-08-29
 owner: interface
 generated: false
 security-critical: false
@@ -20,13 +20,13 @@ only ledger bytes and cannot resolve sibling target or receipt paths.
 
 | Command | Required selection or destination | Main effect |
 | --- | --- | --- |
-| `init` | new `--file`, identity flags, `--input`; conditional new `--key-file` | Create one valid ledger with its first question and forecast. |
+| `init` | new `--file`, identity flags; optional `--input`; conditional new `--key-file` | Create an empty ledger or include one question and optional first forecast. |
 | `ledger update` | `--file --input` | Patch allowed root/current-forecaster fields. |
 | `validate`, `status` | `--file` | Validate or summarize. |
 | `platform add|update` | `--file --platform --input` | Add or patch one platform. |
 | `platform list|show` | `--file`; show also `--platform` | Read sorted/redacted platform data. |
 | `platform remove` | `--file --platform --yes` | Remove only an unreferenced platform. |
-| `question add` | `--file --question --type --input`; conditional new `--key-file` | Add one typed question and first forecast. |
+| `question add` | `--file --question --type --input`; conditional new `--key-file` | Add one typed question with an optional first forecast. |
 | `question update` | `--file --question --input` | Patch allowed unfrozen fields. |
 | `question list|show` | `--file`; show also `--question` | Read sorted/redacted question data. |
 | `question resolve|annul|dispute` | `--file --question --input --yes` | Replace the v1 current resolution state while retaining forecasts. |
@@ -89,6 +89,11 @@ name returns the MCP unknown-tool protocol response.
 | 9 | `pending`, `incomplete` |
 | 10 | `unavailable` |
 | 130 | `interrupted` |
+
+Schema compatibility is exact. A ledger other than v1.1.0 produces an explicit
+warning on stderr, returns `unsupported_schema_version`/exit 3, and stops before
+any file, key, artifact, or network side effect. No migration command is
+provided during this preview cutover.
 
 Exact closed input schemas and operation policies are generated under
 [generated interface reference](generated/index.md). Candidate-binary

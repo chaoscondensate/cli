@@ -18,7 +18,7 @@ The interoperable data contract is maintained in the
 User-visible changes are tracked in the [changelog](CHANGELOG.md).
 
 > [!IMPORTANT]
-> **Status: Preview and unaudited.** Release `v0.2.1` implements the complete
+> **Status: Preview and unaudited.** Release `v0.3.0` implements the complete
 > CLI and MCP command surface: authoring, sealed forecasts, canonical
 > targets, experimental OpenTimestamps receipts, layered verification, and
 > portable publication packages. OpenTimestamps support remains experimental
@@ -54,7 +54,7 @@ The CLI is designed around a few strict rules:
 See the [complete installation guide](docs/getting-started/install.md) for
 checksum verification, upgrades, removal, and archive fallback instructions.
 
-Release `v0.2.1` provides Homebrew, platform archives, native Linux packages,
+Release `v0.3.0` provides Homebrew, platform archives, native Linux packages,
 and a Windows Chocolatey package. Check the selected release's asset list before
 using a package command.
 
@@ -108,9 +108,7 @@ make build
 
 ## Quick start
 
-Every ledger command requires an explicit file. To create a ledger from the
-current unreleased source, prepare the required initial question document and
-run:
+Every ledger command requires an explicit file. Start with an empty ledger:
 
 ```sh
 forecast-ledger init \
@@ -118,14 +116,14 @@ forecast-ledger init \
   --ledger-id my-forecasts \
   --timezone Europe/London \
   --forecaster-id me \
-  --forecaster-name "My Name" \
-  --input initial-question.yaml
+  --forecaster-name "My Name"
 ```
 
-Forecast Ledger v1 requires exactly one initial question with one initial
-forecast; the command never creates an invalid empty ledger. See
-[Create a ledger](docs/getting-started/create-ledger.md) for the input shape,
-dry-run, team, and sealed-key workflow.
+The embedded Forecast Ledger v1.1 contract permits zero questions and questions
+with zero forecasts. Add them when they are ready; `--input` is optional on
+`init`, and `initial_forecast` is optional in question input. See [Create a
+ledger](docs/getting-started/create-ledger.md) for the empty-first, combined,
+dry-run, team, and sealed-key workflows.
 
 Root display and current forecaster metadata can later be changed with a closed
 patch, without rewriting question or forecast history:
@@ -137,17 +135,18 @@ forecast-ledger ledger update --file ledger.yaml --input metadata-patch.yaml
 Platform records can be managed locally with `platform add`, `update`, `list`,
 `show`, and approved `remove`; see [Manage platform records](docs/how-to/manage-platforms.md).
 
-Typed questions can be added with one required first forecast, updated within
-the v1 evidence rules, listed, shown, resolved, annulled, or disputed; see
+Typed questions can be added before their first forecast, updated within the v1
+evidence rules, listed, shown, resolved, annulled, or disputed; see
 [Manage questions and resolutions](docs/how-to/manage-questions.md).
 
-Append a public forecast revision without modifying the earlier record:
+Append the first public forecast, or a later revision without modifying an
+earlier record:
 
 ```sh
 forecast-ledger forecast add \
   --file ledger.yaml \
   --question q-launch \
-  --forecast f-launch-002 \
+  --forecast f-launch-001 \
   --input forecast.yaml
 ```
 

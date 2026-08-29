@@ -21,7 +21,7 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	ledgerRoot := t.TempDir()
 	outputRoot := t.TempDir()
 	secretRoot := t.TempDir()
-	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.0.0", "individual-ledger.json"), filepath.Join(ledgerRoot, "ledger.json"))
+	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.1.0", "individual-ledger.json"), filepath.Join(ledgerRoot, "ledger.json"))
 	server, err := New(Config{
 		LedgerRoots: []string{"main=" + ledgerRoot}, OutputRoots: []string{"packages=" + outputRoot}, SecretRoots: []string{"keys=" + secretRoot},
 		Timeout: time.Second,
@@ -80,6 +80,12 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 			t.Errorf("registered tool %s returned protocol error: %v", tool.Name, callErr)
 			continue
 		}
+		if tool.Name == "ledger_init" {
+			if result.IsError || !strings.Contains(toolText(result), `"question_count":0`) {
+				t.Errorf("registered tool %s did not create an empty ledger: %s", tool.Name, toolText(result))
+			}
+			continue
+		}
 		if !result.IsError || !strings.Contains(toolText(result), `"code"`) {
 			t.Errorf("registered tool %s did not return a recoverable application error: %s", tool.Name, toolText(result))
 		}
@@ -127,7 +133,7 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 		t.Fatalf("same-ledger writer conflict result=%s err=%v", toolText(conflict), err)
 	}
 
-	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.0.0", "individual-ledger.json"), filepath.Join(ledgerRoot, "second.json"))
+	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.1.0", "individual-ledger.json"), filepath.Join(ledgerRoot, "second.json"))
 	independent, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{
 		"file": "main:second.json", "platform": "independent-platform", "input": map[string]any{"name": "Independent", "kind": "internal"},
 	}})
@@ -167,6 +173,55 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	resource, err := client.ReadResource(ctx, &sdk.ReadResourceParams{URI: "forecast-ledger://v1/ledger/main/ledger.json"})
 	if err != nil || len(resource.Contents) != 1 || !strings.Contains(resource.Contents[0].Text, "ledger_id") {
 		t.Fatalf("ledger resource=%#v err=%v", resource, err)
+	}
+}
+
+func TestMCPEmptyInitAndBacklogQuestion(t *testing.T) {
+	ledgerRoot := t.TempDir()
+	secretRoot := t.TempDir()
+	server, err := New(Config{LedgerRoots: []string{"main=" + ledgerRoot}, SecretRoots: []string{"keys=" + secretRoot}, Timeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := t.Context()
+	client := connectClient(t, ctx, server)
+	defer client.Close()
+
+	initialized, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "ledger_init", Arguments: map[string]any{
+		"file": "main:empty.json", "ledger_id": "empty", "timezone": "UTC", "forecaster_id": "owner", "forecaster_name": "Owner",
+	}})
+	if err != nil || initialized.IsError || !strings.Contains(toolText(initialized), `"question_count":0`) || !strings.Contains(toolText(initialized), `"forecast_count":0`) {
+		t.Fatalf("empty init result=%s err=%v", toolText(initialized), err)
+	}
+
+	questionInput := map[string]any{
+		"title": "Will it happen?", "resolution_criteria": "Resolve from the named source.",
+		"forecast_window": map[string]any{"closes_at": "2026-12-31T00:00:00Z"}, "expected_resolution_at": "2027-01-01T00:00:00Z",
+	}
+	added, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "question_add", Arguments: map[string]any{
+		"file": "main:empty.json", "question": "q-one", "type": "binary", "input": questionInput,
+	}})
+	if err != nil || added.IsError || !strings.Contains(toolText(added), `"message":"Question was added"`) {
+		t.Fatalf("question add result=%s err=%v", toolText(added), err)
+	}
+	listed, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "forecast_list", Arguments: map[string]any{"file": "main:empty.json", "question": "q-one"}})
+	if err != nil || listed.IsError || !strings.Contains(toolText(listed), `"forecasts":[]`) {
+		t.Fatalf("forecast list result=%s err=%v", toolText(listed), err)
+	}
+
+	sealedInput := map[string]any{
+		"title": "Secret", "resolution_criteria": "Resolve from the named source.",
+		"forecast_window": map[string]any{"closes_at": "2026-12-31T00:00:00Z"}, "expected_resolution_at": "2027-01-01T00:00:00Z",
+		"initial_forecast": map[string]any{"id": "f-secret", "visibility": "sealed", "forecasted_at": "2026-08-30T00:00:00Z", "value": map[string]any{"kind": "binary", "probability_bp": 5000}, "rationale": "private", "key_factors": []any{}, "comment": "private"},
+	}
+	sealed, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "question_add", Arguments: map[string]any{
+		"file": "main:empty.json", "question": "q-secret", "type": "binary", "input": sealedInput,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sealed.IsError || !strings.Contains(toolText(sealed), "protected input_file") {
+		t.Fatalf("inline sealed input was not rejected safely: %s", toolText(sealed))
 	}
 }
 

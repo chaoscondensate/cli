@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: unreleased-main
-reviewed: 2026-08-26
+reviewed: 2026-08-29
 owner: security
 generated: false
 security-critical: true
@@ -43,6 +43,12 @@ Each layer returns `pass`, `fail`, `pending`, `not_applicable`, or
 wins aggregation. Pending work returns overall `pending`; unavailable required
 checks return `incomplete`. Exit 0 is reserved for a complete pass. Verification
 failure uses exit 6, network failure exit 8, and pending or incomplete exit 9.
+
+An empty ledger is a complete pass with an empty forecast report and zero
+network requests: every check that applies to the empty selection completed.
+This does not claim that forecasts or evidence exist. A question-only selector
+also works over its empty forecast set; a selector naming a nonexistent
+forecast returns `not_found`.
 
 Human, plain, JSON, and MCP reports expose safely available timing evidence,
 including the receipt and target paths, binding/proof state, Bitcoin block

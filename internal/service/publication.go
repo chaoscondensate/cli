@@ -260,7 +260,7 @@ func VerifyPublicationPackage(ctx context.Context, ledgerPath, manifestPath stri
 	if err != nil || expectedLedger != resolvedLedger {
 		return PublicationVerifyResult{}, app.NewError(app.CodeVerification, "selected package ledger does not match manifest ledger_path", err)
 	}
-	result := PublicationVerifyResult{ManifestPath: "manifest.json", ManifestSHA256: storage.ResourceDigest(manifestBytes), FileCount: len(manifest.Entries) + 1, Limitations: append([]string(nil), verificationLimitations...), NetworkProfile: networkProfileForObserver(observer, !options.Online)}
+	result := PublicationVerifyResult{ManifestPath: "manifest.json", ManifestSHA256: storage.ResourceDigest(manifestBytes), FileCount: len(manifest.Entries) + 1, Evidence: []ForecastVerification{}, Limitations: append([]string(nil), verificationLimitations...), NetworkProfile: networkProfileForObserver(observer, !options.Online)}
 	listed := map[string]struct{}{"manifest.json": {}}
 	for _, entry := range manifest.Entries {
 		absolute, err := resolver.Resolve(entry.Path, true)

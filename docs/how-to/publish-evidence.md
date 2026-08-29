@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: unreleased-main
-reviewed: 2026-08-26
+reviewed: 2026-08-29
 owner: security
 generated: false
 security-critical: true
@@ -41,6 +41,11 @@ The canonical `manifest.json` is written last. Its closed
 only `forecast_target` or `opentimestamps_receipt` evidence entries, sorted by
 portable path with SHA-256 and size. `--dry-run` performs preflight without
 creating the package.
+
+An empty ledger produces a valid minimal package containing the copied ledger
+and `manifest.json`, with no evidence entries. Offline package verification
+passes the applicable document and manifest checks; that result does not claim
+that any forecast evidence exists.
 
 Verify the copy independently; package verification is offline by default:
 

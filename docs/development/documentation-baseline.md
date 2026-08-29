@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: unreleased-main
-reviewed: 2026-08-26
+reviewed: 2026-08-29
 owner: project-maintainer
 generated: false
 security-critical: true
@@ -10,7 +10,7 @@ prerequisites: ../../AGENTS.md
 next: documentation-traceability.md
 -->
 
-Reviewed: 2026-08-26
+Reviewed: 2026-08-29
 
 This page records the implementation and policy inputs used by the maintained
 product documentation. It describes the repository at the reviewed commit; it
@@ -45,10 +45,10 @@ The following commands have connected application services:
 
 | Command | Behavior | Network |
 | --- | --- | --- |
-| `forecast-ledger init --file <new-path> ... --input <path|->` | Exclusively creates a schema-valid JSON/YAML ledger with one typed question and one public or sealed forecast. A sealed forecast requires a separate new `--key-file`. | None |
+| `forecast-ledger init --file <new-path> ... [--input <path|->]` | Exclusively creates a schema-valid JSON/YAML ledger. Optional input may add root metadata, one question, and an optional first public or sealed forecast. A sealed forecast requires a separate new `--key-file`. | None |
 | `forecast-ledger ledger update --file <path> --input <path|->` | Minimally patches allowed root and current forecaster metadata. | None |
 | `forecast-ledger platform add|update|list|show|remove ...` | Creates, patches, lists, inspects, or removes unreferenced platform records. List/show accept `--file -`; removal requires approval. | None |
-| `forecast-ledger question add|update|list|show|resolve|annul|dispute ...` | Creates a typed question with its first public or sealed forecast, applies safe patches, reads redacted summaries, and records approved lifecycle claims. List/show accept `--file -`. | None |
+| `forecast-ledger question add|update|list|show|resolve|annul|dispute ...` | Creates a typed question with an optional first public or sealed forecast, applies safe patches, reads redacted summaries, and records approved lifecycle claims. List/show accept `--file -`. | None |
 | `forecast-ledger forecast add|list|show|seal|reveal ...`, `forecast key-hint update ...` | Appends public or sealed forecasts, authenticates approved reveal, repairs safe logical hints, or reads redacted history. List/show accept `--file -`. | None |
 | `forecast-ledger target build|check ...` | Builds or checks exact `forecast-envelope/v1` RFC 8785 target bytes at deterministic ledger-relative paths. | None |
 | `forecast-ledger timestamp stamp|upgrade|status|verify ...` | Creates, upgrades, inspects, and verifies experimental pure-Go OpenTimestamps receipts. Built-in stamp is 2-of-4; Bitcoin verification requires two public observers to agree. CLI-only custom calendars and Bitcoin Core are advanced overrides. | Built-in profile, explicit custom mode, Core, or offline as applicable |
@@ -83,16 +83,18 @@ for an installed artifact.
 
 | Item | Reviewed value |
 | --- | --- |
-| Forecast Ledger schema | `1.0.0` |
-| Schema commit | `e409463d702888fefd253b32f21b9b2f864aabed` |
-| Embedded schema SHA-256 | `e63bdd01f0241aa4d94d5ccc45e84bcea70a6a7fd46ab77cff4802b3f8b8fc65` |
+| Forecast Ledger schema | `1.1.0` |
+| Schema commit | `c04c72a178c15cd6cbbdd2e8a7b743d58872a94a` |
+| Embedded schema SHA-256 | `c478f0f568c0c746c343a308d0fcb53815f4c8b91b4666f8f784913ad9132d15` |
 | MCP protocol target | `2026-07-28` |
 | Timestamp profile | `opentimestamps-public-v1` (experimental; four calendars, threshold two, two Bitcoin observers; per invocation: 32 heights, 128 requests, four concurrent) |
 | Go toolchain | `1.27.0` |
 
 Validation uses embedded contract bytes and does not resolve remote schema
-references. The moved `v1.0.0` upstream tag is not a safe pin; documentation
-and builds use the exact commit and digest above.
+references. Documentation and builds use the exact commit and digest above,
+never a floating tag. This preview cutover is intentionally breaking: v1.0.0
+ledgers receive an `unsupported_schema_version` warning and are rejected before
+side effects. There is no migration or dual-read path.
 
 ### Platforms and release artifacts
 

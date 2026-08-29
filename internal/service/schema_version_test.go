@@ -1,12 +1,16 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/chaoscondensate/cli/internal/app"
+	"github.com/chaoscondensate/cli/internal/ledger"
+	ledgerschema "github.com/chaoscondensate/cli/internal/schema"
 )
 
 func TestLoadRejectsMissingUnknownAndFutureSchemaVersionsFirst(t *testing.T) {
@@ -16,6 +20,7 @@ func TestLoadRejectsMissingUnknownAndFutureSchemaVersionsFirst(t *testing.T) {
 	}{
 		{name: "missing", content: `{"ledger_id":"example"}`},
 		{name: "wrong type", content: `{"schema_version":1}`},
+		{name: "old", content: `{"schema_version":"1.0.0"}`},
 		{name: "future", content: `{"schema_version":"2.0.0"}`},
 		{name: "unknown", content: `{"schema_version":"preview"}`},
 	}
@@ -30,9 +35,35 @@ func TestLoadRejectsMissingUnknownAndFutureSchemaVersionsFirst(t *testing.T) {
 				t.Fatalf("error = %#v, code=%q exit=%d", err, app.ErrorCodeOf(err), app.ExitCodeOf(err))
 			}
 			applicationErr, ok := err.(*app.Error)
-			if !ok || applicationErr.Details["supported_schema_version"] != "1.0.0" {
+			if !ok || applicationErr.Details["supported_schema_version"] != "1.1.0" {
 				t.Fatalf("details = %#v", applicationErr)
 			}
 		})
+	}
+}
+
+func TestMutatingOperationRejectsV100BeforeWriting(t *testing.T) {
+	raw, err := fs.ReadFile(ledgerschema.Conformance(), "individual-ledger.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v100 := bytes.Replace(raw, []byte(`"schema_version": "1.1.0"`), []byte(`"schema_version": "1.0.0"`), 1)
+	if bytes.Equal(v100, raw) {
+		t.Fatal("v1.0.0 negative fixture was not created")
+	}
+	path := filepath.Join(t.TempDir(), "ledger.json")
+	if err := os.WriteFile(path, v100, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err = CommitPlatformAddFile(context.Background(), path, "new-platform", PlatformCreateInput{Name: "New", Kind: ledger.PlatformInformal})
+	if app.ErrorCodeOf(err) != app.CodeUnsupportedSchemaVersion {
+		t.Fatalf("error = %v", err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(after, v100) {
+		t.Fatal("unsupported ledger changed")
 	}
 }

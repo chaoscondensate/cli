@@ -14,7 +14,7 @@ import (
 )
 
 func TestUpstreamFixturesPassSemanticValidation(t *testing.T) {
-	for _, name := range []string{"individual-ledger.json", "team-ledger.yaml"} {
+	for _, name := range []string{"empty-ledger.json", "individual-ledger.json", "question-without-forecasts.yaml", "team-ledger.yaml"} {
 		t.Run(name, func(t *testing.T) {
 			model := loadValidLedger(t, name)
 			issues, err := ValidateSemantics(model, nil)

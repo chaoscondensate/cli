@@ -5,13 +5,13 @@ Defines complete business behavior for creating a Forecast Ledger and safely man
 ## ADDED Requirements
 
 ### Requirement: Initialize a schema-valid ledger with an initial question
-`forecast-ledger init` SHALL create a new `.json`, `.yaml`, or `.yml` file at the explicit `--file` path and MUST refuse an existing destination. It SHALL require `--ledger-id`, `--timezone`, `--forecaster-id`, `--forecaster-name`, and a bounded `--input` document containing exactly one initial question with its required `type` and exactly one initial public or sealed forecast because the pinned Forecast Ledger v1 contract requires non-empty `questions` and `forecasts` arrays. Additional questions and forecasts are added after initialization through their normal commands. Unlike `question add`, init has no separate question-type flag because its input owns the complete initial question. Both paths SHALL normalize the type into the same question builder and validation rules while retaining intentionally distinct closed input schemas. `--forecaster-kind` SHALL default to `individual`; team forecasters SHALL supply at least two uniquely identified members in the input. Optional title, description, contact, profiles, platforms, and explicit `created_at` MAY be supplied in the same input.
+`forecast-ledger init` SHALL create a new `.json`, `.yaml`, or `.yml` file at the explicit `--file` path and MUST refuse an existing destination. It SHALL require `--ledger-id`, `--timezone`, `--forecaster-id`, and `--forecaster-name`; `--input` SHALL be optional. Without input it SHALL create a valid ledger with `questions: []`. A supplied bounded input MAY contain root metadata and one initial question, and that question MAY contain one initial public or sealed forecast. Unlike `question add`, init has no separate question-type flag because its input owns the complete initial question. Both paths SHALL normalize a supplied type into the same question builder and validation rules while retaining intentionally distinct closed input schemas. `--forecaster-kind` SHALL default to `individual`; team forecasters SHALL supply at least two uniquely identified members in the input. Optional title, description, contact, profiles, platforms, and explicit `created_at` MAY be supplied in the same input.
 
 Init SHALL capture one operation time before constructing records. An omitted ledger `created_at` MAY use that time. An omitted initial-forecast `recorded_at` SHALL use that operation time independently and MUST NOT be copied from an explicit or defaulted `created_at`. An explicit initial `recorded_at` remains unchanged. If a defaulted time violates chronology, the diagnostic SHALL identify `recorded_at` and state that it was supplied from the operation clock rather than imply that the user wrote the field or that it came from `created_at`.
 
-An initial sealed forecast SHALL use the exact normal seal profile, SHALL require an explicit new `--key-file`, and SHALL cause the complete init input to be treated as private. A public initial forecast MUST reject `--key-file`. Key creation, ledger creation, rollback/recovery, redaction, and dry-run behavior SHALL match `forecast seal`; no incomplete ledger may be committed if either resource fails.
+An initial sealed forecast SHALL use the exact normal seal profile, SHALL require an explicit new `--key-file`, and SHALL cause the complete init input to be treated as private. An absent or public initial forecast MUST reject `--key-file`. Key creation, ledger creation, rollback/recovery, redaction, and dry-run behavior SHALL match `forecast seal`; no incomplete ledger may be committed if either resource fails.
 
-The created document SHALL use schema version `1.0.0`, an empty platform map unless platforms were supplied, no inferred publication/source-control metadata, and the requested initial question. IDs SHALL match the v1 slug grammar, the timezone SHALL be a known IANA name, and the complete prospective document SHALL pass structural and semantic validation before exclusive creation.
+The created document SHALL use schema version `1.1.0`, an empty platform map unless platforms were supplied, no inferred publication/source-control metadata, and zero or one requested initial question. IDs SHALL match the v1 slug grammar, the timezone SHALL be a known IANA name, and the complete prospective document SHALL pass structural and semantic validation before exclusive creation.
 
 #### Scenario: Minimal valid initialization
 - **WHEN** an individual forecaster supplies all root flags and one valid binary question in `--input`
@@ -26,8 +26,8 @@ The created document SHALL use schema version `1.0.0`, an empty platform map unl
 - **THEN** the key is protected before the valid ledger is created, and output exposes neither the private init fields nor key material
 
 #### Scenario: Empty initial question set
-- **WHEN** the init input contains no question
-- **THEN** the command rejects it before file creation and explains that v1 requires at least one initial question
+- **WHEN** init omits input or its input contains no question
+- **THEN** the command creates a valid ledger with `questions: []` and reports zero question and forecast counts
 
 #### Scenario: Existing destination
 - **WHEN** the ledger path already exists as any file, symlink, junction, or directory entry
@@ -78,13 +78,17 @@ The operation MUST NOT change `schema_version`, `ledger_id`, `created_at`, forec
 - **THEN** one stable sorted list is returned without attempting to locate sibling artifacts
 
 ### Requirement: Add a typed question
-`question add` SHALL require a globally unique `--question` ID, the existing required scalar `--type` with one of `binary`, `multiple_choice`, `numeric`, or `date`, and a closed `--input` object containing required `title`, `resolution_criteria`, `forecast_window`, `expected_resolution_at`, exactly one initial public or sealed forecast bundle, optional `created_at`, and applicable type-specific fields. The structured input MUST NOT contain a second `type` field. The default status SHALL be `open`, and no resolution SHALL be accepted on add. Question and initial forecast SHALL be validated and committed atomically so the ledger never contains an invalid empty forecast array. An initial sealed forecast SHALL require an explicit new `--key-file`, make the full input private, and reuse the normal seal/key transaction; a public initial forecast MUST reject `--key-file`.
+`question add` SHALL require a globally unique `--question` ID, the existing required scalar `--type` with one of `binary`, `multiple_choice`, `numeric`, or `date`, and a closed `--input` object containing required `title`, `resolution_criteria`, `forecast_window`, `expected_resolution_at`, optional `created_at`, applicable type-specific fields, and an optional initial public or sealed forecast bundle. The structured input MUST NOT contain a second `type` field. The default status SHALL be `open`, and no resolution SHALL be accepted on add. If an initial forecast exists, the question and forecast SHALL be validated and committed atomically. An initial sealed forecast SHALL require an explicit new `--key-file`, make the full input private, and reuse the normal seal/key transaction; absent and public initial forecasts MUST reject `--key-file`.
 
 Binary and date questions MUST NOT contain options or unit. Multiple-choice questions SHALL contain at least two uniquely identified options and no unit. Numeric questions SHALL contain a non-empty exact unit and no options. `opens_at` SHALL default to `created_at`; it MUST NOT be after `closes_at`; expected resolution MUST NOT precede close. Platform references MUST exist and tags/options MUST be unique.
 
 #### Scenario: Add multiple-choice question
 - **WHEN** input contains unique options, valid chronology, and existing platform references
-- **THEN** the exact typed question and any contract-required initial forecast are appended atomically
+- **THEN** the exact typed question and any supplied initial forecast are appended atomically
+
+#### Scenario: Add a backlog question
+- **WHEN** valid question input omits `initial_forecast`
+- **THEN** the question is appended with `forecasts: []` and no key or artifact is created
 
 #### Scenario: Wrong type-specific field
 - **WHEN** a binary question input includes a unit or options

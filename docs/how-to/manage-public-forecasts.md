@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: unreleased-main
-reviewed: 2026-08-26
+reviewed: 2026-08-29
 owner: interface
 generated: false
 security-critical: false
@@ -13,6 +13,11 @@ next: ../reference/index.md
 Public forecasts are append-only records under one question. Adding a revision
 does not edit or hide the earlier forecast. Every command explicitly selects the
 ledger and question; forecast IDs must be unique across the entire ledger.
+
+A question may have no forecasts. `forecast add` creates its first public
+forecast normally, without adding an implicit `supersedes_forecast_id`. Supply
+that field only for a later revision, and only with an existing forecast ID from
+the same question.
 
 Create `forecast.yaml` with a value that matches the question type:
 
@@ -32,6 +37,7 @@ Probability uses integer basis points: `6500` means 65%. Multiple-choice input
 must include every option exactly once and total 10,000. Numeric values use
 exact decimal strings. Numeric and date values can contain a point, interval,
 quantiles, or a supported combination documented by the schema.
+Omit `supersedes_forecast_id` when this is the question's first forecast.
 
 Append the record:
 
@@ -78,5 +84,9 @@ target and receipt files.
 Quote timestamps in maintained YAML input as shown above. The CLI also accepts
 a YAML timestamp scalar in a known timestamp field, but rejects that implicit
 type in ordinary text fields.
+
+For a question with no forecasts, `forecast list` returns an empty list.
+Selecting any forecast with `forecast show` returns `not_found`; it never
+creates a placeholder or performs another side effect.
 
 [How-to index](index.md) · [Documentation index](../index.md)

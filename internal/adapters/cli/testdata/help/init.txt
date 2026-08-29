@@ -6,7 +6,7 @@ USAGE:
 
 DESCRIPTION:
    Example:
-     forecast-ledger init --file ledger.yaml --ledger-id my-forecasts --timezone Europe/London --forecaster-id me --forecaster-name 'My Name' --input initial-question.yaml
+     forecast-ledger init --file ledger.yaml --ledger-id my-forecasts --timezone Europe/London --forecaster-id me --forecaster-name 'My Name'
 
    Omitted initial times use one operation-clock observation; an explicit ledger created_at is not copied into recorded_at.
 

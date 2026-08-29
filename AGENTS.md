@@ -16,16 +16,16 @@ content is English and should use short, plain terms.
 
 When sources disagree, use this order:
 
-1. The exact embedded Forecast Ledger v1.0.0 contract and its published
+1. The exact embedded Forecast Ledger v1.1.0 contract and its published
    conformance fixtures.
 2. Published English v1 documentation and exact-commit reference tools.
 3. Accepted OpenSpec artifacts in this repository.
 4. Older Research material, which is background only.
 
 The authoritative upstream commit is
-`e409463d702888fefd253b32f21b9b2f864aabed`. The embedded schema SHA-256 is
-`e63bdd01f0241aa4d94d5ccc45e84bcea70a6a7fd46ab77cff4802b3f8b8fc65`.
-The `v1.0.0` tag moved once, so never fetch a floating tag at build or runtime.
+`c04c72a178c15cd6cbbdd2e8a7b743d58872a94a`. The embedded schema SHA-256 is
+`c478f0f568c0c746c343a308d0fcb53815f4c8b91b4666f8f784913ad9132d15`.
+Never fetch a floating tag at build or runtime.
 Do not edit vendored contract or fixture bytes by hand. Update the exact commit,
 digests, attribution, compatibility decision, and conformance tests together.
 

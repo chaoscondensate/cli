@@ -1,8 +1,8 @@
 # Forecast Ledger CLI documentation
 
 <!-- doc-metadata
-coverage: v0.2.1
-reviewed: 2026-08-26
+coverage: v0.3.0
+reviewed: 2026-08-29
 owner: documentation
 generated: false
 security-critical: false
@@ -10,7 +10,7 @@ prerequisites: none
 next: getting-started/index.md
 -->
 
-This documentation covers Forecast Ledger CLI release `v0.2.1`. The release is
+This documentation covers Forecast Ledger CLI release `v0.3.0`. The release is
 Preview and implements authoring,
 cryptographic targets and sealed forecasts, experimental OpenTimestamps,
 layered verification, standalone publication packages, and the MCP stdio
@@ -39,7 +39,8 @@ Project help and reporting routes are listed in the root
 
 ## Current safe first workflow
 
-From the current source, start with [Create a ledger](getting-started/create-ledger.md).
+From the current source, start with an empty ledger and add questions or
+forecasts when ready in [Create a ledger](getting-started/create-ledger.md).
 To inspect an existing Forecast Ledger file without a network request:
 
 ```sh

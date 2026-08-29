@@ -9,7 +9,7 @@ import (
 )
 
 // InputSchemaName identifies one closed operation input contract. Version 1 is
-// tied to the exact embedded Forecast Ledger 1.0.0 definitions.
+// tied to the exact embedded Forecast Ledger 1.1.0 definitions.
 type InputSchemaName string
 
 const (
@@ -135,7 +135,7 @@ func inputDefinitions() (map[string]any, error) {
 func operationDefinitions() map[InputSchemaName]any {
 	return map[InputSchemaName]any{
 		InputSchemaInit: closedObject(
-			[]string{"question"},
+			nil,
 			map[string]any{
 				"title":       stringValue(0),
 				"description": stringValue(0),
@@ -247,10 +247,10 @@ func commonInputDefinitions() map[string]any {
 				},
 			}}),
 		"initialQuestionInput": questionDefinition(initialQuestionFields, []string{
-			"id", "title", "type", "resolution_criteria", "forecast_window", "expected_resolution_at", "initial_forecast",
+			"id", "title", "type", "resolution_criteria", "forecast_window", "expected_resolution_at",
 		}, true),
 		"questionAddInput": questionDefinition(questionFields, []string{
-			"title", "resolution_criteria", "forecast_window", "expected_resolution_at", "initial_forecast",
+			"title", "resolution_criteria", "forecast_window", "expected_resolution_at",
 		}, false),
 		"publicForecastInput": closedObject([]string{"forecasted_at", "value"}, map[string]any{
 			"forecasted_at": ref("timestamp"), "recorded_at": ref("timestamp"), "value": ref("forecastValue"),

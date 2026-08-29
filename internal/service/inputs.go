@@ -61,7 +61,7 @@ type InitialQuestionInput struct {
 	PlatformRefs         *[]ledger.PlatformRef `json:"platform_refs,omitempty"`
 	Tags                 *[]ledger.Slug        `json:"tags,omitempty"`
 	Notes                *string               `json:"notes,omitempty"`
-	InitialForecast      InitialForecastInput  `json:"initial_forecast"`
+	InitialForecast      *InitialForecastInput `json:"initial_forecast,omitempty"`
 }
 
 type InitInput struct {
@@ -72,7 +72,7 @@ type InitInput struct {
 	Profiles    *[]ledger.Profile               `json:"profiles,omitempty"`
 	Members     *[]ledger.Member                `json:"members,omitempty"`
 	Platforms   map[ledger.Slug]ledger.Platform `json:"platforms,omitempty"`
-	Question    InitialQuestionInput            `json:"question"`
+	Question    *InitialQuestionInput           `json:"question,omitempty"`
 }
 
 type ForecasterMetadataPatchInput struct {
@@ -123,7 +123,7 @@ type QuestionAddInput struct {
 	PlatformRefs         *[]ledger.PlatformRef `json:"platform_refs,omitempty"`
 	Tags                 *[]ledger.Slug        `json:"tags,omitempty"`
 	Notes                *string               `json:"notes,omitempty"`
-	InitialForecast      InitialForecastInput  `json:"initial_forecast"`
+	InitialForecast      *InitialForecastInput `json:"initial_forecast,omitempty"`
 }
 
 type NormalizedQuestionCreate struct {
@@ -143,6 +143,40 @@ func NormalizeInitialQuestion(input InitialQuestionInput) NormalizedQuestionCrea
 			Unit: input.Unit, PlatformRefs: input.PlatformRefs, Tags: input.Tags,
 			Notes: input.Notes, InitialForecast: input.InitialForecast,
 		},
+	}
+}
+
+type InitialCreationShape string
+
+const (
+	CreationLedgerOnly     InitialCreationShape = "ledger_only"
+	CreationQuestionOnly   InitialCreationShape = "question_only"
+	CreationPublicForecast InitialCreationShape = "public_forecast"
+	CreationSealedForecast InitialCreationShape = "sealed_forecast"
+)
+
+func ClassifyInitInput(input InitInput) (InitialCreationShape, error) {
+	if input.Question == nil {
+		return CreationLedgerOnly, nil
+	}
+	return classifyInitialForecast(input.Question.InitialForecast)
+}
+
+func ClassifyQuestionAddInput(input QuestionAddInput) (InitialCreationShape, error) {
+	return classifyInitialForecast(input.InitialForecast)
+}
+
+func classifyInitialForecast(input *InitialForecastInput) (InitialCreationShape, error) {
+	if input == nil {
+		return CreationQuestionOnly, nil
+	}
+	switch input.Visibility {
+	case ledger.VisibilityPublic:
+		return CreationPublicForecast, nil
+	case ledger.VisibilitySealed:
+		return CreationSealedForecast, nil
+	default:
+		return "", invalidField("initial_forecast.visibility", "initial forecast visibility must be public or sealed")
 	}
 }
 

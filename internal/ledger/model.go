@@ -39,7 +39,7 @@ type Ledger struct {
 }
 
 // LegacyPublication represents optional publication metadata retained by the
-// upstream v1.0.0 schema. The CLI does not require Git and provides no Git
+// upstream v1.1.0 schema. The CLI does not require Git and provides no Git
 // automation; this type exists only for schema-compatible document handling.
 type LegacyPublication struct {
 	History       string       `json:"history" yaml:"history"`

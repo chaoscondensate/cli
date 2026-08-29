@@ -2,7 +2,7 @@
 
 See `proposal.md` for motivation and the seven delta specs for observable behavior. The repository already has a pinned v1 schema and seal fixture, bounded JSON/YAML document trees, typed models, semantic validation, canonicalization foundations, recoverable storage primitives, stable presentation/errors, a hidden urfave preview tree, and working `validate`/`status`. Most product actions still share one unavailable handler; MCP contains only a package scaffold; OpenTimestamps and publication contain no production workflow. The older active `build-forecast-ledger-cli-mcp` change contains useful completed foundation tasks but conflicting command specs and is superseded in full by this change.
 
-The exact schema commit and digests remain authoritative. It currently requires at least one question per ledger and at least one forecast per question, which means a schema-valid `init` cannot create an empty shell and `question add` cannot create an empty question. The CLI must remain useful without source control, hosted services, Python at runtime, or a default ledger. macOS, Linux, and Windows must share the same domain behavior despite different filesystem and credential semantics.
+The exact schema commit and digests remain authoritative. Forecast Ledger v1.1.0 permits zero questions in a ledger and zero forecasts in a question, so `init` may create an empty ledger and `question add` may create a backlog question. The `adopt-forecast-ledger-v1-1` change supersedes this design's earlier v1.0.0 minimum-item assumptions. The CLI must remain useful without source control, hosted services, Python at runtime, or a default ledger. macOS, Linux, and Windows must share the same domain behavior despite different filesystem and credential semantics.
 
 ## Goals / Non-Goals
 
@@ -44,13 +44,13 @@ The YAML adapter performs one schema-directed normalization before typed decodin
 
 Alternative considered: dozens of scalar flags. Rejected because nested typed forecasts, sources, units, options, accounts, and patches become ambiguous, difficult to quote cross-platform, and unsafe for private bundles.
 
-### 3. Initialize and add questions with their first forecast atomically
+### 3. Support all valid initial creation shapes
 
-The pinned schema's non-empty arrays are treated as a hard contract. Init parses root identity plus exactly one initial question/forecast pair and exclusively creates one fully valid file. Question add parses one question plus exactly one public or sealed forecast and appends them in one transaction. A sealed first forecast requires an explicit new key destination and treats the whole structured input as private; it reuses the normal protected-key-first transaction. There is no invalid “draft ledger” state and no placeholder forecast. Additional records use the normal add/seal actions after the initial valid commit.
+Init parses root identity and optional input, then exclusively creates one valid file as a ledger only, ledger plus question, or ledger plus question and public/sealed forecast. Question add likewise appends a question with or without one initial forecast. A sealed initial forecast requires an explicit new key destination and treats the whole structured input as private; it reuses the normal protected-key-first transaction. Empty arrays are schema-valid workflow states, not placeholders or partially valid documents.
 
-Shared builders construct the same typed question/forecast records used by later add/seal operations, including explicit clock injection for deterministic tests. This avoids special init-only semantics.
+Shared builders construct the same typed question and optional forecast records used by later add/seal operations, including explicit clock injection for deterministic tests. This avoids special init-only semantics. When a forecast is supplied, question and forecast creation and any protected-key effect remain atomic.
 
-Alternative considered: create empty arrays and allow later commands to repair the ledger. Rejected because every subsequent command starts by validating the current ledger and the created file would violate the authoritative schema.
+The earlier v1.0.0 design rejected empty arrays. Forecast Ledger v1.1.0 deliberately removes those minimum-item constraints, so the newer `adopt-forecast-ledger-v1-1` contract supersedes that decision.
 
 ### 4. Use selector indexes and immutable-field policies before patching
 
@@ -181,7 +181,7 @@ Alternatives considered: retain init-specific clock semantics, emit placeholder 
 ## Risks / Trade-offs
 
 - **[The scope is large and cross-cutting]** → Deliver in dependency-ordered vertical slices and keep unavailable gates per action; do not merge placeholder completion.
-- **[Schema non-empty arrays make init less minimal]** → Require an initial question/forecast explicitly and reuse normal builders so the first file is valid.
+- **[Flexible empty states drift across adapters]** → Classify the four creation shapes once in shared services and test CLI/MCP parity for each applicable shape.
 - **[Init and question-add obtain type from different transport fields]** → Generate distinct closed schemas, normalize both into one builder request, and test identical domain results.
 - **[The schema contains legacy publication and external/failed states outside this authoring workflow]** → Preserve valid imported values, never infer source-control behavior, keep external anchors distinct, treat failed forecast integrity as terminal, and recover through an append-only revision.
 - **[Resolution dispute replaces the one v1 resolution object]** → Require confirmation, report prior status, preserve forecasts/evidence, and document that v1 does not provide internal resolution history.

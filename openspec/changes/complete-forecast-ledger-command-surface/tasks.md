@@ -8,7 +8,7 @@
 - [x] 1.6 Implement shared dry-run planning only for persistent mutation/resource creation, explicit confirmation, non-interactive approval, cancellation, and timeout policies for CLI and MCP callers; keep read-only network verification controlled by online/offline mode rather than dry-run.
 - [x] 1.7 Extend stable public result/error codes and CLI exit mapping for usage, invalid, not-found, conflict, verification, I/O, network-disabled, incomplete, pending, unavailable, and interruption outcomes; do not add a separate permission exit class.
 - [x] 1.8 Generate CLI input/result references and MCP schemas from the operation contracts, and fail CI when regeneration changes the tree.
-- [x] 1.9 Reject every ledger whose root `schema_version` is not exactly `1.0.0` with code `unsupported_schema_version` and invalid-data exit 3, without fetching, coercing, or guessing a migration.
+- [x] 1.9 Reject every ledger whose root `schema_version` is not exactly `1.1.0` with code `unsupported_schema_version` and invalid-data exit 3, without fetching, coercing, or guessing a migration; human/plain output warns before stopping.
 - [x] 1.10 Mark `build-forecast-ledger-cli-mcp` as fully superseded by this change, map its 31 completed implementation tasks to the replacement requirements, and prevent that older delta from being synced or archived separately.
 
 ## 2. Transaction and path safety
@@ -23,11 +23,11 @@
 
 ## 3. Ledger initialization and root metadata
 
-- [x] 3.1 Implement root forecaster, platform, timezone, ID, and chronology builders for schema version `1.0.0`, requiring at least two members when the forecaster kind is `team`.
-- [x] 3.2 Implement the exactly-one initial typed question and exactly-one initial public forecast path with full prospective validation.
+- [x] 3.1 Implement root forecaster, platform, timezone, ID, and chronology builders for schema version `1.1.0`, requiring at least two members when the forecaster kind is `team`.
+- [x] 3.2 Implement ledger-only, question-only, public-initial-forecast, and sealed-initial-forecast creation shapes with full prospective validation.
 - [x] 3.3 Implement the initial sealed forecast path using the exact six-field private mirror input, explicit new `--key-file`, protected-key-first commit ordering, and recovery reporting.
 - [x] 3.4 Implement exclusive JSON/YAML ledger creation and reject every pre-existing file, link, junction, reparse point, or directory destination.
-- [x] 3.5 Wire `forecast-ledger init` in urfave with leaf-local `--file`, required root identity flags, `--input`, conditional `--key-file`, dry-run, approval, JSON, and stable exit behavior.
+- [x] 3.5 Wire `forecast-ledger init` in urfave with leaf-local `--file`, required root identity flags, optional `--input`, conditional `--key-file`, dry-run, approval, JSON, and stable exit behavior.
 - [x] 3.6 Add init schema, semantic, presentation, private-input, rollback, JSON golden, help, completion, and native-platform acceptance tests; unhide `init` only when they pass.
 - [x] 3.7 Implement `ledger update` for root title, description, default timezone, and mutable forecaster kind/profile fields, including atomic individual/team member-shape transitions, omission-preserves/null-removes semantics, immutable schema/ledger/creation/forecaster ID/collections/publication, and current-metadata/no-authorship warnings.
 - [x] 3.8 Wire and test `forecast-ledger ledger update` with leaf-local `--file` and `--input`, dry-run, approval, JSON, minimal-patch preservation, help, completion, and native-platform acceptance gates.
@@ -46,7 +46,7 @@
 ## 5. Question authoring and lifecycle
 
 - [x] 5.1 Implement shared binary, multiple-choice, numeric, and date question builders with init-document versus scalar question-add type normalization, required `forecast_window` and `expected_resolution_at`, type-specific exclusion, unique options/tags, platform-reference, and window chronology rules; reject a duplicate `type` field in question-add `--input`.
-- [x] 5.2 Implement `question add` with exactly one initial public or sealed forecast, conditional protected `--key-file`, global ID checks, and one atomic valid commit.
+- [x] 5.2 Implement `question add` with an optional initial public or sealed forecast, conditional protected `--key-file`, global ID checks, and one atomic valid commit.
 - [x] 5.3 Implement `question update` with the descriptive/unresolved-status allowlist, checks that changed windows still contain every existing forecast, precomputed-target conflict rejection when evidence would stale, and actionable annul-plus-new-question guidance with no override or target rewrite.
 - [x] 5.4 Implement deterministic `question list` with type, lifecycle, window, forecast count, expected resolution, and integrity counts.
 - [x] 5.5 Implement redacted `question show` with resolution metadata and forecast summaries but no sealed plaintext or revealed key material.

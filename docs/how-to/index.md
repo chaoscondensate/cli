@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: unreleased-main
-reviewed: 2026-08-26
+reviewed: 2026-08-29
 owner: documentation
 generated: false
 security-critical: false
@@ -14,7 +14,7 @@ How-to guides solve one named operational task. Until the corresponding
 services are implemented, the maintained task guidance is limited to:
 
 - [validate an existing ledger](../../README.md#quick-start);
-- [create a new ledger or update its current metadata](../getting-started/create-ledger.md);
+- [create an empty or populated ledger, or update its current metadata](../getting-started/create-ledger.md);
 - [manage platform records](manage-platforms.md);
 - [manage typed questions and resolution lifecycle](manage-questions.md);
 - [append, list, and inspect public forecasts](manage-public-forecasts.md);

@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: unreleased-main
-reviewed: 2026-08-26
+reviewed: 2026-08-29
 owner: interface
 generated: false
 security-critical: true
@@ -34,6 +34,11 @@ the first artifact.
 deferred writes without creating directories or files. Target commands require
 a real ledger file; `--file -` is not supported because artifacts are resolved
 relative to the ledger directory.
+
+On an empty ledger, or one whose questions have no forecasts, `target build
+--all` succeeds with an empty target/effect list. It does not create a `proofs`
+directory or rewrite the ledger. A specific question/forecast selector still
+returns `not_found`.
 
 Check retained target bytes without mutation:
 
