@@ -3,7 +3,7 @@
 Notable user-visible changes to Forecast Ledger CLI are recorded here. Release
 tags and downloadable files are published on GitHub Releases.
 
-## 0.5.0 - 2026-08-30
+## 0.5.1 - 2026-08-30
 
 ### Changed
 
@@ -26,6 +26,12 @@ tags and downloadable files are published on GitHub Releases.
 - Classify a received malformed or unsupported TSA response as verification
   failure rather than provider unavailability, while keeping transport and
   HTTP-status outages in the network category.
+
+## 0.5.0 - 2026-08-30
+
+The stable tag did not produce a stable GitHub Release because it shared its
+source commit with the preceding release-candidate tag. Use `v0.5.1`, which
+contains the same product changes on a distinct release commit.
 
 ## 0.4.0 - 2026-08-30
 

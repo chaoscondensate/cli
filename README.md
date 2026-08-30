@@ -18,7 +18,7 @@ The interoperable data contract is maintained in the
 User-visible changes are tracked in the [changelog](CHANGELOG.md).
 
 > [!IMPORTANT]
-> **Status: Preview and unaudited.** Release `v0.5.0` implements the complete
+> **Status: Preview and unaudited.** Release `v0.5.1` implements the complete
 > CLI and MCP command surface: authoring, sealed forecasts, canonical
 > targets, experimental RFC 3161 timestamp evidence, layered verification, and
 > portable publication packages. RFC 3161 support remains experimental until
