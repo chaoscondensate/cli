@@ -1,8 +1,8 @@
 # Tutorials
 
 <!-- doc-metadata
-coverage: v0.4.0
-reviewed: 2026-08-29
+coverage: v0.5.0
+reviewed: 2026-08-30
 owner: documentation
 generated: false
 security-critical: false
@@ -11,7 +11,7 @@ next: ../development/documentation-baseline.md
 -->
 
 Tutorials teach complete workflows using a checked release binary. Release
-v0.4.0 has the required services, but the maintained end-to-end
+v0.5.0 has the required services, but the maintained end-to-end
 tutorial transcript is still pending. Use the focused, checked how-to guides
 for authoring, timestamps, verification, publication, and MCP.
 

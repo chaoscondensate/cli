@@ -34,6 +34,7 @@ type toolInput struct {
 	Output         string          `json:"output,omitempty"`
 	Manifest       string          `json:"manifest,omitempty"`
 	RevealedAt     string          `json:"revealed_at,omitempty"`
+	TSAProvider    string          `json:"tsa_provider,omitempty"`
 	TSAURL         string          `json:"tsa_url,omitempty"`
 	CABundle       string          `json:"ca_bundle,omitempty"`
 	All            bool            `json:"all,omitempty"`
@@ -121,12 +122,16 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 	fileMustExist := def.Name != service.OperationLedgerInit
 	file := ""
 	if input.File != "" {
-		file, err = s.roots.Resolve(service.RootLedger, input.File, fileMustExist)
+		fileRoot := service.RootLedger
+		if def.Name == service.OperationPublicationVerify {
+			fileRoot = service.RootOutput
+		}
+		file, err = s.roots.Resolve(fileRoot, input.File, fileMustExist)
 		if err != nil {
 			return nil, "", "", err
 		}
 	}
-	if fileMustExist && file != "" {
+	if fileMustExist && file != "" && def.Name != service.OperationPublicationVerify {
 		if _, err := service.LoadAndValidateLedger(ctx, file, nil); err != nil {
 			return nil, "", "", err
 		}
@@ -248,10 +253,13 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 		}
 		return result, code, message, nil
 	case service.OperationTimestampStamp:
-		result, err := service.CommitTimestampStamp(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), service.TimestampStampOptions{DryRun: input.DryRun, Offline: s.config.Mode.Offline, TSAURL: input.TSAURL, CABundlePath: input.CABundle, Effects: s.effects})
+		result, err := service.CommitTimestampStamp(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), service.TimestampStampOptions{DryRun: input.DryRun, Offline: s.config.Mode.Offline, TSAProvider: input.TSAProvider, TSAURL: input.TSAURL, CABundlePath: input.CABundle, Effects: s.effects})
 		code, message := "timestamp.stamped", "RFC 3161 timestamp evidence was stored and verified locally"
 		if result.FailureCode == app.CodeNetwork {
 			code, message = "timestamp.not_checked", "The timestamp authority request did not complete"
+		}
+		if result.FailureCode == app.CodeVerification {
+			code, message = "timestamp.invalid_response", "No timestamp authority response passed local verification"
 		}
 		if result.State == service.TimestampPending {
 			if result.FailureCode != app.CodeNetwork {

@@ -1,3 +1,7 @@
+> Supersession note (2026-08-30): the explicit-TSA-only acquisition behavior
+> below records the v0.4.0 cutover. For the next release it is superseded by
+> `add-default-tsa-failover`; do not reintroduce it as the current requirement.
+
 ## Why
 
 Forecast Ledger schema `1.2.0` replaces OpenTimestamps with RFC 3161 and makes the old timestamp object invalid. The CLI still embeds schema `1.1.0` and carries a large experimental OTS and Bitcoin surface, so it must make one breaking pre-adoption cutover before any users or compatibility obligations exist.

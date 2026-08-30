@@ -1,3 +1,7 @@
+> Supersession note (2026-08-30): the explicit-TSA-only design below records
+> the v0.4.0 cutover. The qualified built-in provider and transport model in
+> `add-default-tsa-failover` controls the next release.
+
 ## Context
 
 See `proposal.md` for the motivation. The current binary embeds Forecast Ledger v1.1.0, models timestamps as OTS receipts, implements calendar and Bitcoin observation in `internal/timestamp/ots`, and exposes those assumptions through services, CLI, MCP, generated contracts, package manifests, build information, CI, and documentation. The released upstream v1.2.0 contract instead records RFC 3161 request, response, TSA, SHA-256, state, verified metadata, and CA-bundle paths; it deliberately rejects the old OTS object.

@@ -1,8 +1,8 @@
 # MCP reference
 
 <!-- doc-metadata
-coverage: v0.4.0
-reviewed: 2026-08-29
+coverage: current-main
+reviewed: 2026-08-30
 owner: interface
 generated: false
 security-critical: true
@@ -52,10 +52,18 @@ The generated [tool catalog](generated/mcp-tool-schemas.json),
 reference. Startup mode can remove `forecast_reveal` or package tools from
 discovery.
 
-`timestamp_stamp` requires `tsa_url` and ledger-relative `ca_bundle`. It accepts
-only a public HTTPS authority URL, creates an RFC 3161 SHA-256 request, and
-retains all bytes needed for later local verification. Repeating the call with a
-different authority appends independent evidence; it does not replace earlier
-entries. MCP resources expose these artifacts with resource kind `timestamp`.
+`publication_verify` resolves both `file` and `manifest` inside the same named
+output-root class, for example `packages:evidence/ledger/ledger.yaml` and
+`packages:evidence/manifest.json`. This keeps the package's `ledger/`,
+`proofs/`, and `trust/` siblings under one explicit non-overlapping root.
+
+`timestamp_stamp` requires only `file`, `question`, and `forecast`. Omission of
+TSA fields selects `auto`, currently the one-entry FreeTSA catalog. Optional
+`tsa_provider` accepts `auto` or `freetsa`. A custom `tsa_url` and
+ledger-relative `ca_bundle` must be supplied together and remain public
+HTTPS-only. The tool creates an RFC 3161 SHA-256 request and retains all bytes
+needed for later local verification. Repeating the call with a different
+authority appends independent evidence; it does not replace earlier entries.
+MCP resources expose these artifacts with resource kind `timestamp`.
 
 [Run the MCP server](../how-to/run-mcp.md) · [Reference index](index.md)

@@ -906,7 +906,7 @@ func timestampCommand() *urfavecli.Command {
 	verify := timestampLeaf("verify", "Verify retained RFC 3161 evidence locally", false, false)
 	verify.Action = timestampVerifyAction
 	command := group("timestamp", "Manage experimental RFC 3161 request and response evidence", stamp, status, verify)
-	command.Description = "Stamp requires an explicit public HTTPS TSA and retained ledger-relative PEM CA bundle. Status and verification are local and make no timestamp-service network request."
+	command.Description = "Stamp defaults to the built-in FreeTSA profile and retained embedded trust. A named provider or an explicit public HTTPS TSA plus ledger-relative PEM bundle can be selected instead. Status and verification are local and make no timestamp-service network request."
 	return command
 }
 
@@ -915,8 +915,9 @@ func timestampLeaf(name, usage string, readOnly, stampOptions bool) *urfavecli.C
 	if stampOptions {
 		flags = append(flags, &urfavecli.BoolFlag{Name: "offline", Usage: "Open no network connection"})
 		flags = append(flags,
-			&urfavecli.StringFlag{Name: "tsa-url", Required: true, Usage: "Public HTTPS RFC 3161 timestamp authority URL"},
-			&urfavecli.StringFlag{Name: "ca-bundle", Required: true, TakesFile: true, Usage: "Retained ledger-relative PEM CA bundle"},
+			&urfavecli.StringFlag{Name: "tsa-provider", Usage: "Built-in timestamp provider: auto or freetsa (default: auto)"},
+			&urfavecli.StringFlag{Name: "tsa-url", Usage: "Custom public HTTPS RFC 3161 timestamp authority URL; requires --ca-bundle"},
+			&urfavecli.StringFlag{Name: "ca-bundle", TakesFile: true, Usage: "Custom retained ledger-relative PEM CA bundle; requires --tsa-url"},
 		)
 	}
 	command := leaf(name, usage, fmt.Sprintf("forecast-ledger timestamp %s --file ledger.yaml --question q-launch --forecast f-001", name), readOnly, flags)
@@ -928,7 +929,7 @@ func timestampStampAction(ctx context.Context, command *urfavecli.Command) error
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
 	result, err := service.CommitTimestampStamp(operationContext, command.String("file"), ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast")), service.TimestampStampOptions{
-		DryRun: runtime.DryRun, Offline: command.Bool("offline"), TSAURL: command.String("tsa-url"), CABundlePath: command.String("ca-bundle"), Effects: service.ProductionEffects(),
+		DryRun: runtime.DryRun, Offline: command.Bool("offline"), TSAProvider: command.String("tsa-provider"), TSAURL: command.String("tsa-url"), CABundlePath: command.String("ca-bundle"), Effects: service.ProductionEffects(),
 	})
 	if err != nil && result.FailureCode == "" {
 		return withRecovery(err, result.Recovery)
@@ -936,6 +937,9 @@ func timestampStampAction(ctx context.Context, command *urfavecli.Command) error
 	code, message := "timestamp.verified", "RFC 3161 response was verified and retained"
 	if result.FailureCode == app.CodeNetwork {
 		code, message = "timestamp.not_checked", "The timestamp authority request did not complete"
+	}
+	if result.FailureCode == app.CodeVerification {
+		code, message = "timestamp.invalid_response", "No timestamp authority response passed local verification"
 	}
 	if result.State == service.TimestampPending {
 		if result.FailureCode != app.CodeNetwork {
@@ -945,7 +949,11 @@ func timestampStampAction(ctx context.Context, command *urfavecli.Command) error
 	if runtime.DryRun {
 		code, message = "timestamp.stamp.planned", "Timestamp stamp is valid; no entropy, network request, or file write occurred"
 	}
-	if presentErr := presenterFor(command).Success(code, message, result); presentErr != nil {
+	presenter := presenterFor(command)
+	if presenter.Mode() != presentation.ModeJSON && presenter.Mode() != presentation.ModeQuiet {
+		message = formatTimestampArtifact(presenter.Mode(), result)
+	}
+	if presentErr := presenter.Success(code, message, result); presentErr != nil {
 		return presentErr
 	}
 	if err != nil {
@@ -962,7 +970,12 @@ func timestampStatusAction(ctx context.Context, command *urfavecli.Command) erro
 	if err != nil {
 		return err
 	}
-	return presenterFor(command).Success("timestamp.status", "RFC 3161 local status: "+string(result.State), result)
+	presenter := presenterFor(command)
+	message := "RFC 3161 local status: " + string(result.State)
+	if presenter.Mode() != presentation.ModeJSON && presenter.Mode() != presentation.ModeQuiet {
+		message = formatTimestampArtifact(presenter.Mode(), result)
+	}
+	return presenter.Success("timestamp.status", message, result)
 }
 
 func timestampVerifyAction(ctx context.Context, command *urfavecli.Command) error {
@@ -1133,7 +1146,7 @@ func versionCommand() *urfavecli.Command {
 				encoder.SetEscapeHTML(false)
 				return encoder.Encode(info)
 			}
-			_, err := fmt.Fprintf(command.Root().Writer, "%s %s\nsource revision: %s\ngo: %s\nforecast ledger schema: %s (%s, sha256:%s)\nmcp protocol: %s\ntimestamp support: %s/%s (experimental; explicit TSA and retained CA bundle; local verification)\n", info.Binary, info.Version, info.SourceRevision, info.GoVersion, info.Schema.Version, info.Schema.Commit, info.Schema.SHA256, info.MCPProtocol, info.Timestamp.Protocol, info.Timestamp.HashAlgorithm)
+			_, err := fmt.Fprintf(command.Root().Writer, "%s %s\nsource revision: %s\ngo: %s\nforecast ledger schema: %s (%s, sha256:%s)\nmcp protocol: %s\ntimestamp support: %s/%s (experimental; auto=freetsa, retained CA bundle; local verification)\n", info.Binary, info.Version, info.SourceRevision, info.GoVersion, info.Schema.Version, info.Schema.Commit, info.Schema.SHA256, info.MCPProtocol, info.Timestamp.Protocol, info.Timestamp.HashAlgorithm)
 			return err
 		}}
 }
@@ -1256,6 +1269,27 @@ func formatTimestampVerification(mode presentation.Mode, result service.Timestam
 	return output.String()
 }
 
+func formatTimestampArtifact(mode presentation.Mode, result service.TimestampArtifactResult) string {
+	if mode == presentation.ModePlain {
+		return fmt.Sprintf("state\t%s\nselection\t%s\t%s\nrequests\t%d\nattempts\t%s\ntimestamps\t%s",
+			result.State, result.SelectionMode, result.SelectedProvider, result.RequestSummary.RequestCount, compactPublicJSON(result.Attempts), compactPublicJSON(result.Entries))
+	}
+	var output strings.Builder
+	fmt.Fprintf(&output, "State: %s", result.State)
+	if result.SelectionMode != "" {
+		fmt.Fprintf(&output, "\nSelection: %s", result.SelectionMode)
+	}
+	if result.SelectedProvider != "" {
+		fmt.Fprintf(&output, "\nSelected provider: %s", result.SelectedProvider)
+	}
+	fmt.Fprintf(&output, "\nRequests: %d", result.RequestSummary.RequestCount)
+	if len(result.Attempts) > 0 {
+		fmt.Fprintf(&output, "\nAttempts: %s", compactPublicJSON(result.Attempts))
+	}
+	fmt.Fprintf(&output, "\nTimestamp entries: %s", compactPublicJSON(result.Entries))
+	return output.String()
+}
+
 func formatPublicationVerification(mode presentation.Mode, result service.PublicationVerifyResult) string {
 	var output strings.Builder
 	if mode == presentation.ModePlain {
@@ -1327,7 +1361,7 @@ func leaf(name, usage, example string, readOnly bool, flags []urfavecli.Flag) *u
 
 func admitSupportedLedger(ctx context.Context, command *urfavecli.Command) (context.Context, error) {
 	path := command.String("file")
-	if command.Name == "init" || path == "" || path == "-" {
+	if command.Name == "init" || path == "" || path == "-" || strings.HasSuffix(command.FullName(), " publish verify") {
 		return ctx, nil
 	}
 	operationContext, cancel := RuntimeFromCommand(command).Context(ctx)

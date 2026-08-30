@@ -36,6 +36,8 @@ const (
 
 var (
 	oidSHA256           = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 1}
+	oidSHA384           = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 2}
+	oidSHA512           = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 3}
 	oidExtendedKeyUsage = asn1.ObjectIdentifier{2, 5, 29, 37}
 )
 
@@ -49,7 +51,14 @@ const (
 	ReasonTargetMismatch    Reason = "rfc3161.target_mismatch"
 	ReasonResponseMalformed Reason = "rfc3161.response_malformed"
 	ReasonResponseRejected  Reason = "rfc3161.response_rejected"
+	ReasonTransport         Reason = "rfc3161.transport"
+	ReasonHTTPStatus        Reason = "rfc3161.http_status"
+	ReasonMediaType         Reason = "rfc3161.media_type"
 	ReasonBindingMismatch   Reason = "rfc3161.binding_mismatch"
+	ReasonPolicyMismatch    Reason = "rfc3161.policy_mismatch"
+	ReasonNonceMismatch     Reason = "rfc3161.nonce_mismatch"
+	ReasonImprintMismatch   Reason = "rfc3161.imprint_mismatch"
+	ReasonSignerBinding     Reason = "rfc3161.signer_binding"
 	ReasonTokenMalformed    Reason = "rfc3161.token_malformed"
 	ReasonAlgorithm         Reason = "rfc3161.algorithm_unsupported"
 	ReasonTrustBundle       Reason = "rfc3161.trust_bundle"
@@ -222,24 +231,12 @@ func Verify(ctx context.Context, target, request, response, caBundle []byte, lim
 	if err != nil {
 		return Metadata{}, err
 	}
-	if err := resp.Validate(req); err != nil {
-		return Metadata{}, failure(ReasonBindingMismatch, "timestamp response does not match the request")
-	}
-	token, err := resp.SignedToken()
+	token, info, err := validateResponseBinding(resp, req)
 	if err != nil {
-		return Metadata{}, failure(ReasonTokenMalformed, "timestamp response does not contain a supported signed token")
+		return Metadata{}, err
 	}
 	if len(token.Certificates) == 0 || len(token.Certificates) > limits.Certificates || len(token.SignerInfos) != 1 || len(token.SignerInfos) > limits.SignerInfos {
 		return Metadata{}, failure(ReasonLimit, "timestamp token certificate or signer count is outside limits")
-	}
-	for _, signerInfo := range token.SignerInfos {
-		if !signerInfo.DigestAlgorithm.Algorithm.Equal(oidSHA256) {
-			return Metadata{}, failure(ReasonAlgorithm, "timestamp token signer uses an unsupported digest algorithm")
-		}
-	}
-	info, err := token.Info()
-	if err != nil {
-		return Metadata{}, failure(ReasonTokenMalformed, "timestamp token metadata is malformed")
 	}
 	if !info.MessageImprint.HashAlgorithm.Algorithm.Equal(oidSHA256) || len(info.Extensions) > limits.Extensions {
 		return Metadata{}, failure(ReasonAlgorithm, "timestamp token uses an unsupported algorithm or extension profile")
@@ -254,13 +251,16 @@ func Verify(ctx context.Context, target, request, response, caBundle []byte, lim
 	if err != nil {
 		return Metadata{}, err
 	}
-	chain, err := token.Verify(ctx, x509.VerifyOptions{
+	chain, err := verifySignedToken(ctx, token, x509.VerifyOptions{
 		Roots:       roots,
 		CurrentTime: info.GenTime,
 		KeyUsages:   []x509.ExtKeyUsage{x509.ExtKeyUsageTimeStamping},
-	})
-	if err != nil || len(chain) == 0 {
-		return Metadata{}, failure(ReasonSignature, "timestamp signature or certificate chain verification failed")
+	}, limits)
+	if err != nil {
+		return Metadata{}, err
+	}
+	if len(chain) == 0 {
+		return Metadata{}, failure(ReasonTrustBundle, "timestamp signer does not chain to the retained trust bundle")
 	}
 	signer := chain[0]
 	if !hasCriticalTimestampingEKU(signer) {

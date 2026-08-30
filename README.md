@@ -18,7 +18,7 @@ The interoperable data contract is maintained in the
 User-visible changes are tracked in the [changelog](CHANGELOG.md).
 
 > [!IMPORTANT]
-> **Status: Preview and unaudited.** Release `v0.4.0` implements the complete
+> **Status: Preview and unaudited.** Release `v0.5.0` implements the complete
 > CLI and MCP command surface: authoring, sealed forecasts, canonical
 > targets, experimental RFC 3161 timestamp evidence, layered verification, and
 > portable publication packages. RFC 3161 support remains experimental until
@@ -191,27 +191,25 @@ limits. Checking a forecast whose target was never retained succeeds with
 `not_applicable` and guidance to run `target build`; it does not pretend that
 missing bytes passed verification.
 
-Create experimental RFC 3161 evidence with an explicit timestamp authority and
-a retained PEM trust bundle, then inspect or verify it locally:
+Create experimental RFC 3161 evidence with the built-in FreeTSA profile, then
+inspect or verify it locally:
 
 ```sh
 forecast-ledger timestamp stamp \
   --file ledger.yaml \
   --question q-launch \
-  --forecast f-launch-002 \
-  --tsa-url https://tsa.example.com/ \
-  --ca-bundle trust/tsa-ca.pem
+  --forecast f-launch-002
 forecast-ledger timestamp status --file ledger.yaml --question q-launch --forecast f-launch-002
 forecast-ledger timestamp verify --file ledger.yaml --question q-launch --forecast f-launch-002
 ```
 
-There is no built-in TSA list and no system-root fallback. Stamp sends one
-SHA-256 RFC 3161 request to the named public HTTPS endpoint and retains the
-request (`.tsq`), response (`.tsr`), exact target, and ledger-relative CA
-bundle. Status and verify make no timestamp-service network request. Repeat
-stamp with another TSA URL to retain independent entries. Read [Timestamp
-forecasts](docs/how-to/timestamp-forecasts.md) before choosing and retaining
-trust material.
+Omitting TSA options selects the current one-entry catalog: FreeTSA at its exact
+HTTPS endpoint. The embedded FreeTSA CA is copied to `trust/rfc3161/` beside the
+ledger. `--tsa-provider freetsa` makes that choice explicit. A custom public
+HTTPS TSA still requires `--tsa-url` and `--ca-bundle` together. There is no
+system-root fallback. Status and verify make no timestamp-service network
+request. Read [Timestamp forecasts](docs/how-to/timestamp-forecasts.md) before
+accepting the provider and retained-trust limits.
 
 Run all evidence layers locally, or opt into outcome-source reachability checks:
 
@@ -329,9 +327,10 @@ cryptographic evidence.
 
 Keep protected key files out of repositories, backups intended for publication,
 shell arguments or logs. Publication packages intentionally include the exact
-retained public CA bundle. The constrained RFC 3161 profile is experimental,
-uses SHA-256 only, excludes system roots and revocation/LTV lookup, and rejects
-unsupported or weak input instead of guessing.
+retained public CA bundle. The constrained RFC 3161 profile is experimental.
+Target and message-imprint hashing remain SHA-256; strong SHA-256, SHA-384, and
+SHA-512 CMS signer digests are accepted. The verifier excludes system roots and
+revocation/LTV lookup and rejects unsupported or weak input instead of guessing.
 
 ## Development
 

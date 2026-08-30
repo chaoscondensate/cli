@@ -1,3 +1,7 @@
+> Supersession note (2026-08-30): completed explicit-TSA tasks below are
+> historical v0.4.0 facts. `add-default-tsa-failover` owns the next release's
+> provider and transport requirements.
+
 ## 1. Shared operation contracts and change ownership
 
 - [x] 1.1 Add `internal/service` request, result, warning, side-effect, recovery, root/mode/network-profile, and operation interfaces without creating a storage-to-service import cycle.

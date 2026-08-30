@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"io"
 	"io/fs"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,7 +17,9 @@ import (
 	"github.com/chaoscondensate/cli/internal/app"
 	"github.com/chaoscondensate/cli/internal/buildinfo"
 	contractschema "github.com/chaoscondensate/cli/internal/schema"
+	"github.com/chaoscondensate/cli/internal/service"
 	"github.com/chaoscondensate/cli/internal/storage"
+	"github.com/chaoscondensate/cli/internal/timestamp/rfc3161"
 	urfavecli "github.com/urfave/cli/v3"
 )
 
@@ -610,7 +614,7 @@ func TestHelpSuggestionsCompletionAndVersionJSON(t *testing.T) {
 		}
 	}
 	code, stdout, stderr = runCLI("forecast-ledger", "version")
-	if code != 0 || stderr != "" || !strings.Contains(stdout, "timestamp support: rfc3161/sha256") || !strings.Contains(stdout, "explicit TSA and retained CA bundle; local verification") {
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "timestamp support: rfc3161/sha256") || !strings.Contains(stdout, "auto=freetsa, retained CA bundle; local verification") {
 		t.Fatalf("human version does not describe RFC 3161 support: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	code, stdout, stderr = runCLI("forecast-ledger", "timestamp", "--help")
@@ -631,6 +635,28 @@ func TestRootHelpShowsOnlyWorkingCommandsAndUnavailableHasStableExit(t *testing.
 	for _, visible := range []string{"init", "ledger", "platform", "question", "forecast", "target", "timestamp", "verify", "publish", "mcp", "validate", "status", "version", "completion"} {
 		if !strings.Contains(stdout, visible) {
 			t.Errorf("root help missing working command %q", visible)
+		}
+	}
+	for _, args := range [][]string{
+		{"forecast-ledger", "timestamp", "upgrade", "--help"},
+		{"forecast-ledger", "timestamp", "made-up", "--help"},
+		{"forecast-ledger", "publish", "made-up", "--help"},
+		{"forecast-ledger", "made-up", "--help"},
+	} {
+		code, stdout, stderr := runCLI(args...)
+		if code != 2 || stdout != "" || !strings.Contains(stderr, "No help topic") || strings.Contains(stderr, "internal error") {
+			t.Fatalf("unknown help %v code=%d stdout=%q stderr=%q", args, code, stdout, stderr)
+		}
+	}
+	for _, args := range [][]string{
+		{"forecast-ledger", "timestamp", "upgrade"},
+		{"forecast-ledger", "timestamp", "made-up"},
+		{"forecast-ledger", "publish", "made-up"},
+		{"forecast-ledger", "made-up"},
+	} {
+		code, stdout, stderr := runCLI(args...)
+		if code != 2 || stdout != "" || stderr == "" || strings.Contains(stderr, "internal error") {
+			t.Fatalf("unknown command %v code=%d stdout=%q stderr=%q", args, code, stdout, stderr)
 		}
 	}
 }
@@ -679,6 +705,32 @@ func TestTimestampStatusOfflineFailureAndPublicationCLI(t *testing.T) {
 		t.Fatalf("safe TSA failure code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 
+	requestPath, _, err := service.TimestampEvidencePaths("f-election-coalition-001", "https://tsa.example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	absoluteRequest := filepath.Join(directory, filepath.FromSlash(string(requestPath)))
+	if err := os.MkdirAll(filepath.Dir(absoluteRequest), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	requestBytes, err := os.ReadFile(filepath.Join("..", "..", "timestamp", "rfc3161", "testdata", "request.tsq"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(absoluteRequest, requestBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	responseBytes, err := os.ReadFile(filepath.Join("..", "..", "timestamp", "rfc3161", "testdata", "response.tsr"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	httpClient := &rfc3161.HTTPClient{Resolver: cliPublicResolver{}, Client: &http.Client{Transport: cliRoundTripper(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/timestamp-reply"}}, Body: io.NopCloser(bytes.NewReader(responseBytes)), Request: request}, nil
+	})}}
+	if _, err := service.CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", service.TimestampStampOptions{TSAURL: "https://tsa.example.test", CABundlePath: "tsa.pem", Effects: service.ProductionEffects(), HTTPClient: httpClient}); err != nil {
+		t.Fatal(err)
+	}
+
 	output := filepath.Join(directory, "package")
 	code, stdout, stderr = runCLI("forecast-ledger", "--json", "publish", "build", "--file", ledgerPath, "--output", output)
 	if code != 0 || stderr != "" || !strings.Contains(stdout, `"code":"publication.built"`) {
@@ -690,6 +742,18 @@ func TestTimestampStatusOfflineFailureAndPublicationCLI(t *testing.T) {
 	if code != 0 || stderr != "" || !strings.Contains(stdout, `"overall":"pass"`) {
 		t.Fatalf("publish verify code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
+}
+
+type cliPublicResolver struct{}
+
+func (cliPublicResolver) LookupIPAddr(context.Context, string) ([]net.IPAddr, error) {
+	return []net.IPAddr{{IP: net.ParseIP("8.8.8.8")}}, nil
+}
+
+type cliRoundTripper func(*http.Request) (*http.Response, error)
+
+func (fn cliRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	return fn(request)
 }
 
 func TestInitCreatesValidPublicLedgerAndSupportsDryRun(t *testing.T) {

@@ -1,8 +1,8 @@
 # Security documentation
 
 <!-- doc-metadata
-coverage: v0.4.0
-reviewed: 2026-08-29
+coverage: current-main
+reviewed: 2026-08-30
 owner: security
 generated: false
 security-critical: true
@@ -29,15 +29,25 @@ and private input remain separate. Reveal is irreversible publication of the
 private fields and requires explicit approval.
 
 `timestamp stamp` sends the SHA-256 digest of the canonical target, a random
-nonce, and request timing to the explicitly selected RFC 3161 authority. It
-does not send forecast plaintext unless the digest itself is already known to
-the authority. The authority learns when the request was made and may retain
-network metadata. The CLI accepts only a public HTTPS endpoint, bounded
-responses, and same-origin redirects.
+nonce, and request timing to the selected RFC 3161 authority. Omission selects
+the current FreeTSA HTTPS profile. It does not send forecast plaintext unless
+the digest itself is already known to the authority. The authority learns when
+the request was made and may retain network metadata. FreeTSA publishes no
+numeric rate limit, measurable SLA, independent TSA audit, or succession
+assurance in the reviewed first-party material.
+
+Custom URLs are public HTTPS-only and may follow only bounded same-origin
+redirects. Built-in profiles use exact compiled HTTPS or HTTP transport policy,
+reject every redirect, and validate public DNS/IP results on each request. No
+HTTP provider ships now. A future HTTP provider would expose the imprint,
+nonce, and timing to network observers and remain vulnerable to observation,
+blocking, and response substitution; the CMS signature and retained chain
+prevent a substituted response from becoming verified timing.
 
 Later status, timestamp verification, layered verification, and package
 verification are local. They trust only the CA bundle retained with the ledger,
-not the operating-system root store. Preserve that bundle, the request, the
+not the operating-system root store. Built-in trust is copied beside the
+evidence and never replaced during later verification. Preserve that bundle, the request, the
 response, and the target together. A valid signature proves only that the named
 authority issued the token for the digest at its asserted generation time.
 

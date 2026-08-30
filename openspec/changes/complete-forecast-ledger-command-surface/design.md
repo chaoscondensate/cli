@@ -1,3 +1,7 @@
+> Supersession note (2026-08-30): explicit-TSA-only statements below describe
+> the completed v0.4.0 command surface. `add-default-tsa-failover` controls
+> the next release's provider and transport model.
+
 ## Context
 
 See `proposal.md` for motivation and the seven delta specs for observable behavior. The repository already has a pinned v1 schema and seal fixture, bounded JSON/YAML document trees, typed models, semantic validation, canonicalization foundations, recoverable storage primitives, stable presentation/errors, a hidden urfave preview tree, and working `validate`/`status`. Most product actions still share one unavailable handler; MCP contains only a package scaffold; RFC 3161 and publication contain no production workflow. The older active `build-forecast-ledger-cli-mcp` change contains useful completed foundation tasks but conflicting command specs and is superseded in full by this change.

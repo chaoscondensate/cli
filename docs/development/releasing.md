@@ -1,8 +1,8 @@
 # Release process
 
 <!-- doc-metadata
-coverage: development
-reviewed: 2026-08-25
+coverage: current-main
+reviewed: 2026-08-30
 owner: release
 generated: false
 security-critical: true
@@ -80,6 +80,23 @@ goreleaser release --snapshot --clean --skip=publish,chocolatey
 Then inspect `dist/artifacts.json`, run each native binary available on the
 current host, and confirm that `forecast-ledger version --json` contains the
 expected version, commit, schema pin, Go version, and MCP protocol version.
+For a release that changes RFC 3161 support, also:
+
+- run the checked-in fixtures through the Go verifier and the pinned OpenSSL
+  commands recorded in `internal/timestamp/rfc3161/testdata/README.md`;
+- validate the compiled provider catalog, embedded PEM digest, source record,
+  trust expiry, exact HTTP/HTTPS transport permission, and generated provider
+  metadata;
+- build and locally verify a timestamped package with `proofs/` and `trust/`
+  beside `ledger/`; and
+- run the FreeTSA canary separately when qualification or profile drift needs
+  checking. Reachability is never an ordinary CI or release gate.
+
+Do not add a built-in provider, change its endpoint or transport, or replace
+its trust bytes as a release-only edit. Those changes require reviewed catalog
+provenance, fixtures, security documentation, and local verification in the
+same source change. Custom provider URLs remain HTTPS-only.
+
 On Windows, also validate the Chocolatey package with:
 
 ```powershell

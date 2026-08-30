@@ -11,7 +11,7 @@ development branch and shipped in the newest release line.
 
 | Version | Security support |
 | --- | --- |
-| Latest `0.1.x` release | Best-effort fixes |
+| Latest `0.5.x` release | Best-effort fixes |
 | Current `main` branch | Reports accepted; not a supported end-user release |
 | Earlier releases | Unsupported; upgrade to the latest release |
 

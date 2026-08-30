@@ -1,3 +1,7 @@
+> Supersession note (2026-08-30): completed explicit-TSA tasks below are
+> historical v0.4.0 facts. `add-default-tsa-failover` owns the next release's
+> provider and transport requirements.
+
 ## 1. Align Planning and Project Rules
 
 - [x] 1.1 Update `AGENTS.md` package boundaries, timestamp invariants, documentation duties, and conformance gates to name only Forecast Ledger v1.2.0 and RFC 3161.

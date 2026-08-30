@@ -3,7 +3,29 @@
 Notable user-visible changes to Forecast Ledger CLI are recorded here. Release
 tags and downloadable files are published on GitHub Releases.
 
-## Unreleased
+## 0.5.0 - 2026-08-30
+
+### Changed
+
+- Make `timestamp stamp` and `timestamp_stamp` default to the qualified
+  one-entry FreeTSA catalog. `--tsa-provider`/`tsa_provider` can name the
+  built-in profile; custom `tsa_url` and `ca_bundle` remain a required-together
+  public HTTPS pair.
+- Accept RFC 3161 ESS `SigningCertificate` v1 and
+  `SigningCertificateV2`, while keeping message imprints at SHA-256 and
+  accepting strong SHA-256, SHA-384, and SHA-512 CMS signer digests.
+- Retain the successful built-in CA bytes under deterministic
+  `trust/rfc3161/` paths. Built-in provider failures commit no evidence.
+
+### Fixed
+
+- Verify emitted publication packages with `proofs/` and `trust/` beside
+  `ledger/` instead of resolving artifact paths below `ledger/`.
+- Return usage exit 2 for removed or unknown child commands with `--help`
+  instead of an internal error.
+- Classify a received malformed or unsupported TSA response as verification
+  failure rather than provider unavailability, while keeping transport and
+  HTTP-status outages in the network category.
 
 ## 0.4.0 - 2026-08-30
 

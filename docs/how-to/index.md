@@ -1,8 +1,8 @@
 # How-to guides
 
 <!-- doc-metadata
-coverage: v0.4.0
-reviewed: 2026-08-29
+coverage: v0.5.0
+reviewed: 2026-08-30
 owner: documentation
 generated: false
 security-critical: false
@@ -27,8 +27,9 @@ services are implemented, the maintained task guidance is limited to:
 - [build the project](../development/build.md); and
 - [create and verify a release](../development/releasing.md).
 
-RFC 3161 acquisition requires a public HTTPS timestamp authority and its CA
-bundle. Check the [implementation baseline](../development/documentation-baseline.md)
-for current release and review status.
+RFC 3161 acquisition defaults to the qualified FreeTSA HTTPS profile and
+materialized embedded CA. Custom authorities require a public HTTPS URL and CA
+bundle. Check the [provider record](../development/rfc3161-providers.md) and
+[implementation baseline](../development/documentation-baseline.md).
 
 [Documentation index](../index.md)

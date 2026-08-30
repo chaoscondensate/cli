@@ -1,3 +1,7 @@
+> Supersession note (2026-08-30): the explicit-TSA-only requirement records
+> completed v0.4.0 behavior and is superseded for the next release by
+> `add-default-tsa-failover`.
+
 ## Purpose
 
 Defines the complete RFC 3161 command lifecycle and portable evidence behavior shared by CLI and MCP for exact Forecast Ledger v1.2.0 forecast targets.

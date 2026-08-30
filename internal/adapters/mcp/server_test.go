@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +18,7 @@ import (
 	"github.com/chaoscondensate/cli/internal/app"
 	"github.com/chaoscondensate/cli/internal/service"
 	"github.com/chaoscondensate/cli/internal/storage"
+	"github.com/chaoscondensate/cli/internal/timestamp/rfc3161"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -114,6 +118,15 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	if err != nil || forecastShow.IsError || !strings.Contains(toolText(forecastShow), `"integrity":{"status":"unanchored"}`) {
 		t.Fatalf("MCP forecast integrity result=%s err=%v", toolText(forecastShow), err)
 	}
+	autoPlan, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "timestamp_stamp", Arguments: map[string]any{
+		"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-001", "dry_run": true,
+	}})
+	if err != nil || autoPlan.IsError || !strings.Contains(toolText(autoPlan), `"selection_mode":"auto"`) || !strings.Contains(toolText(autoPlan), `"provider_id":"freetsa"`) || !strings.Contains(toolText(autoPlan), `"request_count":0`) {
+		t.Fatalf("MCP automatic timestamp plan result=%s err=%v", toolText(autoPlan), err)
+	}
+	if _, statErr := os.Stat(filepath.Join(ledgerRoot, "trust")); !os.IsNotExist(statErr) {
+		t.Fatalf("MCP automatic dry-run created trust: %v", statErr)
+	}
 	copyFixture(t, filepath.Join("..", "..", "timestamp", "rfc3161", "testdata", "root.pem"), filepath.Join(ledgerRoot, "tsa.pem"))
 	tsaFailure, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "timestamp_stamp", Arguments: map[string]any{
 		"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-001",
@@ -210,7 +223,7 @@ func TestEveryMCPExistingLedgerToolRejectsV110AtAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, tool := range listed.Tools {
-		if tool.Name == "ledger_init" {
+		if tool.Name == "ledger_init" || tool.Name == "publication_verify" {
 			continue
 		}
 		arguments := minimumToolArguments(tool.Name)
@@ -229,6 +242,60 @@ func TestEveryMCPExistingLedgerToolRejectsV110AtAdmission(t *testing.T) {
 	if entries, err := os.ReadDir(secretRoot); err != nil || len(entries) != 0 {
 		t.Fatalf("old-schema MCP admission wrote secrets: entries=%v err=%v", entries, err)
 	}
+}
+
+func TestMCPPublicationVerifyUsesOnePackageOutputRoot(t *testing.T) {
+	ledgerRoot, outputRoot := t.TempDir(), t.TempDir()
+	ledgerPath := filepath.Join(ledgerRoot, "ledger.json")
+	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.2.0", "individual-ledger.json"), ledgerPath)
+	copyFixture(t, filepath.Join("..", "..", "timestamp", "rfc3161", "testdata", "root.pem"), filepath.Join(ledgerRoot, "tsa.pem"))
+	requestPath, _, err := service.TimestampEvidencePaths("f-election-coalition-001", "https://tsa.example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	absoluteRequest := filepath.Join(ledgerRoot, filepath.FromSlash(string(requestPath)))
+	if err := os.MkdirAll(filepath.Dir(absoluteRequest), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	copyFixture(t, filepath.Join("..", "..", "timestamp", "rfc3161", "testdata", "request.tsq"), absoluteRequest)
+	response, err := os.ReadFile(filepath.Join("..", "..", "timestamp", "rfc3161", "testdata", "response.tsr"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &rfc3161.HTTPClient{Resolver: mcpPublicResolver{}, Client: &http.Client{Transport: mcpRoundTripper(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/timestamp-reply"}}, Body: io.NopCloser(bytes.NewReader(response)), Request: request}, nil
+	})}}
+	if _, err := service.CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", service.TimestampStampOptions{TSAURL: "https://tsa.example.test", CABundlePath: "tsa.pem", Effects: service.ProductionEffects(), HTTPClient: client}); err != nil {
+		t.Fatal(err)
+	}
+	packageRoot := filepath.Join(outputRoot, "evidence")
+	if _, err := service.CommitPublicationBuild(t.Context(), ledgerPath, packageRoot, false); err != nil {
+		t.Fatal(err)
+	}
+	server, err := New(Config{LedgerRoots: []string{"main=" + ledgerRoot}, OutputRoots: []string{"packages=" + outputRoot}, Timeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mcpClient := connectClient(t, t.Context(), server)
+	defer mcpClient.Close()
+	result, err := callToolForTest(t, mcpClient, &sdk.CallToolParams{Name: "publication_verify", Arguments: map[string]any{
+		"file": "packages:evidence/ledger/ledger.json", "manifest": "packages:evidence/manifest.json",
+	}})
+	if err != nil || result.IsError || !strings.Contains(toolText(result), `"overall":"pass"`) {
+		t.Fatalf("MCP package verification result=%s err=%v", toolText(result), err)
+	}
+}
+
+type mcpPublicResolver struct{}
+
+func (mcpPublicResolver) LookupIPAddr(context.Context, string) ([]net.IPAddr, error) {
+	return []net.IPAddr{{IP: net.ParseIP("8.8.8.8")}}, nil
+}
+
+type mcpRoundTripper func(*http.Request) (*http.Response, error)
+
+func (fn mcpRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	return fn(request)
 }
 
 func TestMCPEmptyInitAndBacklogQuestion(t *testing.T) {

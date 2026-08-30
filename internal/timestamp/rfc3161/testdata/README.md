@@ -17,3 +17,7 @@ individual-ledger fixture (SHA-256
 The checked-in request and response were generated with OpenSSL 3.6.0. The Go
 tests parse and verify them locally. The generation script also runs
 `openssl ts -verify` before copying any public fixture into this directory.
+
+The `freetsa/` directory contains a separate byte-exact public-provider
+fixture captured once from the qualified HTTPS endpoint. Its README records
+provenance, commands, profiles, and digests. Normal tests never refresh it.

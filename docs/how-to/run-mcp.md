@@ -1,8 +1,8 @@
 # Run the MCP server
 
 <!-- doc-metadata
-coverage: v0.4.0
-reviewed: 2026-08-29
+coverage: v0.5.0
+reviewed: 2026-08-30
 owner: interface
 generated: false
 security-critical: true
@@ -66,10 +66,12 @@ from discovery unless all three conditions hold: a secret root exists, the
 server is not read-only, and startup includes `--allow-reveal`. A reveal call
 still needs a protected key reference and `confirm: true`.
 
-`timestamp_stamp` requires an explicit public HTTPS `tsa_url` and a retained
-ledger-relative `ca_bundle`. Redirects may not change origin. The server does
-not accept a proxy or a private, loopback, link-local, or otherwise non-public
-timestamp endpoint.
+`timestamp_stamp` defaults to `auto`, currently the built-in FreeTSA HTTPS
+profile and embedded trust. `tsa_provider` may name `auto` or `freetsa`.
+Custom `tsa_url` and ledger-relative `ca_bundle` must be supplied together;
+custom URLs remain public HTTPS-only and redirects may not change origin. The
+server does not accept a proxy or a private, loopback, link-local, or otherwise
+non-public timestamp endpoint.
 Private seal input and keys are protected-file references under a secret root;
 they are never raw tool arguments or resource content.
 
@@ -81,6 +83,11 @@ retained request, response, target, and CA bundle without a network call.
 `verification_run` and `publication_verify` return `no_evidence` with
 `incomplete` when no applicable forecast-evidence layer exists. Neither outcome
 is relabeled as a successful proof.
+
+For `publication_verify`, address both the package ledger and manifest through
+one named output root, such as `packages:evidence/ledger/ledger.yaml` and
+`packages:evidence/manifest.json`. Do not add the package's nested `ledger/` as
+a second ledger root; configured root classes must remain non-overlapping.
 
 Addressed redacted resources use the versioned form
 `forecast-ledger://v1/<kind>/<root>/<path>`, with optional question and forecast

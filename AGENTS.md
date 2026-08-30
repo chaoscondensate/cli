@@ -77,6 +77,14 @@ when a small standard-library implementation is sufficient.
   schema reference.
 - RFC 3161 with a SHA-256 message imprint is the only v1 timestamp protocol.
   OpenTimestamps input is a required negative fixture and must be rejected.
+- Built-in timestamp acquisition uses a versioned qualified provider catalog.
+  The current catalog contains only FreeTSA at its exact HTTPS endpoint.
+  Built-in profiles may use exact compiled HTTPS or HTTP transport policy, but
+  caller-controlled custom TSA endpoints remain public HTTPS-only. Local
+  verification always uses retained trust bytes and never a live provider,
+  catalog lookup, or system trust-store fallback.
+- Normal tests and releases use deterministic RFC 3161 fixtures. Live provider
+  canaries are separate, low-frequency maintenance checks and never gate them.
 - A pending response is not verified timing. Filesystem, hosting, archive, and
   source-control timestamps are not cryptographic evidence.
 - Verification reports layers separately and never claim authorship,

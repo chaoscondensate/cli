@@ -130,6 +130,7 @@ const (
 	EffectTarget            EffectKind = "target"
 	EffectTimestampRequest  EffectKind = "timestamp_request"
 	EffectTimestampResponse EffectKind = "timestamp_response"
+	EffectTimestampTrust    EffectKind = "timestamp_trust"
 	EffectKey               EffectKind = "key"
 	EffectPackage           EffectKind = "package"
 	EffectNetwork           EffectKind = "network"

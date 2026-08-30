@@ -1,8 +1,8 @@
 # Documentation baseline
 
 <!-- doc-metadata
-coverage: v0.4.0
-reviewed: 2026-08-29
+coverage: current-main
+reviewed: 2026-08-30
 owner: project-maintainer
 generated: false
 security-critical: true
@@ -10,7 +10,7 @@ prerequisites: ../../AGENTS.md
 next: documentation-traceability.md
 -->
 
-Reviewed: 2026-08-29
+Reviewed: 2026-08-30
 
 This page records the implementation and policy inputs used by the maintained
 product documentation. It describes the repository at the reviewed commit; it
@@ -36,7 +36,7 @@ that the corresponding document or test has been implemented.
 
 ## Implementation inventory
 
-This inventory was checked against release `v0.4.0` source.
+This inventory was checked against release `v0.5.0` source.
 
 ### Working CLI surface
 
@@ -50,7 +50,7 @@ The following commands have connected application services:
 | `forecast-ledger question add|update|list|show|resolve|annul|dispute ...` | Creates a typed question with an optional first public or sealed forecast, applies safe patches, reads redacted summaries, and records approved lifecycle claims. List/show accept `--file -`. | None |
 | `forecast-ledger forecast add|list|show|seal|reveal ...`, `forecast key-hint update ...` | Appends public or sealed forecasts, authenticates approved reveal, repairs safe logical hints, or reads redacted history. List/show accept `--file -`. | None |
 | `forecast-ledger target build|check ...` | Builds or checks exact `forecast-envelope/v1` RFC 8785 target bytes at deterministic ledger-relative paths. | None |
-| `forecast-ledger timestamp stamp|status|verify ...` | Acquires RFC 3161 evidence from an explicit public HTTPS TSA, or inspects and verifies retained target, request, response, and CA-bundle bytes locally. Repeating stamp with another TSA preserves independent entries. | Explicit TSA only for stamp; none for status or verify |
+| `forecast-ledger timestamp stamp|status|verify ...` | Acquires RFC 3161 evidence through `auto` (currently FreeTSA), one named built-in provider, or a custom public HTTPS TSA and CA pair; status and verify inspect retained bytes locally. | Selected TSA only for stamp; none for status or verify |
 | `forecast-ledger verify --file <path> ...` | Reports document, content-binding, RFC 3161 existence-timing, reveal, and outcome-evidence layers with stable states, reasons, evidence, and limitations. Pass requires applicable forecast evidence; empty or all-not-applicable selections return `no_evidence`. | Outcome URLs only with `--check-sources`; timestamp checks are local |
 | `forecast-ledger publish build|verify ...` | Builds a deterministic allowlisted package containing the exact RFC 3161 artifacts and verifies it locally. Manifest/file integrity is reported separately from the evidence aggregate. It does not use Git or a hosted publisher. | None |
 | `forecast-ledger mcp serve --ledger-root <name=path> ...` | Starts a protocol-clean stdio server with closed CLI-parity tools and redacted addressed resources. Default is read-write/online within roots; read-only/offline are whole-server modes and reveal is separately default-off. | Explicit TSA only for timestamp stamp unless server is offline |
@@ -89,7 +89,7 @@ for an installed artifact.
 | Schema commit | `6c2fe3df99223945b8d1613a03f95796b3c7d1e2` |
 | Embedded schema SHA-256 | `d609982f0fcea1ce076fdb32b44ef0eebe3265754eea7065de9d78a857dab5b8` |
 | MCP protocol target | `2026-07-28` |
-| Timestamp protocol | RFC 3161 with SHA-256, explicit TSA URL, retained CA bundle, and no system-root fallback |
+| Timestamp protocol | RFC 3161 with SHA-256 message imprints, strong SHA-256/384/512 CMS signer digests, ESS v1/v2, built-in FreeTSA HTTPS plus custom HTTPS, retained CA bundle, and no system-root fallback |
 | Go toolchain | `1.27.0` |
 
 Validation uses embedded contract bytes and does not resolve remote schema
@@ -106,7 +106,7 @@ GoReleaser builds six `CGO_ENABLED=0` archives:
 - Linux arm64 and x86-64 as `.tar.gz`; and
 - Windows arm64 and x86-64 as `.zip`.
 
-Release `v0.4.0` contains those six archives and eight native Linux packages:
+Release `v0.5.0` contains those six archives and eight native Linux packages:
 `deb`, `rpm`, `apk`, and Arch Linux packages for arm64 and x86-64. Each package
 installs the binary in `/usr/bin` and the Apache-2.0 license in
 `/usr/share/licenses/forecast-ledger`. The main checksum manifest covers the
@@ -205,7 +205,7 @@ The maintained maturity labels have these meanings:
 | Deprecated | The behavior still works for a stated period but has a documented replacement and removal version. |
 | Unsupported | The behavior is outside the maintained contract and must not be presented as working. |
 
-Release `v0.4.0` is **Preview**. A stable SemVer tag identifies a
+Release `v0.5.0` is **Preview**. A stable SemVer tag identifies a
 reproducible release; it does not promote unfinished commands or unaudited
 components to the Stable product maturity label.
 
@@ -234,14 +234,15 @@ time, or substantive outcome-source correctness.
 ### Maturity, audit, and limitations
 
 - The approved public status currently visible in README is **Preview**. The
-  `v0.4.0` is published through the explicit release workflow; version
+  `v0.5.0` is published through the explicit release workflow; version
   stability does not imply feature completeness or audit.
 - No independent security or cryptographic audit is recorded. A pinned
   `govulncheck` run reported no reachable dependency vulnerability on
   2026-08-29; that result is not an audit or a security guarantee.
 - Local validation and status are offline. No telemetry or runtime update check
-  is implemented. Only RFC 3161 stamp uses the network, with an explicit public
-  HTTPS TSA URL; timestamp verification is local.
+  is implemented. Only RFC 3161 stamp uses the network; omission contacts the
+  built-in FreeTSA HTTPS profile, while custom URLs remain public HTTPS-only.
+  Timestamp verification is local.
 - Sealing, reveal, target generation, RFC 3161 timestamping, layered
   verification, evidence packages, and MCP tools/resources are connected.
 - Pending timestamp entries are not verified timing. Validation and release provenance

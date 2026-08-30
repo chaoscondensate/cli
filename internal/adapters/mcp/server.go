@@ -132,7 +132,7 @@ func contracts() map[service.OperationName]toolContract {
 		service.OperationForecastKeyHintUpdate: {Allowed: append(file, "question", "forecast", "key_hint", "dry_run"), Required: []string{"file", "question", "forecast", "key_hint"}},
 		service.OperationTargetBuild:           {Allowed: append(file, "question", "forecast", "all", "dry_run"), Required: file},
 		service.OperationTargetCheck:           {Allowed: append(file, "question", "forecast", "all"), Required: file},
-		service.OperationTimestampStamp:        {Allowed: append(file, "question", "forecast", "tsa_url", "ca_bundle", "dry_run"), Required: []string{"file", "question", "forecast", "tsa_url", "ca_bundle"}},
+		service.OperationTimestampStamp:        {Allowed: append(file, "question", "forecast", "tsa_provider", "tsa_url", "ca_bundle", "dry_run"), Required: []string{"file", "question", "forecast"}},
 		service.OperationTimestampStatus:       {Allowed: append(file, "question", "forecast"), Required: []string{"file", "question", "forecast"}},
 		service.OperationTimestampVerify:       {Allowed: append(file, "question", "forecast", "dry_run"), Required: []string{"file", "question", "forecast"}},
 		service.OperationVerificationRun:       {Allowed: append(file, "question", "forecast", "check_sources"), Required: file},

@@ -39,20 +39,42 @@ type HTTPClient struct {
 }
 
 func (c HTTPClient) Submit(ctx context.Context, endpoint string, request []byte) (SubmitResult, error) {
+	normalized, err := NormalizeEndpoint(endpoint)
+	if err != nil {
+		return SubmitResult{}, err
+	}
+	return c.submit(ctx, normalized, request, false)
+}
+
+// SubmitProvider submits to an exact compiled provider profile. Unlike custom
+// input, a qualified built-in profile may authorize HTTP. Every redirect is
+// rejected for both built-in transport policies.
+func (c HTTPClient) SubmitProvider(ctx context.Context, profile ProviderProfile, request []byte) (SubmitResult, error) {
+	if err := validateProviderCatalog([]ProviderProfile{profile}); err != nil {
+		return SubmitResult{}, failure(ReasonRequestProfile, "timestamp provider profile is invalid")
+	}
+	return c.submit(ctx, profile.endpoint, request, true)
+}
+
+func (c HTTPClient) submit(ctx context.Context, endpoint string, request []byte, rejectRedirects bool) (SubmitResult, error) {
 	limits := c.Limits.normalized()
 	if len(request) == 0 || len(request) > limits.RequestBytes {
 		return SubmitResult{}, failure(ReasonLimit, "timestamp request exceeds the supported size")
 	}
-	parsed, addresses, err := c.validateEndpoint(ctx, endpoint)
+	parsed, addresses, err := c.resolveEndpoint(ctx, endpoint)
 	if err != nil {
 		return SubmitResult{}, err
 	}
 	client := c.Client
 	if client == nil {
-		client = c.productionClient(parsed, addresses)
+		client = c.productionClient(parsed, addresses, rejectRedirects)
 	} else {
 		clone := *client
-		clone.CheckRedirect = sameOriginRedirect(parsed)
+		if rejectRedirects {
+			clone.CheckRedirect = rejectRedirect
+		} else {
+			clone.CheckRedirect = sameOriginRedirect(parsed)
+		}
 		client = &clone
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, parsed.String(), bytes.NewReader(request))
@@ -63,19 +85,19 @@ func (c HTTPClient) Submit(ctx context.Context, endpoint string, request []byte)
 	req.Header.Set("Accept", tspclient.MediaTypeTimestampReply)
 	resp, err := client.Do(req)
 	if err != nil {
-		return SubmitResult{}, failure(ReasonResponseRejected, "timestamp authority request failed")
+		return SubmitResult{}, failure(ReasonTransport, "timestamp authority request failed")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return SubmitResult{}, failure(ReasonResponseRejected, "timestamp authority returned a non-success HTTP status")
+		return SubmitResult{}, failure(ReasonHTTPStatus, "timestamp authority returned a non-success HTTP status")
 	}
 	mediaType, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 	if err != nil || !strings.EqualFold(mediaType, tspclient.MediaTypeTimestampReply) {
-		return SubmitResult{}, failure(ReasonResponseRejected, "timestamp authority returned an unsupported media type")
+		return SubmitResult{}, failure(ReasonMediaType, "timestamp authority returned an unsupported media type")
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, int64(limits.ResponseBytes)+1))
 	if err != nil {
-		return SubmitResult{}, failure(ReasonResponseRejected, "timestamp authority response could not be read")
+		return SubmitResult{}, failure(ReasonTransport, "timestamp authority response could not be read")
 	}
 	if len(body) == 0 || len(body) > limits.ResponseBytes {
 		return SubmitResult{}, failure(ReasonLimit, "timestamp authority response exceeds the supported size")
@@ -86,19 +108,18 @@ func (c HTTPClient) Submit(ctx context.Context, endpoint string, request []byte)
 	return SubmitResult{Response: body, RequestCount: 1, TSAOrigin: normalizedOrigin(parsed)}, nil
 }
 
-func (c HTTPClient) validateEndpoint(ctx context.Context, raw string) (*url.URL, []net.IPAddr, error) {
-	normalized, err := NormalizeEndpoint(raw)
-	if err != nil {
-		return nil, nil, err
+func (c HTTPClient) resolveEndpoint(ctx context.Context, normalized string) (*url.URL, []net.IPAddr, error) {
+	parsed, err := url.Parse(normalized)
+	if err != nil || parsed.Hostname() == "" || parsed.Scheme != "https" && parsed.Scheme != "http" {
+		return nil, nil, failure(ReasonRequestProfile, "timestamp authority endpoint is invalid")
 	}
-	parsed, _ := url.Parse(normalized)
 	resolver := c.Resolver
 	if resolver == nil {
 		resolver = net.DefaultResolver
 	}
 	addresses, err := resolver.LookupIPAddr(ctx, parsed.Hostname())
 	if err != nil || len(addresses) == 0 {
-		return nil, nil, failure(ReasonResponseRejected, "timestamp authority host could not be resolved")
+		return nil, nil, failure(ReasonTransport, "timestamp authority host could not be resolved")
 	}
 	for _, address := range addresses {
 		if !publicIP(address.IP) {
@@ -126,7 +147,7 @@ func NormalizeEndpoint(raw string) (string, error) {
 	return parsed.String(), nil
 }
 
-func (c HTTPClient) productionClient(endpoint *url.URL, addresses []net.IPAddr) *http.Client {
+func (c HTTPClient) productionClient(endpoint *url.URL, addresses []net.IPAddr, rejectRedirects bool) *http.Client {
 	timeout := c.Timeout
 	if timeout <= 0 {
 		timeout = DefaultHTTPTimeout
@@ -153,7 +174,15 @@ func (c HTTPClient) productionClient(endpoint *url.URL, addresses []net.IPAddr) 
 		}
 		return nil, lastErr
 	}
-	return &http.Client{Transport: transport, Timeout: timeout, CheckRedirect: sameOriginRedirect(endpoint)}
+	checkRedirect := sameOriginRedirect(endpoint)
+	if rejectRedirects {
+		checkRedirect = rejectRedirect
+	}
+	return &http.Client{Transport: transport, Timeout: timeout, CheckRedirect: checkRedirect}
+}
+
+func rejectRedirect(*http.Request, []*http.Request) error {
+	return fmt.Errorf("timestamp authority redirects are disabled")
 }
 
 func sameOriginRedirect(origin *url.URL) func(*http.Request, []*http.Request) error {
@@ -170,9 +199,13 @@ func normalizedOrigin(value *url.URL) string {
 	host := strings.ToLower(value.Hostname())
 	port := value.Port()
 	if port == "" {
-		port = "443"
+		if value.Scheme == "http" {
+			port = "80"
+		} else {
+			port = "443"
+		}
 	}
-	return "https://" + net.JoinHostPort(host, port)
+	return value.Scheme + "://" + net.JoinHostPort(host, port)
 }
 
 func publicIP(value net.IP) bool {

@@ -4,7 +4,7 @@
       "additionalProperties": false,
       "properties": {
         "request_count": {
-          "maximum": 1,
+          "maximum": 16,
           "minimum": 0,
           "type": "integer"
         },
@@ -43,6 +43,9 @@
           "type": "string"
         },
         "policy_oid": {
+          "type": "string"
+        },
+        "provider_id": {
           "type": "string"
         },
         "reason_codes": {
@@ -98,6 +101,35 @@
     "timestampVerificationData": {
       "additionalProperties": false,
       "properties": {
+        "attempts": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "attempted": {
+                "type": "boolean"
+              },
+              "ordinal": {
+                "maximum": 16,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "provider_id": {
+                "type": "string"
+              },
+              "reason_code": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider_id",
+              "ordinal",
+              "attempted"
+            ],
+            "type": "object"
+          },
+          "maxItems": 16,
+          "type": "array"
+        },
         "effects": {
           "type": "array"
         },
@@ -120,7 +152,7 @@
           "additionalProperties": false,
           "properties": {
             "request_count": {
-              "maximum": 1,
+              "maximum": 16,
               "minimum": 0,
               "type": "integer"
             },
@@ -132,6 +164,16 @@
             "request_count"
           ],
           "type": "object"
+        },
+        "selected_provider": {
+          "type": "string"
+        },
+        "selection_mode": {
+          "enum": [
+            "auto",
+            "named",
+            "custom"
+          ]
         },
         "state": {
           "enum": [
@@ -178,6 +220,9 @@
                 "type": "string"
               },
               "policy_oid": {
+                "type": "string"
+              },
+              "provider_id": {
                 "type": "string"
               },
               "reason_codes": {
@@ -361,6 +406,7 @@
               "target",
               "timestamp_request",
               "timestamp_response",
+              "timestamp_trust",
               "key",
               "package",
               "network"

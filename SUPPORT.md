@@ -29,6 +29,13 @@ or guarantee that evidence will be accepted by a third party. Current Preview
 software has incomplete workflows; check the README maturity notice before
 reporting a planned command as missing.
 
+The built-in FreeTSA integration is a best-effort third-party dependency, not a
+Forecast Ledger hosted service. Report reproducible catalog, transport,
+verification, or failover behavior here. Report an authority outage or policy
+question to that authority, and do not submit repeated live requests while
+diagnosing it. A provider outage does not change the validity of evidence that
+already verifies locally with its retained trust bytes.
+
 Do not post keys, credentials, salts, private ledgers, unrevealed forecasts,
 personal data, or proprietary source material. Replace them with the smallest
 synthetic reproduction. Remove usernames and local paths from logs unless they

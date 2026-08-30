@@ -1,8 +1,8 @@
 # Getting started
 
 <!-- doc-metadata
-coverage: v0.4.0
-reviewed: 2026-08-29
+coverage: current-main
+reviewed: 2026-08-30
 owner: documentation
 generated: false
 security-critical: false
@@ -22,8 +22,8 @@ result.
 - [Validate or inspect an existing ledger](../../README.md#quick-start).
 - [Review the implementation and compatibility baseline](../development/documentation-baseline.md).
 
-Release `v0.4.0` implements the complete advertised command
-surface. Timestamp support uses RFC 3161 with explicit authority and CA-bundle
-selection.
+The current source implements the advertised command surface. Timestamp support
+uses RFC 3161 and defaults to the built-in FreeTSA profile with retained trust;
+named and custom choices remain available.
 
 [Documentation index](../index.md)

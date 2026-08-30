@@ -1966,7 +1966,7 @@
         "additionalProperties": false,
         "properties": {
           "file": {
-            "description": "Ledger reference as root-name:relative/path",
+            "description": "Package ledger reference inside an output root as root-name:relative/path",
             "minLength": 1,
             "type": "string"
           },
@@ -3166,7 +3166,7 @@
         "additionalProperties": false,
         "properties": {
           "ca_bundle": {
-            "description": "Retained ledger-relative PEM CA bundle",
+            "description": "Custom retained ledger-relative PEM CA bundle; requires tsa_url",
             "type": "string"
           },
           "dry_run": {
@@ -3188,17 +3188,23 @@
             "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
             "type": "string"
           },
+          "tsa_provider": {
+            "description": "Built-in timestamp provider; defaults to auto",
+            "enum": [
+              "auto",
+              "freetsa"
+            ],
+            "type": "string"
+          },
           "tsa_url": {
-            "description": "Public HTTPS timestamp authority URL",
+            "description": "Custom public HTTPS timestamp authority URL; requires ca_bundle",
             "type": "string"
           }
         },
         "required": [
-          "ca_bundle",
           "file",
           "forecast",
-          "question",
-          "tsa_url"
+          "question"
         ],
         "type": "object"
       },

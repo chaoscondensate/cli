@@ -1,8 +1,8 @@
 # CLI reference
 
 <!-- doc-metadata
-coverage: v0.4.0
-reviewed: 2026-08-29
+coverage: current-main
+reviewed: 2026-08-30
 owner: interface
 generated: false
 security-critical: false
@@ -36,7 +36,7 @@ only ledger bytes and cannot resolve sibling target or timestamp paths.
 | `forecast reveal` | `--file --question --forecast --key-file --yes` | Authenticate and disclose a sealed forecast. |
 | `forecast key-hint update` | `--file --question --forecast --key-hint` | Replace only the safe logical hint. |
 | `target build|check` | `--file` plus `--all` or question+forecast | Create or compare canonical target bytes. |
-| `timestamp stamp` | `--file --question --forecast --tsa-url --ca-bundle`; optional `--offline` | Request and retain RFC 3161 evidence from one timestamp authority. |
+| `timestamp stamp` | `--file --question --forecast`; optional `--tsa-provider`, custom `--tsa-url`+`--ca-bundle`, or `--offline` | Request and locally verify RFC 3161 evidence; omission selects `auto` (currently FreeTSA). |
 | `timestamp status|verify` | `--file --question --forecast` | Inspect or locally verify retained RFC 3161 evidence. |
 | `verify` | `--file`; optional question+forecast | Run layered evidence checks. |
 | `publish build` | `--file --output` | Create a new standalone package. |
@@ -68,8 +68,9 @@ evidence. Quote RFC 3339 values in maintained YAML input, such as
 
 Verification commands emit their complete expected outcome report to stdout
 before returning a nonzero semantic exit. `timestamp stamp` uses network exit 8
-when the authority is unavailable. Retained malformed, untrusted, or
-mismatching evidence uses verification exit 6. Layered and package verification
+when every selected built-in authority is unavailable. A built-in invalid
+response uses verification exit 6 and commits nothing; custom invalid evidence
+is retained as pending. Layered and package verification
 use `incomplete`/exit 9 with overall `no_evidence` when no applicable
 forecast-evidence layer exists. Passing document, manifest, or file checks
 remain visible but do not turn that aggregate into `pass`.

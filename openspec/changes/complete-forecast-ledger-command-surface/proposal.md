@@ -1,3 +1,7 @@
+> Supersession note (2026-08-30): explicit-TSA-only statements below describe
+> the completed v0.4.0 command surface. `add-default-tsa-failover` controls
+> timestamp acquisition for the next release.
+
 ## Why
 
 The repository currently exposes only validation, status, version, and completion while the command surface that creates, maintains, seals, timestamps, verifies, packages, and serves forecast ledgers remains unavailable. The complete product needs one reviewable contract that defines every command's inputs, business rules, side effects, outputs, failure modes, and CLI/MCP parity before implementation resumes.

@@ -2,6 +2,11 @@
 
 Defines documentation as a reliable product interface that helps users adopt, operate, integrate, and evaluate the CLI safely while keeping claims and examples synchronized with released behavior.
 
+> Supersession note (2026-08-30): `add-default-tsa-failover` replaces the
+> explicit-TSA-only documentation input below with the released built-in
+> provider catalog, retained embedded trust, and required-together custom HTTPS
+> override. Historical release documentation remains accurate for v0.4.0.
+
 ## ADDED Requirements
 
 ### Requirement: README is the product landing page

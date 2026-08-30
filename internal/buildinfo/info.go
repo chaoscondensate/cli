@@ -25,9 +25,11 @@ type Schema struct {
 }
 
 type TimestampSupport struct {
-	Protocol      string `json:"protocol"`
-	HashAlgorithm string `json:"hash_algorithm"`
-	Experimental  bool   `json:"experimental"`
+	Protocol      string   `json:"protocol"`
+	HashAlgorithm string   `json:"hash_algorithm"`
+	Experimental  bool     `json:"experimental"`
+	DefaultMode   string   `json:"default_mode"`
+	Providers     []string `json:"providers"`
 }
 
 // Info is the stable machine-readable version result.
@@ -54,6 +56,6 @@ func Current() Info {
 			SHA256:  ledgerschema.SchemaSHA256,
 		},
 		MCPProtocol: MCPProtocolVersion,
-		Timestamp:   TimestampSupport{Protocol: "rfc3161", HashAlgorithm: "sha256", Experimental: true},
+		Timestamp:   TimestampSupport{Protocol: "rfc3161", HashAlgorithm: "sha256", Experimental: true, DefaultMode: "auto", Providers: []string{"freetsa"}},
 	}
 }

@@ -60,8 +60,12 @@ func operationResultSchema(definition service.OperationDefinition) map[string]an
 }
 
 func toolInputSchema(definition service.OperationDefinition) map[string]any {
+	fileDescription := "Ledger reference as root-name:relative/path"
+	if definition.Name == service.OperationPublicationVerify {
+		fileDescription = "Package ledger reference inside an output root as root-name:relative/path"
+	}
 	properties := map[string]any{
-		"file": map[string]any{"type": "string", "minLength": 1, "description": "Ledger reference as root-name:relative/path"},
+		"file": map[string]any{"type": "string", "minLength": 1, "description": fileDescription},
 	}
 	required := []string{"file"}
 	addSelector(properties, &required, definition.Selection)
@@ -174,7 +178,7 @@ func resultSchema() map[string]any {
 				"code": map[string]any{"type": "string"}, "message": map[string]any{"type": "string"}, "details": map[string]any{"type": "object"},
 			})},
 			"effects": map[string]any{"type": "array", "items": closedRecord([]string{"kind", "action", "status"}, map[string]any{
-				"kind":   map[string]any{"enum": []string{"ledger", "target", "timestamp_request", "timestamp_response", "key", "package", "network"}},
+				"kind":   map[string]any{"enum": []string{"ledger", "target", "timestamp_request", "timestamp_response", "timestamp_trust", "key", "package", "network"}},
 				"action": map[string]any{"enum": []string{"read", "create", "replace", "remove", "contact"}},
 				"status": map[string]any{"enum": []string{"planned", "deferred", "completed", "unchanged"}},
 				"root":   map[string]any{"type": "string"}, "path": map[string]any{"type": "string"}, "source_id": map[string]any{"type": "string"},
@@ -192,7 +196,7 @@ func resultSchema() map[string]any {
 func resultDefinitions() map[string]any {
 	stringList := stringArray()
 	requestSummary := closedRecord([]string{"request_count"}, map[string]any{
-		"request_count": map[string]any{"type": "integer", "minimum": 0, "maximum": 1},
+		"request_count": map[string]any{"type": "integer", "minimum": 0, "maximum": 16},
 		"tsa_origin":    map[string]any{"type": "string"},
 	})
 	verificationLayer := closedRecord([]string{"name", "state"}, map[string]any{
@@ -200,15 +204,22 @@ func resultDefinitions() map[string]any {
 		"reason_codes": stringList, "evidence": map[string]any{"type": "object"}, "limitations": stringList,
 	})
 	timestampEntry := closedRecord([]string{"tsa_url", "state", "request_path", "response_path", "request_present", "response_present", "ca_bundle_present", "check_state"}, map[string]any{
-		"tsa_url": map[string]any{"type": "string", "format": "uri"}, "state": map[string]any{"enum": []string{"pending", "verified"}},
+		"provider_id": map[string]any{"type": "string"},
+		"tsa_url":     map[string]any{"type": "string", "format": "uri"}, "state": map[string]any{"enum": []string{"pending", "verified"}},
 		"request_path": map[string]any{"type": "string"}, "response_path": map[string]any{"type": "string"}, "ca_bundle_path": map[string]any{"type": "string"},
 		"request_present": map[string]any{"type": "boolean"}, "response_present": map[string]any{"type": "boolean"}, "ca_bundle_present": map[string]any{"type": "boolean"},
 		"check_state": map[string]any{"enum": []string{"pass", "fail", "pending", "not_applicable", "not_checked"}}, "reason_codes": stringList,
 		"gen_time": map[string]any{"type": "string", "format": "date-time"}, "policy_oid": map[string]any{"type": "string"}, "serial_number": map[string]any{"type": "string"},
 		"signer_subject": map[string]any{"type": "string"}, "signer_fingerprint_sha256": map[string]any{"type": "string"}, "ca_bundle_sha256": map[string]any{"type": "string"},
 	})
+	timestampAttempt := closedRecord([]string{"provider_id", "ordinal", "attempted"}, map[string]any{
+		"provider_id": map[string]any{"type": "string"}, "ordinal": map[string]any{"type": "integer", "minimum": 1, "maximum": 16},
+		"attempted": map[string]any{"type": "boolean"}, "reason_code": map[string]any{"type": "string"},
+	})
 	timestampData := closedRecord([]string{"question_id", "forecast_id", "state", "target_path", "target_sha256", "target_present", "verification"}, map[string]any{
 		"question_id": map[string]any{"type": "string"}, "forecast_id": map[string]any{"type": "string"},
+		"selection_mode": map[string]any{"enum": []string{"auto", "named", "custom"}}, "selected_provider": map[string]any{"type": "string"},
+		"attempts":    map[string]any{"type": "array", "maxItems": 16, "items": timestampAttempt},
 		"state":       map[string]any{"enum": []string{"unanchored", "pending", "verified", "failed", "inconsistent"}},
 		"target_path": map[string]any{"type": "string"}, "target_sha256": map[string]any{"type": "string"},
 		"target_present": map[string]any{"type": "boolean"}, "timestamps": map[string]any{"type": "array", "items": timestampEntry},

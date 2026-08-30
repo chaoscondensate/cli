@@ -1,0 +1,19 @@
+name: FreeTSA synthetic canary
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 1 * *"
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    name: Check the qualified FreeTSA profile
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Submit one public synthetic timestamp request
+        run: ./scripts/freetsa-canary.sh

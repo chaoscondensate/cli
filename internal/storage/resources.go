@@ -25,6 +25,7 @@ const (
 	ResourceTarget            ResourceKind = "target"
 	ResourceTimestampRequest  ResourceKind = "timestamp_request"
 	ResourceTimestampResponse ResourceKind = "timestamp_response"
+	ResourceTimestampTrust    ResourceKind = "timestamp_trust"
 	ResourceKey               ResourceKind = "key"
 	ResourcePackage           ResourceKind = "package"
 )
@@ -353,7 +354,7 @@ func replaceResourceJournal(path string, journal resourceJournal) error {
 
 func validateResourceEntry(entry ResourceEntry) error {
 	switch entry.Kind {
-	case ResourceLedger, ResourceTarget, ResourceTimestampRequest, ResourceTimestampResponse, ResourceKey, ResourcePackage:
+	case ResourceLedger, ResourceTarget, ResourceTimestampRequest, ResourceTimestampResponse, ResourceTimestampTrust, ResourceKey, ResourcePackage:
 	default:
 		return app.NewError(app.CodeInvalidData, "resource plan kind is invalid", nil)
 	}

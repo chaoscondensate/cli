@@ -18,6 +18,12 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	if err == nil {
 		return 0
 	}
+	var frameworkExit urfavecli.ExitCoder
+	if errors.As(err, &frameworkExit) && frameworkExit.ExitCode() == 3 {
+		// urfave reserves exit 3 for an unknown help topic. The Forecast
+		// Ledger contract classifies every unknown command/help lookup as usage.
+		err = app.NewError(app.CodeUsage, err.Error(), err)
+	}
 	code := app.ExitCodeOf(err)
 	var presented interface{ AlreadyPresented() bool }
 	if errors.As(err, &presented) && presented.AlreadyPresented() {

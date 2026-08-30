@@ -1,3 +1,8 @@
+> Supersession note (2026-08-30): the requirement to supply explicit TSA inputs
+> records v0.4.0 behavior and is superseded for the next release by
+> `add-default-tsa-failover`. The remaining RFC 3161 evidence requirements
+> continue to apply.
+
 ## Purpose
 
 Defines the RFC 3161 timestamp lifecycle and portable evidence behavior shared by CLI and MCP for exact Forecast Ledger v1.2.0 forecast targets.

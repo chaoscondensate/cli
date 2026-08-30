@@ -12,6 +12,7 @@ next: build.md
 
 - [Build the CLI](build.md)
 - [Review dependencies](dependencies.md)
+- [Qualify and rotate RFC 3161 providers](rfc3161-providers.md)
 - [Review product names](name-review.md)
 - [Create and verify releases](releasing.md)
 - [Review the documentation baseline](documentation-baseline.md)

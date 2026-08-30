@@ -1,3 +1,7 @@
+> Supersession note (2026-08-30): explicit `tsa_url`/`ca_bundle` requirements
+> below record completed v0.4.0 behavior and are superseded for the next release
+> by `add-default-tsa-failover`.
+
 ## Purpose
 
 Defines a production MCP stdio runtime that exposes the same Forecast Ledger business operations as the CLI through closed schemas, confined roots, simple server-wide safety modes, cancellation, and secret-safe results.

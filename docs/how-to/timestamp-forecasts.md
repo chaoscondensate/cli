@@ -1,8 +1,8 @@
 # Timestamp a forecast
 
 <!-- doc-metadata
-coverage: v0.4.0
-reviewed: 2026-08-29
+coverage: current-main
+reviewed: 2026-08-30
 owner: security
 generated: false
 security-critical: true
@@ -15,13 +15,19 @@ a signed generation time (`gen_time`) from a timestamp authority (TSA). It does
 not prove authorship, completeness, forecast truth, outcome truth, or that the
 TSA clock was honest.
 
-## Prepare trust material
+## Choose the provider mode
 
-Choose a TSA outside this CLI. Obtain the PEM certificate bundle needed to
-validate that TSA and retain it beside the ledger, for example
-`trust/tsa-ca.pem`. The CLI does not provide a TSA list, download certificates,
-or use operating-system roots. Treat the endpoint and bundle as one reviewed
-trust choice.
+The default `auto` mode uses the released provider catalog. The current catalog
+contains only FreeTSA at `https://freetsa.org/tsr`, so it makes at most one
+request. FreeTSA is best effort: no numeric rate limit, service-level agreement,
+independent TSA audit, or long-term availability promise is published in the
+reviewed first-party material. See the maintained [provider qualification and
+rotation record](../development/rfc3161-providers.md).
+
+Use `--tsa-provider freetsa` to name the same built-in profile explicitly. For
+a custom TSA, obtain and retain its PEM trust bundle beside the ledger. Pass
+`--tsa-url` and `--ca-bundle` together. Custom URLs remain public HTTPS-only.
+The CLI never downloads trust at runtime and never uses operating-system roots.
 
 ## Stamp
 
@@ -29,30 +35,43 @@ trust choice.
 forecast-ledger timestamp stamp \
   --file ledger.yaml \
   --question q-launch \
-  --forecast f-launch-002 \
+  --forecast f-launch-002
+```
+
+Named and custom forms are:
+
+```sh
+forecast-ledger timestamp stamp \
+  --file ledger.yaml --question q-launch --forecast f-launch-002 \
+  --tsa-provider freetsa
+forecast-ledger timestamp stamp \
+  --file ledger.yaml --question q-launch --forecast f-launch-002 \
   --tsa-url https://tsa.example.com/ \
   --ca-bundle trust/tsa-ca.pem
 ```
 
 Stamp creates a bounded SHA-256 request with a fresh positive nonce and asks
-the TSA to include its signing certificate. It makes one HTTPS request and
-retains:
+the TSA to include its signing certificate. It stops after the first locally
+verified built-in response and retains:
 
 - `proofs/targets/f-launch-002.json` — the exact canonical target;
 - `proofs/timestamps/f-launch-002/<tsa-id>/request.tsq` — the DER request;
 - `proofs/timestamps/f-launch-002/<tsa-id>/response.tsr` — the DER response; and
-- the exact ledger-relative PEM CA bundle named by `--ca-bundle`.
+- the exact ledger-relative PEM CA bundle. Built-in trust is materialized at
+  `trust/rfc3161/<provider>-<sha256>.pem`.
 
-`<tsa-id>` is a stable short digest of the normalized TSA URL. The URL must be
+`<tsa-id>` is a stable short digest of the exact TSA URL. A custom URL must be
 public HTTPS without credentials, query, fragment, or a non-default port.
 Private, loopback, link-local, reserved, and redirect-to-other-origin
-destinations are rejected.
+destinations are rejected. Built-in profiles have an exact compiled HTTPS or
+HTTP transport policy and reject every redirect; the current catalog contains
+no HTTP provider. Caller input can never authorize HTTP.
 
 `--dry-run` validates paths and inputs without entropy, network, or writes.
 `--offline` fails before a socket because stamp requires the TSA. A transport
-failure is a network error, not a failed signature. If a successful response is
-retained but complete local verification fails, the entry remains `pending`
-with safe reason codes and can be inspected or retried.
+failure is a network error, not a failed signature. Automatic and named
+built-in failure commits nothing. Custom mode retains a received but
+unverifiable response as `pending` for inspection and retry.
 
 Repeat stamp with another TSA URL to keep independent timestamp entries. An
 earlier verified entry is preserved. Repeating the same TSA is idempotent only
@@ -75,8 +94,10 @@ forecast-ledger timestamp verify \
 Both commands are local. They read the target, request, response, declared
 metadata, and retained CA bundle. Verify checks request/response nonce and
 imprint agreement, SHA-256 target binding, CMS signed attributes and signature,
-the signing-certificate binding, critical timestamping EKU, certificate chain
-at `gen_time`, supported algorithms, and the ledger metadata. It never contacts
+ESS `SigningCertificate` v1 or `SigningCertificateV2`, critical timestamping
+EKU, certificate chain at `gen_time`, supported algorithms, and the ledger
+metadata. Message imprints remain SHA-256; CMS signer digests may be SHA-256,
+SHA-384, or SHA-512. It never contacts
 the TSA, a blockchain, a Git host, a system trust service, or a revocation
 service.
 

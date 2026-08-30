@@ -1,8 +1,8 @@
 # Create a ledger
 
 <!-- doc-metadata
-coverage: v0.4.0
-reviewed: 2026-08-29
+coverage: v0.5.0
+reviewed: 2026-08-30
 owner: interface
 generated: false
 security-critical: true

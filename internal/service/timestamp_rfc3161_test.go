@@ -188,6 +188,88 @@ func TestRFC3161DryRunOfflineOutageAndPendingRecovery(t *testing.T) {
 	}
 }
 
+func TestRFC3161AutomaticFreeTSASelectionMaterializesTrustAndReusesEvidence(t *testing.T) {
+	directory, ledgerPath := timestampLedgerFixture(t)
+	profile, ok := rfc3161.ProviderByID(rfc3161.ProviderFreeTSA)
+	if !ok {
+		t.Fatal("FreeTSA provider is missing")
+	}
+	plan, err := PlanTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampStampOptions{DryRun: true})
+	if err != nil || len(plan.Entries) != 1 || plan.Entries[0].CABundleSHA256 != profile.BundleSHA256() || plan.Entries[0].ProviderID != rfc3161.ProviderFreeTSA || plan.SelectionMode != timestampSelectionAuto {
+		t.Fatalf("automatic dry-run = %#v, %v", plan, err)
+	}
+	if _, statErr := os.Stat(filepath.Join(directory, "trust")); !errors.Is(statErr, fs.ErrNotExist) {
+		t.Fatalf("dry-run created trust resources: %v", statErr)
+	}
+	requestPath, _, err := TimestampEvidencePaths("f-election-coalition-001", profile.Endpoint())
+	if err != nil {
+		t.Fatal(err)
+	}
+	absoluteRequest := filepath.Join(directory, filepath.FromSlash(string(requestPath)))
+	if err := os.MkdirAll(filepath.Dir(absoluteRequest), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(absoluteRequest, timestampFreeTSAFixture(t, "request.tsq"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	transport := &countingRoundTripper{response: timestampFreeTSAFixture(t, "response.tsr")}
+	effects := Effects{Clock: fixedTestClock{value: time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)}, Random: failingRandom{}}
+	result, err := CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampStampOptions{Effects: effects, HTTPClient: testTimestampHTTPClient(transport)})
+	if err != nil || result.State != TimestampVerified || result.SelectionMode != timestampSelectionAuto || result.SelectedProvider != rfc3161.ProviderFreeTSA || result.RequestSummary.RequestCount != 1 || len(result.Attempts) != 1 || !result.Attempts[0].Attempted {
+		t.Fatalf("automatic stamp = %#v, %v", result, err)
+	}
+	trustPath := filepath.Join(directory, filepath.FromSlash(profile.TrustPath()))
+	trust, err := os.ReadFile(trustPath)
+	if err != nil || !bytes.Equal(trust, profile.Bundle()) {
+		t.Fatalf("materialized trust = %d bytes, %v", len(trust), err)
+	}
+	loaded, err := LoadAndValidateLedger(t.Context(), ledgerPath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	timestamp := loaded.Model.Questions[1].Forecasts[0].Integrity.Verified.Timestamps[0]
+	if timestamp.CABundlePath == nil || string(*timestamp.CABundlePath) != profile.TrustPath() || timestamp.TSAURL != profile.Endpoint() {
+		t.Fatalf("retained timestamp = %#v", timestamp)
+	}
+
+	transport.err = errors.New("network must not be used")
+	retry, err := CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampStampOptions{Effects: effects, HTTPClient: testTimestampHTTPClient(transport)})
+	if err != nil || retry.State != TimestampVerified || retry.RequestSummary.RequestCount != 0 || transport.requests != 1 || retry.Attempts[0].ReasonCode != "timing.existing_evidence_reused" {
+		t.Fatalf("automatic reuse = %#v, %v; requests=%d", retry, err, transport.requests)
+	}
+}
+
+func TestRFC3161AutomaticFailureIsNoOpAndSelectionInputsAreExclusive(t *testing.T) {
+	directory, ledgerPath := timestampLedgerFixture(t)
+	transport := &countingRoundTripper{err: errors.New("simulated outage")}
+	effects := Effects{Clock: fixedTestClock{}, Random: deterministicTestRandom{reader: bytes.NewReader(bytes.Repeat([]byte{0x42}, 64))}}
+	result, err := CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampStampOptions{Effects: effects, HTTPClient: testTimestampHTTPClient(transport)})
+	if app.ErrorCodeOf(err) != app.CodeNetwork || result.State != TimestampUnanchored || result.RequestSummary.RequestCount != 1 || result.Attempts[0].ReasonCode != "timing.tsa_unavailable" {
+		t.Fatalf("automatic outage = %#v, %v", result, err)
+	}
+	for _, name := range []string{"proofs", "trust"} {
+		if _, statErr := os.Stat(filepath.Join(directory, name)); !errors.Is(statErr, fs.ErrNotExist) {
+			t.Fatalf("automatic outage created %s: %v", name, statErr)
+		}
+	}
+	invalidTransport := &countingRoundTripper{response: []byte("not a timestamp response")}
+	invalid, invalidErr := CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampStampOptions{Effects: effects, HTTPClient: testTimestampHTTPClient(invalidTransport)})
+	if app.ErrorCodeOf(invalidErr) != app.CodeVerification || invalid.State != TimestampUnanchored || invalid.Attempts[0].ReasonCode != string(rfc3161.ReasonResponseMalformed) {
+		t.Fatalf("automatic invalid response = %#v, %v", invalid, invalidErr)
+	}
+	for _, name := range []string{"proofs", "trust"} {
+		if _, statErr := os.Stat(filepath.Join(directory, name)); !errors.Is(statErr, fs.ErrNotExist) {
+			t.Fatalf("invalid automatic response created %s: %v", name, statErr)
+		}
+	}
+	if _, err := PlanTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampStampOptions{TSAProvider: rfc3161.ProviderFreeTSA, TSAURL: "https://tsa.example.test", CABundlePath: "tsa.pem"}); app.ErrorCodeOf(err) != app.CodeInvalidData {
+		t.Fatalf("mixed provider inputs = %v", err)
+	}
+	if _, err := PlanTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", TimestampStampOptions{TSAURL: "http://tsa.example.test", CABundlePath: "tsa.pem"}); app.ErrorCodeOf(err) != app.CodeInvalidData {
+		t.Fatalf("custom HTTP = %v", err)
+	}
+}
+
 func TestRFC3161PublicationRejectsMissingAndTamperedArtifacts(t *testing.T) {
 	directory, ledgerPath := timestampLedgerFixture(t)
 	caPath := filepath.Join(directory, "tsa.pem")
@@ -246,6 +328,50 @@ func TestRFC3161PublicationRejectsMissingAndTamperedArtifacts(t *testing.T) {
 		t.Fatalf("tampered manifest error = %v", err)
 	}
 	if err := os.WriteFile(manifestPath, manifestBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	unexpected := filepath.Join(packageRoot, "unexpected.txt")
+	if err := os.WriteFile(unexpected, []byte("not listed"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := VerifyPublicationPackage(t.Context(), packageLedger, manifestPath); app.ErrorCodeOf(err) != app.CodeVerification {
+		t.Fatalf("unexpected file error = %v", err)
+	}
+	if err := os.Remove(unexpected); err != nil {
+		t.Fatal(err)
+	}
+
+	symlink := filepath.Join(packageRoot, "unsafe-link")
+	if err := os.Symlink(filepath.Base(manifestPath), symlink); err == nil {
+		if _, err := VerifyPublicationPackage(t.Context(), packageLedger, manifestPath); app.ErrorCodeOf(err) != app.CodeVerification {
+			t.Fatalf("symlink error = %v", err)
+		}
+		if err := os.Remove(symlink); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	movedResponse := filepath.Join(filepath.Dir(packageLedger), "response.tsr")
+	if err := os.Rename(responseFiles[0], movedResponse); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := VerifyPublicationPackage(t.Context(), packageLedger, manifestPath); app.ErrorCodeOf(err) != app.CodeVerification {
+		t.Fatalf("moved-under-ledger response error = %v", err)
+	}
+	if err := os.Rename(movedResponse, responseFiles[0]); err != nil {
+		t.Fatal(err)
+	}
+
+	tamperedResponse := append([]byte(nil), responseBytes...)
+	tamperedResponse[len(tamperedResponse)-1] ^= 0x01
+	if err := os.WriteFile(responseFiles[0], tamperedResponse, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := VerifyPublicationPackage(t.Context(), packageLedger, manifestPath); app.ErrorCodeOf(err) != app.CodeVerification {
+		t.Fatalf("tampered response error = %v", err)
+	}
+	if err := os.WriteFile(responseFiles[0], responseBytes, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -366,6 +492,15 @@ func writeLedgerModel(t *testing.T, path string, model *ledger.Ledger) {
 func timestampFixture(t *testing.T, name string) []byte {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join("..", "timestamp", "rfc3161", "testdata", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
+func timestampFreeTSAFixture(t *testing.T, name string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("..", "timestamp", "rfc3161", "testdata", "freetsa", name))
 	if err != nil {
 		t.Fatal(err)
 	}
