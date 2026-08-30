@@ -1,10 +1,11 @@
 package cli
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/chaoscondensate/cli/internal/storage"
 )
 
 func TestYAMLReplacementDogfoodingMatrixMatchesJSONSuccess(t *testing.T) {
@@ -72,7 +73,7 @@ func runCLIRevealReplacement(t *testing.T, path string) (int, string, string) {
 	secretPath := filepath.Join(directory, "private.yaml")
 	keyPath := filepath.Join(directory, "sealed.key")
 	secret := "value:\n  kind: binary\n  probability_bp: 7000\nrationale: PRIVATE-CLI-RATIONALE\nkey_factors:\n  - PRIVATE-CLI-FACTOR\ncomment: PRIVATE-CLI-COMMENT\n"
-	if err := os.WriteFile(secretPath, []byte(secret), 0o600); err != nil {
+	if err := storage.CreateProtectedFile(secretPath, []byte(secret)); err != nil {
 		t.Fatal(err)
 	}
 	code, stdout, stderr := runCLI("forecast-ledger", "--json", "forecast", "seal", "--file", path, "--question", "q-one", "--forecast", "f-sealed", "--forecasted-at", "2026-09-02T13:00:00Z", "--recorded-at", "2026-09-02T13:01:00Z", "--secret-input", secretPath, "--key-file", keyPath)
