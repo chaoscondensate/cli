@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -101,6 +102,58 @@ func TestUpdateLedgerRollsBackOnPreAndPostValidationFailure(t *testing.T) {
 		t.Fatalf("ledger changed after failed validation: %s", data)
 	}
 	assertNoTransactionTemps(t, filepath.Dir(path))
+}
+
+func TestYAMLReplacementParseAndPostValidationFailuresLeaveNoTransactionArtifacts(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		mutate MutateDocumentFunc
+		check  ValidateDocumentFunc
+	}{
+		{
+			name: "prospective parse",
+			mutate: func(*document.Document) ([]byte, error) {
+				return []byte("root:\n  nested:\ninvalid\n"), nil
+			},
+		},
+		{
+			name: "post-mutation validation",
+			mutate: func(parsed *document.Document) ([]byte, error) {
+				return document.ApplyPatch(parsed, []document.PatchOperation{{Kind: document.PatchReplace, Pointer: "/root/nested", Value: map[string]any{"replacement": "valid-yaml"}}})
+			},
+			check: func() ValidateDocumentFunc {
+				calls := 0
+				return func(*document.Document) error {
+					calls++
+					if calls == 2 {
+						return errors.New("injected post-mutation rejection")
+					}
+					return nil
+				}
+			}(),
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			directory := t.TempDir()
+			path := filepath.Join(directory, "ledger.yaml")
+			original := []byte("# keep\r\nroot:\r\n  nested:\r\n    old: value\r\nuntouched: 'quoted' # keep\r\n")
+			if err := os.WriteFile(path, original, 0o640); err != nil {
+				t.Fatal(err)
+			}
+			err := UpdateLedger(context.Background(), path, TransactionOptions{Validate: test.check, Mutate: test.mutate})
+			if app.ErrorCodeOf(err) != app.CodeInvalidData {
+				t.Fatalf("error = %v, want invalid_data", err)
+			}
+			retained, readErr := os.ReadFile(path)
+			if readErr != nil || !bytes.Equal(retained, original) {
+				t.Fatalf("original YAML changed: data=%q err=%v", retained, readErr)
+			}
+			if _, statErr := os.Stat(JournalPath(path)); !errors.Is(statErr, os.ErrNotExist) {
+				t.Fatalf("validation failure retained journal: %v", statErr)
+			}
+			assertNoTransactionTemps(t, directory)
+		})
+	}
 }
 
 func TestRecoveryCompletesCrashAfterJournalSync(t *testing.T) {

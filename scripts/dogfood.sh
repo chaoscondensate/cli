@@ -24,6 +24,8 @@ ledger="$work/ledger.json"
 key="$work/f-two.key"
 package="$work/package"
 backdated_ledger="$work/backdated-ledger.json"
+yaml_ledger="$work/native-replacements.yaml"
+yaml_key="$work/native-replacements.key"
 
 # A historical ledger creation time must not become the default initial
 # forecasted_at or recorded_at. Both omitted values come from this operation.
@@ -133,6 +135,36 @@ fi
   --reason "The second event was cancelled." --recorded-at 2027-01-02T00:01:00Z --yes >/dev/null
 "$binary" --json question dispute --file "$ledger" --question q-second \
   --reason "The cancellation is under review." --recorded-at 2027-01-02T00:02:00Z --yes >/dev/null
+
+# Keep the documented YAML path in the native Linux, macOS, and Windows
+# lifecycle. These operations cover normalized scalar, mapping, and sequence
+# replacements through the same binary used for filesystem smoke tests.
+"$binary" --json init --file "$yaml_ledger" --ledger-id native-yaml --timezone UTC \
+  --forecaster-id dogfood --forecaster-name Dogfood --created-at 2026-01-01T00:00:00Z >/dev/null
+"$binary" --json platform add --file "$yaml_ledger" --platform native --name "Native platform" --kind self_hosted >/dev/null
+"$binary" --json platform update --file "$yaml_ledger" --platform native --name "Updated native platform" --kind internal --account-username native >/dev/null
+"$binary" --json question add --file "$yaml_ledger" --question q-yaml --type binary \
+  --title "Will YAML replacements work?" --resolution-criteria "Use the named result." \
+  --created-at 2026-01-01T00:00:00Z --expected-resolution-at 2027-01-01T00:00:00Z \
+  --platform-ref native --tag initial >/dev/null
+"$binary" --json forecast add --file "$yaml_ledger" --question q-yaml --forecast f-yaml \
+  --forecasted-at 2026-02-01T00:00:00Z --recorded-at 2026-02-01T00:01:00Z \
+  --value-kind binary --probability-bp 5500 >/dev/null
+printf '%s\n' '{"value":{"kind":"binary","probability_bp":6500},"rationale":"PRIVATE-NATIVE-YAML","key_factors":["private"],"comment":"private"}' |
+  "$binary" --json forecast seal --file "$yaml_ledger" --question q-yaml --forecast f-yaml-sealed \
+  --forecasted-at 2026-03-01T00:00:00Z --recorded-at 2026-03-01T00:01:00Z \
+  --secret-input - --key-file "$yaml_key" >/dev/null
+"$binary" --json forecast reveal --file "$yaml_ledger" --question q-yaml --forecast f-yaml-sealed \
+  --key-file "$yaml_key" --revealed-at 2026-03-02T00:00:00Z --yes >/dev/null
+"$binary" --json question update --file "$yaml_ledger" --question q-yaml \
+  --title "Updated YAML replacement question" --status closed --tag updated --tag native >/dev/null
+"$binary" --json question annul --file "$yaml_ledger" --question q-yaml \
+  --reason "Native YAML lifecycle complete." --recorded-at 2027-01-01T00:01:00Z --yes >/dev/null
+"$binary" --json validate --file "$yaml_ledger" >/dev/null
+if grep -E '^[[:space:]]+[^#[:space:]][^:]*: \{.+\}$|^[[:space:]]+[^#[:space:]][^:]*: \[.+\]$' "$yaml_ledger" >/dev/null; then
+  echo "native YAML lifecycle emitted a populated flow collection" >&2
+  exit 1
+fi
 
 set +e
 verify_output=$("$binary" --plain verify --file "$ledger" --offline)

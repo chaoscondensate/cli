@@ -132,4 +132,9 @@ release:
   footer: |
     ---
 
+    Signing status: macOS archives are not Apple-signed or notarized, Windows
+    binaries are not code-signed, and Linux and Chocolatey packages are not
+    package-signed. Verify published checksums and GitHub artifact attestations
+    as described in the installation guide.
+
     Project context and updates: https://chaoscondensate.com/

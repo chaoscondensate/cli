@@ -61,6 +61,43 @@ func TestMCPForecastDefaultsUseOneLedgerTimezoneObservation(t *testing.T) {
 	}
 }
 
+func TestMCPYAMLStructuralReplacementMutationsRemainRecoverable(t *testing.T) {
+	ledgerRoot := t.TempDir()
+	server, err := New(Config{LedgerRoots: []string{"main=" + ledgerRoot}, Timeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := connectClient(t, t.Context(), server)
+	defer client.Close()
+
+	calls := []struct {
+		name string
+		args map[string]any
+	}{
+		{"ledger_init", map[string]any{"file": "main:ledger.yaml", "ledger_id": "yaml-replacements", "timezone": "UTC", "forecaster_id": "owner", "forecaster_name": "Owner"}},
+		{"platform_add", map[string]any{"file": "main:ledger.yaml", "platform": "local", "name": "Local", "kind": "self_hosted"}},
+		{"question_add", map[string]any{"file": "main:ledger.yaml", "question": "q-one", "type": "binary", "title": "Will it happen?", "resolution_criteria": "Use the official result.", "expected_resolution_at": "2031-01-01T00:00:00Z", "platform_refs": []any{map[string]any{"platform": "local"}}}},
+		{"platform_update", map[string]any{"file": "main:ledger.yaml", "platform": "local", "name": "Updated local", "kind": "internal"}},
+		{"question_update", map[string]any{"file": "main:ledger.yaml", "question": "q-one", "title": "Updated question title", "status": "closed", "tags": []any{"reviewed", "mcp"}}},
+		{"question_annul", map[string]any{"file": "main:ledger.yaml", "question": "q-one", "reason": "Question became unresolvable", "recorded_at": "2026-09-01T12:00:00Z", "confirm": true}},
+		{"ledger_validate", map[string]any{"file": "main:ledger.yaml"}},
+	}
+	for _, call := range calls {
+		result, callErr := callToolForTest(t, client, &sdk.CallToolParams{Name: call.name, Arguments: call.args})
+		if callErr != nil || result.IsError || strings.Contains(toolText(result), `"code":"internal"`) {
+			t.Fatalf("%s failed: err=%v result=%s", call.name, callErr, toolText(result))
+		}
+	}
+
+	raw, err := os.ReadFile(filepath.Join(ledgerRoot, "ledger.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "status: annulled") || !strings.Contains(string(raw), "name: Updated local") || strings.Contains(string(raw), "{status:") {
+		t.Fatalf("MCP replacements did not retain expanded valid YAML:\n%s", raw)
+	}
+}
+
 func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	ledgerRoot := t.TempDir()
 	outputRoot := t.TempDir()

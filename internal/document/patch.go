@@ -183,12 +183,24 @@ func pointerTokens(pointer string) []string {
 }
 
 func isScalarReplacement(value any) bool {
-	switch value.(type) {
+	_, ok := scalarReplacementValue(value)
+	return ok
+}
+
+func scalarReplacementValue(value any) (any, bool) {
+	switch typed := value.(type) {
 	case nil, bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, string:
-		return true
-	default:
-		return false
+		return typed, true
+	case OrderedValue:
+		if typed.value == nil {
+			return nil, true
+		}
+		switch typed.value.Kind {
+		case ValueNull, ValueBool, ValueInt, ValueString:
+			return typed.value.Any(), true
+		}
 	}
+	return nil, false
 }
 
 func yamlScalarEnd(raw []byte, start int64, node *yaml.Node) (int64, error) {

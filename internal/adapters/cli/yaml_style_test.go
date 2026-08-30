@@ -16,6 +16,9 @@ func TestApplicationWrittenYAMLUsesBlockStyleForPopulatedCollections(t *testing.
 		{"forecast-ledger", "question", "add", "--file", path, "--question", "q-style", "--type", "binary", "--title", "Will it happen?", "--resolution-criteria", "Use the named public result.", "--expected-resolution-at", "10 Aug 2030", "--tag", "review", "--initial-forecast", "f-style-001", "--initial-value-kind", "binary", "--initial-probability-bp", "5100", "--initial-key-factor", "First factor", "--initial-key-factor", "Second factor"},
 		{"forecast-ledger", "forecast", "add", "--file", path, "--question", "q-style", "--forecast", "f-style-002", "--value-kind", "binary", "--probability-bp", "5200", "--key-factor", "Third factor", "--supersedes-forecast", "f-style-001"},
 		{"forecast-ledger", "question", "add", "--file", path, "--question", "q-empty", "--type", "binary", "--title", "Backlog question", "--resolution-criteria", "Use the named public result.", "--expected-resolution-at", "11 Aug 2030"},
+		{"forecast-ledger", "platform", "update", "--file", path, "--platform", "internal", "--name", "Updated internal", "--kind", "internal", "--account-username", "reviewer"},
+		{"forecast-ledger", "question", "update", "--file", path, "--question", "q-style", "--status", "closed", "--tag", "review", "--tag", "regression"},
+		{"forecast-ledger", "question", "annul", "--file", path, "--question", "q-style", "--reason", "Question became unresolvable", "--recorded-at", "2030-08-11T00:00:00+01:00", "--yes"},
 	}
 	for _, arguments := range commands {
 		code, _, stderr := runCLI(arguments...)

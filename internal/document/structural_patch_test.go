@@ -77,6 +77,132 @@ func TestApplyPatchCanAddRemoveOptionalFieldsAndReplaceSubtrees(t *testing.T) {
 	}
 }
 
+func TestApplyPatchReplacesNormalizedOrderedScalarsInBlockYAML(t *testing.T) {
+	input := "root:\n  status: open\n  recorded_at: 'old'\n  boolean_like: 'false'\n  numeric_like: '100'\n  null_like: 'null'\n  flag: false\n  count: 1\n  nullable: old\nrecords:\n  - status: open\n"
+	doc, err := ParseYAML(strings.NewReader(input), DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := ApplyPatch(doc, []PatchOperation{
+		{Kind: PatchReplace, Pointer: "/root/status", Value: orderedJSONValue(t, `"closed"`)},
+		{Kind: PatchReplace, Pointer: "/root/recorded_at", Value: orderedJSONValue(t, `"2026-08-30T20:30:00Z"`)},
+		{Kind: PatchReplace, Pointer: "/root/boolean_like", Value: orderedJSONValue(t, `"true"`)},
+		{Kind: PatchReplace, Pointer: "/root/numeric_like", Value: orderedJSONValue(t, `"1234"`)},
+		{Kind: PatchReplace, Pointer: "/root/null_like", Value: orderedJSONValue(t, `"null"`)},
+		{Kind: PatchReplace, Pointer: "/root/flag", Value: orderedJSONValue(t, `true`)},
+		{Kind: PatchReplace, Pointer: "/root/count", Value: orderedJSONValue(t, `42`)},
+		{Kind: PatchReplace, Pointer: "/root/nullable", Value: orderedJSONValue(t, `null`)},
+		{Kind: PatchReplace, Pointer: "/records/0/status", Value: orderedJSONValue(t, `"closed"`)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := ParseYAML(strings.NewReader(string(got)), DefaultLimits)
+	if err != nil {
+		t.Fatalf("patched YAML does not parse: %v\n%s", err, got)
+	}
+	wants := map[string]any{
+		"/root/status":       "closed",
+		"/root/recorded_at":  "2026-08-30T20:30:00Z",
+		"/root/boolean_like": "true",
+		"/root/numeric_like": "1234",
+		"/root/null_like":    "null",
+		"/root/flag":         true,
+		"/root/count":        int64(42),
+		"/root/nullable":     nil,
+		"/records/0/status":  "closed",
+	}
+	for pointer, want := range wants {
+		value, lookupErr := lookupValue(parsed.Root, pointer)
+		if lookupErr != nil {
+			t.Fatalf("lookup %s: %v", pointer, lookupErr)
+		}
+		if fmt.Sprint(value.Any()) != fmt.Sprint(want) {
+			t.Errorf("%s = %#v, want %#v", pointer, value.Any(), want)
+		}
+	}
+}
+
+func TestApplyPatchReplacesCollectionsAcrossYAMLContexts(t *testing.T) {
+	input := "# keep heading\nroot:\n  block_map:\n    old: value\n  block_sequence:\n    - old\n  flow_map: {old: value}\n  flow_sequence: [old]\n  untouched: {keep: flow}\nrecords:\n  - id: one\n    details:\n      old: value\nblock_items:\n  - old: value\nflow_items:\n  - {old: value}\n"
+	doc, err := ParseYAML(strings.NewReader(input), DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := ApplyPatch(doc, []PatchOperation{
+		{Kind: PatchReplace, Pointer: "/root/block_map", Value: orderedJSONValue(t, `{"first":"one","second":{"nested":true}}`)},
+		{Kind: PatchReplace, Pointer: "/root/block_sequence", Value: orderedJSONValue(t, `[{"id":"one"},{"id":"two"}]`)},
+		{Kind: PatchReplace, Pointer: "/root/flow_map", Value: orderedJSONValue(t, `{"first":"one","second":"two"}`)},
+		{Kind: PatchReplace, Pointer: "/root/flow_sequence", Value: orderedJSONValue(t, `["one","two"]`)},
+		{Kind: PatchReplace, Pointer: "/records/0/details", Value: orderedJSONValue(t, `{"first":"one","second":"two"}`)},
+		{Kind: PatchReplace, Pointer: "/block_items/0", Value: orderedJSONValue(t, `{"first":"one","second":"two"}`)},
+		{Kind: PatchReplace, Pointer: "/flow_items/0", Value: orderedJSONValue(t, `{"first":"one","second":"two"}`)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(got)
+	for _, want := range []string{
+		"# keep heading\n",
+		"  block_map:\n    first: one\n    second:\n      nested: true\n",
+		"  block_sequence:\n    - id: one\n    - id: two\n",
+		"  flow_map:\n    first: one\n    second: two\n",
+		"  flow_sequence:\n    - one\n    - two\n",
+		"  untouched: {keep: flow}\n",
+		"    details:\n      first: one\n      second: two\n",
+		"block_items:\n  - first: one\n    second: two\n",
+		"flow_items:\n  - first: one\n    second: two\n",
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("missing %q in replacement output:\n%s", want, output)
+		}
+	}
+	if _, err := ParseYAML(strings.NewReader(output), DefaultLimits); err != nil {
+		t.Fatalf("patched YAML does not parse: %v\n%s", err, output)
+	}
+}
+
+func TestApplyPatchStructuralReplacementPreservesUnrelatedCRLFBytes(t *testing.T) {
+	input := "# heading\r\nrecords:\r\n  - id: one\r\n    details:\r\n      old: value\r\n    untouched: 'quoted' # keep\r\n\r\n  - id: two\r\n    details: {keep: flow}\r\ntail: {keep: flow}\r\n"
+	doc, err := ParseYAML(strings.NewReader(input), DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := ApplyPatch(doc, []PatchOperation{{Kind: PatchReplace, Pointer: "/records/0/details", Value: orderedJSONValue(t, `{"first":"one","empty":[],"nested":{"enabled":true}}`)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(got)
+	for _, unchanged := range []string{
+		"# heading\r\n",
+		"    untouched: 'quoted' # keep\r\n\r\n",
+		"  - id: two\r\n    details: {keep: flow}\r\n",
+		"tail: {keep: flow}\r\n",
+	} {
+		if !strings.Contains(output, unchanged) {
+			t.Errorf("unrelated bytes %q changed:\n%s", unchanged, output)
+		}
+	}
+	if !strings.Contains(output, "    details:\r\n      first: one\r\n      empty: []\r\n      nested:\r\n        enabled: true\r\n") {
+		t.Fatalf("replacement is not expanded CRLF block YAML:\n%s", output)
+	}
+	if strings.Contains(strings.ReplaceAll(output, "\r\n", ""), "\n") {
+		t.Fatalf("replacement introduced bare LF into CRLF document: %q", output)
+	}
+	if _, err := ParseYAML(strings.NewReader(output), DefaultLimits); err != nil {
+		t.Fatalf("patched YAML does not parse: %v\n%s", err, output)
+	}
+}
+
+func orderedJSONValue(t *testing.T, raw string) OrderedValue {
+	t.Helper()
+	doc, err := ParseJSON(strings.NewReader(raw), DefaultLimits)
+	if err != nil {
+		t.Fatalf("parse ordered JSON value %s: %v", raw, err)
+	}
+	return Ordered(doc.Root)
+}
+
 func TestApplyPatchExpandsPopulatedYAMLCollectionsButKeepsEmptyCollectionsCompact(t *testing.T) {
 	input := "# review\nquestions: []\nplatforms: {}\nuntouched: {keep: flow}\n"
 	doc, err := ParseYAML(strings.NewReader(input), DefaultLimits)

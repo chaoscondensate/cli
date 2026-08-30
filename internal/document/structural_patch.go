@@ -53,8 +53,10 @@ func applyOnePatch(sourceDocument *Document, operation PatchOperation) ([]byte, 
 		return nil, fmt.Errorf("%w: root replacement is not supported", ErrUnsupportedPatch)
 	}
 	if operation.Kind == PatchReplace {
-		if node, err := lookupValue(sourceDocument.Root, operation.Pointer); err == nil && node.Kind != ValueArray && node.Kind != ValueObject && isScalarReplacement(operation.Value) {
-			return ReplaceScalars(sourceDocument, []ScalarEdit{{Pointer: operation.Pointer, Value: operation.Value}})
+		if node, err := lookupValue(sourceDocument.Root, operation.Pointer); err == nil && node.Kind != ValueArray && node.Kind != ValueObject {
+			if scalar, ok := scalarReplacementValue(operation.Value); ok {
+				return ReplaceScalars(sourceDocument, []ScalarEdit{{Pointer: operation.Pointer, Value: scalar}})
+			}
 		}
 	}
 	var edit byteEdit
@@ -305,7 +307,7 @@ func yamlStructuralEdit(document *Document, operation PatchOperation) (byteEdit,
 			return byteEdit{}, err
 		}
 		start := yamlOffset(document.Raw, document.lineIndex, node.Line, node.Column)
-		start = yamlCollectionReplacementStart(document.Raw, start)
+		start = yamlStructuralReplacementStart(document.Raw, start)
 		end, err := yamlNodeEnd(document, node)
 		if err != nil {
 			return byteEdit{}, err
@@ -399,12 +401,12 @@ func yamlFlowAdd(document *Document, parent *yaml.Node, token string, value any)
 		return byteEdit{}, fmt.Errorf("%w: patch parent is not a collection", ErrUnsupportedPatch)
 	}
 	start := yamlOffset(document.Raw, document.lineIndex, parent.Line, parent.Column)
-	start = yamlCollectionReplacementStart(document.Raw, start)
+	start = yamlStructuralReplacementStart(document.Raw, start)
 	end, err := yamlNodeEnd(document, parent)
 	if err != nil {
 		return byteEdit{}, err
 	}
-	replacement, err := renderYAMLNodeReplacement(updated, document, start)
+	replacement, err := renderYAMLNodeReplacement(updated, parent, document, start)
 	if err != nil {
 		return byteEdit{}, err
 	}
@@ -568,7 +570,7 @@ func renderYAMLValue(value any, existing *yaml.Node, document *Document, start i
 	if err != nil {
 		return nil, err
 	}
-	return renderYAMLNodeReplacement(node, document, start)
+	return renderYAMLNodeReplacement(node, existing, document, start)
 }
 
 func renderYAMLAddedMapping(indent, key string, value any, newline []byte) ([]byte, error) {
@@ -675,7 +677,7 @@ func renderYAMLBlockNode(node *yaml.Node) ([]byte, error) {
 	return bytes.TrimSuffix(output.Bytes(), []byte("\n")), nil
 }
 
-func renderYAMLNodeReplacement(node *yaml.Node, document *Document, start int64) ([]byte, error) {
+func renderYAMLNodeReplacement(node, existing *yaml.Node, document *Document, start int64) ([]byte, error) {
 	encoded, err := renderYAMLBlockNode(node)
 	if err != nil {
 		return nil, err
@@ -689,7 +691,10 @@ func renderYAMLNodeReplacement(node *yaml.Node, document *Document, start int64)
 		indent := leading + "  "
 		return []byte(newline + indent + strings.ReplaceAll(string(encoded), "\n", newline+indent)), nil
 	}
-	indent := strings.Repeat(" ", max(node.Column-1, 0))
+	indent := ""
+	if existing != nil {
+		indent = strings.Repeat(" ", max(existing.Column-1, 0))
+	}
 	return []byte(strings.ReplaceAll(string(encoded), "\n", newline+indent)), nil
 }
 
@@ -721,13 +726,12 @@ func cloneYAMLNode(node *yaml.Node) *yaml.Node {
 	return &clone
 }
 
-func yamlCollectionReplacementStart(raw []byte, start int64) int64 {
+func yamlStructuralReplacementStart(raw []byte, start int64) int64 {
 	lineStart := sourceLineStart(raw, start)
-	if onlyHorizontalSpace(raw[lineStart:start]) {
-		return start
-	}
-	for start > lineStart && (raw[start-1] == ' ' || raw[start-1] == '\t') {
-		start--
+	prefix := raw[lineStart:start]
+	trimmed := bytes.TrimRight(prefix, " \t")
+	if len(trimmed) > 0 && trimmed[len(trimmed)-1] == ':' {
+		return lineStart + int64(len(trimmed))
 	}
 	return start
 }

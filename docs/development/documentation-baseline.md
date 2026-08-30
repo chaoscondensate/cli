@@ -36,7 +36,7 @@ that the corresponding document or test has been implemented.
 
 ## Implementation inventory
 
-This inventory was checked against release `v0.6.0` source.
+This inventory was checked against release `v0.6.1` source.
 
 ### Working CLI surface
 
@@ -81,6 +81,13 @@ but no independent security or cryptographic review is recorded. Installed relea
 unreleased `main`; candidate-binary help and `version --json` are authoritative
 for an installed artifact.
 
+Release `v0.6.0` has a release-blocking YAML regression: operations that replace
+an existing structure can fail with `internal`, although the transaction leaves
+the original ledger valid and unchanged. Release `v0.6.1` restores YAML/JSON
+parity for question lifecycle, platform update, forecast reveal, and timestamp
+recording. Users of the affected binary can use JSON as a temporary workaround
+or upgrade to `v0.6.1`.
+
 ### Contract and protocol pins
 
 | Item | Reviewed value |
@@ -106,7 +113,7 @@ GoReleaser builds six `CGO_ENABLED=0` archives:
 - Linux arm64 and x86-64 as `.tar.gz`; and
 - Windows arm64 and x86-64 as `.zip`.
 
-Release `v0.6.0` contains those six archives and eight native Linux packages:
+Release `v0.6.1` contains those six archives and eight native Linux packages:
 `deb`, `rpm`, `apk`, and Arch Linux packages for arm64 and x86-64. Each package
 installs the binary in `/usr/bin` and the Apache-2.0 license in
 `/usr/share/licenses/forecast-ledger`. The main checksum manifest covers the
@@ -205,7 +212,7 @@ The maintained maturity labels have these meanings:
 | Deprecated | The behavior still works for a stated period but has a documented replacement and removal version. |
 | Unsupported | The behavior is outside the maintained contract and must not be presented as working. |
 
-Release `v0.6.0` is **Preview**. A stable SemVer tag identifies a
+Release `v0.6.1` is **Preview**. A stable SemVer tag identifies a
 reproducible release; it does not promote unfinished commands or unaudited
 components to the Stable product maturity label.
 
@@ -234,7 +241,7 @@ time, or substantive outcome-source correctness.
 ### Maturity, audit, and limitations
 
 - The approved public status currently visible in README is **Preview**. The
-  `v0.6.0` is published through the explicit release workflow; version
+  `v0.6.1` is published through the explicit release workflow; version
   stability does not imply feature completeness or audit.
 - No independent security or cryptographic audit is recorded. A pinned
   `govulncheck` run reported no reachable dependency vulnerability on

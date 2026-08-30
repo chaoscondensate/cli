@@ -2,6 +2,8 @@ package document
 
 import (
 	"bytes"
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -47,6 +49,52 @@ func FuzzParseYAML(f *testing.F) {
 			return
 		}
 		assertBoundedTree(t, document.Root, fuzzLimits.MaxExpandedNodes)
+	})
+}
+
+func FuzzApplyYAMLStructuralReplacement(f *testing.F) {
+	for _, seed := range []struct {
+		source      string
+		replacement string
+	}{
+		{source: "target:\n  old: value\nuntouched: {keep: flow}\n", replacement: `{"first":"one","second":{"nested":true}}`},
+		{source: "target: {old: value}\nuntouched: 'quoted'\n", replacement: `{"first":"one","second":"two"}`},
+		{source: "target:\r\n  - old\r\nuntouched: [keep, flow]\r\n", replacement: `[{"id":"one"},{"id":"two"}]`},
+	} {
+		f.Add([]byte(seed.source), []byte(seed.replacement))
+	}
+	f.Fuzz(func(t *testing.T, source, replacement []byte) {
+		doc, err := ParseYAML(bytes.NewReader(source), fuzzLimits)
+		if err != nil {
+			return
+		}
+		original := bytes.Clone(doc.Raw)
+		beforeUntouched, beforeErr := lookupValue(doc.Root, "/untouched")
+		if beforeErr != nil {
+			return
+		}
+		valueDoc, err := ParseJSON(bytes.NewReader(replacement), fuzzLimits)
+		if err != nil {
+			return
+		}
+		result, err := ApplyPatch(doc, []PatchOperation{{Kind: PatchReplace, Pointer: "/target", Value: Ordered(valueDoc.Root)}})
+		if !bytes.Equal(doc.Raw, original) {
+			t.Fatal("ApplyPatch mutated the source document on return")
+		}
+		if err != nil {
+			return
+		}
+		parsed, err := ParseYAML(bytes.NewReader(result), fuzzLimits)
+		if err != nil {
+			t.Fatalf("successful replacement did not reparse: %v", err)
+		}
+		afterUntouched, err := lookupValue(parsed.Root, "/untouched")
+		if err != nil || !reflect.DeepEqual(beforeUntouched.Any(), afterUntouched.Any()) {
+			t.Fatalf("untouched value changed: before=%#v after=%#v err=%v", beforeUntouched.Any(), afterUntouched.Any(), err)
+		}
+		if strings.Contains(string(source), "\r\n") && strings.Contains(strings.ReplaceAll(string(result), "\r\n", ""), "\n") {
+			t.Fatal("successful replacement introduced bare LF into CRLF source")
+		}
 	})
 }
 

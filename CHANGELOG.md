@@ -3,6 +3,19 @@
 Notable user-visible changes to Forecast Ledger CLI are recorded here. Release
 tags and downloadable files are published on GitHub Releases.
 
+## 0.6.1 - 2026-08-30
+
+### Fixed
+
+- Fix the release-blocking YAML structural-replacement regression found while
+  dogfooding 0.6.0. Question updates and lifecycle changes, platform updates,
+  forecast reveal, and RFC 3161 timestamp recording now preserve the existing
+  YAML collection context instead of failing with `internal`; equivalent JSON
+  and YAML operations again produce the same validated ledger state.
+- Keep normalized scalar replacements on the source-preserving scalar path and
+  render populated mapping or sequence replacements in expanded block style
+  without changing unrelated comments, quoting, ordering, or line endings.
+
 ## 0.6.0 - 2026-08-30
 
 ### Changed
