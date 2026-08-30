@@ -25,39 +25,34 @@ forecast-ledger init \
   --forecaster-name "My Name"
 ```
 
-Then create `question.yaml` without an initial forecast:
-
-```yaml
-title: Will the named event happen by the deadline?
-resolution_criteria: Resolve from the named public source.
-created_at: "2026-08-26T12:00:00+01:00"
-forecast_window:
-  closes_at: "2026-12-31T23:59:59Z"
-expected_resolution_at: "2027-01-15T12:00:00Z"
-```
-
-Add the backlog question and, later, its first forecast:
+Add a backlog question and, later, its first forecast directly from flags:
 
 ```sh
 forecast-ledger question add \
   --file ledger.yaml \
   --question q-example \
   --type binary \
-  --input question.yaml
+  --title "Will the named event happen by the deadline?" \
+  --resolution-criteria "Resolve from the named public source." \
+  --created-at 2026-08-26T12:00:00+01:00 \
+  --closes-at 2026-12-31T23:59:59Z \
+  --expected-resolution-at 2027-01-15T12:00:00Z
 forecast-ledger forecast add \
   --file ledger.yaml \
   --question q-example \
   --forecast f-example-001 \
-  --input forecast.yaml
+  --forecasted-at 2026-09-01T09:00:00+01:00 \
+  --value-kind binary \
+  --probability-bp 6500
 ```
 
 The forecast input format is shown in [Manage public forecasts](../how-to/manage-public-forecasts.md).
 The first forecast has no implicit `supersedes_forecast_id`. If that field is
 supplied, it must name an existing forecast in the same question.
 
-Use `--dry-run` to validate all supplied input and destinations without
-writing. Optional init input may contain root metadata, one initial question,
-and optionally that question's first forecast. It may be JSON or YAML;
+Use `--dry-run` to validate all supplied flags and destinations without
+writing. `--input` remains an optional batch mode for a closed JSON or YAML
+document and is mutually exclusive with document-mapped authoring flags;
 `--input -` reads it from stdin. The ledger destination itself never accepts
 `-`.
 
@@ -69,9 +64,20 @@ An explicit ledger `created_at` is never copied into an omitted question
 need reproducible historical import times, provide each timestamp explicitly.
 Equality at inclusive forecast-window and recorded-time boundaries is valid.
 
-To create a question and sealed first forecast during init, supply an init input
-whose `question.initial_forecast.visibility` is `sealed`, include `rationale`,
-`key_factors`, and `comment`, and add an explicit unused key destination:
+For a sealed first forecast, keep only the private bundle in an owner-only file:
+
+```yaml
+value:
+  kind: binary
+  probability_bp: 6500
+rationale: Private reasoning.
+key_factors:
+  - A private observation.
+comment: Private working note.
+```
+
+Supply public question and forecast metadata as flags, plus the protected input
+and an unused key destination:
 
 ```sh
 forecast-ledger init \
@@ -80,7 +86,16 @@ forecast-ledger init \
   --timezone Europe/London \
   --forecaster-id me \
   --forecaster-name "My Name" \
-  --input private-initial-question.yaml \
+  --question q-example \
+  --question-type binary \
+  --question-title "Will the named event happen?" \
+  --question-resolution-criteria "Resolve from the named public source." \
+  --question-closes-at 2026-12-31T23:59:59Z \
+  --question-expected-resolution-at 2027-01-15T12:00:00Z \
+  --initial-forecast f-example-001 \
+  --initial-visibility sealed \
+  --initial-forecasted-at 2026-09-01T09:00:00+01:00 \
+  --initial-secret-input private-forecast.yaml \
   --key-file f-example-001.key
 ```
 
@@ -98,23 +113,18 @@ seconds and an explicit offset.
 
 ## Update current metadata
 
-Create a closed JSON or YAML patch containing only the fields to change:
-
-```yaml
-title: Updated ledger title
-description: null
-forecaster:
-  name: Current display name
-```
-
-Apply it with:
+Set or clear only the fields to change:
 
 ```sh
-forecast-ledger ledger update --file ledger.yaml --input metadata-patch.yaml
+forecast-ledger ledger update \
+  --file ledger.yaml \
+  --title "Updated ledger title" \
+  --clear-description \
+  --forecaster-name "Current display name"
 ```
 
-Omitted fields stay unchanged. `null` removes only optional title,
-description, contact, profiles, or individual members. A switch to a team must
+Omitted fields stay unchanged. `--clear-*` removes only optional title,
+description, contact, profiles, or members. A switch to a team must
 set `kind: team` and at least two unique members in the same patch; a switch to
 an individual must set `kind: individual` and `members: null` together. Ledger,
 forecaster, question, and forecast IDs are immutable here. Forecast Ledger v1

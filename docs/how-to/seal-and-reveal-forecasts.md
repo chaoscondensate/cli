@@ -14,11 +14,9 @@ A sealed forecast publishes an encrypted commitment while keeping its value and
 explanation private until an approved reveal. Seal always appends a new forecast
 ID; it never hides or reseals an existing public record.
 
-Prepare the private input in an owner-only file, or supply it on stdin:
+Prepare only the private bundle in an owner-only file, or supply it on stdin:
 
 ```yaml
-forecasted_at: "2026-09-01T09:00:00+01:00"
-recorded_at: "2026-09-01T09:01:00+01:00"
 value:
   kind: binary
   probability_bp: 6500
@@ -26,7 +24,6 @@ rationale: Private reasoning.
 key_factors:
   - A private observation.
 comment: Private working note.
-supersedes_forecast_id: f-launch-001
 ```
 
 ```sh
@@ -35,9 +32,17 @@ forecast-ledger forecast seal \
   --file ledger.yaml \
   --question q-launch \
   --forecast f-launch-002 \
-  --input private-forecast.yaml \
+  --forecasted-at 2026-09-01T09:00:00+01:00 \
+  --recorded-at 2026-09-01T09:01:00+01:00 \
+  --supersedes-forecast f-launch-001 \
+  --secret-input private-forecast.yaml \
   --key-file f-launch-002.key
 ```
+
+Public forecast and record times, `--public-note`, and
+`--supersedes-forecast` remain ordinary flags. Value, rationale, key factors,
+and comment never enter argv. The legacy full protected `--input` document is
+still accepted as a mutually exclusive compatibility mode.
 
 The key destination must be new. On POSIX it is created with mode `0600`; on
 Windows it receives an owner-only ACL. The key is made durable before the

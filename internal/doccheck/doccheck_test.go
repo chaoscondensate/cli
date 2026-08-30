@@ -37,14 +37,8 @@ func TestMaintainedYAMLInputsMatchOperationContracts(t *testing.T) {
 		schema      service.InputSchemaName
 		destination func() any
 	}{
-		{path: "docs/getting-started/create-ledger.md", fence: 0, schema: service.InputSchemaQuestionAdd, destination: func() any { return &service.QuestionAddInput{} }},
-		{path: "docs/getting-started/create-ledger.md", fence: 1, schema: service.InputSchemaRootMetadata, destination: func() any { return &service.RootMetadataPatchInput{} }},
-		{path: "docs/how-to/manage-platforms.md", fence: 0, schema: service.InputSchemaPlatformCreate, destination: func() any { return &service.PlatformCreateInput{} }},
-		{path: "docs/how-to/manage-platforms.md", fence: 1, schema: service.InputSchemaPlatformPatch, destination: func() any { return &service.PlatformPatchInput{} }},
-		{path: "docs/how-to/manage-questions.md", fence: 0, schema: service.InputSchemaQuestionAdd, destination: func() any { return &service.QuestionAddInput{} }},
-		{path: "docs/how-to/manage-questions.md", fence: 1, schema: service.InputSchemaQuestionPatch, destination: func() any { return &service.QuestionPatchInput{} }},
-		{path: "docs/how-to/manage-public-forecasts.md", fence: 0, schema: service.InputSchemaForecastCreate, destination: func() any { return &service.ForecastCreateInput{} }},
-		{path: "docs/how-to/seal-and-reveal-forecasts.md", fence: 0, schema: service.InputSchemaForecastSeal, destination: func() any { return &service.SealedForecastInput{} }},
+		{path: "docs/getting-started/create-ledger.md", fence: 0, schema: service.InputSchemaForecastSealPrivate, destination: func() any { return &service.SealedForecastPrivateInput{} }},
+		{path: "docs/how-to/seal-and-reveal-forecasts.md", fence: 0, schema: service.InputSchemaForecastSealPrivate, destination: func() any { return &service.SealedForecastPrivateInput{} }},
 	}
 	for _, test := range tests {
 		t.Run(test.path, func(t *testing.T) {

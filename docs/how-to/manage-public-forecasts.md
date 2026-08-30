@@ -19,24 +19,12 @@ forecast normally, without adding an implicit `supersedes_forecast_id`. Supply
 that field only for a later revision, and only with an existing forecast ID from
 the same question.
 
-Create `forecast.yaml` with a value that matches the question type:
-
-```yaml
-forecasted_at: "2026-09-01T09:00:00+01:00"
-recorded_at: "2026-09-01T09:01:00+01:00"
-value:
-  kind: binary
-  probability_bp: 6500
-rationale: Evidence moved slightly in favor of the outcome.
-key_factors:
-  - The latest reported measurement increased.
-supersedes_forecast_id: f-launch-001
-```
-
 Probability uses integer basis points: `6500` means 65%. Multiple-choice input
-must include every option exactly once and total 10,000. Numeric values use
-exact decimal strings. Numeric and date values can contain a point, interval,
-quantiles, or a supported combination documented by the schema.
+uses repeated `--choice-probability option-id,basis-points` values that include
+every option exactly once and total 10,000. Numeric values use exact decimal
+strings. Numeric and date values can use `--point`, `--interval
+lower,upper,credibility-bp`, repeated `--quantile probability-bp,value`, or a
+supported combination.
 Omit `supersedes_forecast_id` when this is the question's first forecast.
 
 Append the record:
@@ -46,7 +34,13 @@ forecast-ledger forecast add \
   --file ledger.yaml \
   --question q-launch \
   --forecast f-launch-002 \
-  --input forecast.yaml
+  --forecasted-at 2026-09-01T09:00:00+01:00 \
+  --recorded-at 2026-09-01T09:01:00+01:00 \
+  --value-kind binary \
+  --probability-bp 6500 \
+  --rationale "Evidence moved slightly in favor of the outcome." \
+  --key-factor "The latest reported measurement increased." \
+  --supersedes-forecast f-launch-001
 ```
 
 The question must be open. `forecasted_at` must be inside its forecast window
@@ -57,6 +51,9 @@ self-reported time is not cryptographic proof.
 Use `--dry-run` to parse and validate the prospective append without writing.
 The result cannot guarantee that another process will not change the ledger
 before a later real command.
+
+`--input` remains an optional closed JSON/YAML batch mode. It cannot be mixed
+with document-mapped authoring flags.
 
 List the complete revision history in recorded order or inspect one record:
 
@@ -79,9 +76,9 @@ the command opens no network connection and labels stored verified evidence
 accordingly. Because stdin contains only ledger bytes, these commands do not
 resolve or check sibling target or timestamp files.
 
-Quote timestamps in maintained YAML input as shown above. The CLI also accepts
-a YAML timestamp scalar in a known timestamp field, but rejects that implicit
-type in ordinary text fields.
+In optional YAML batch mode, quote timestamps. The decoder also accepts a YAML
+timestamp scalar in a known timestamp field, but rejects that implicit type in
+ordinary text fields.
 
 For a question with no forecasts, `forecast list` returns an empty list.
 Selecting any forecast with `forecast show` returns `not_found`; it never

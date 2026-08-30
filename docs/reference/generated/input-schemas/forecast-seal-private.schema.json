@@ -1,0 +1,290 @@
+{
+  "$defs": {
+    "binaryValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "binary"
+        },
+        "probability_bp": {
+          "description": "Probability of YES in basis points.",
+          "maximum": 10000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "probability_bp"
+      ],
+      "type": "object"
+    },
+    "choiceProbability": {
+      "additionalProperties": false,
+      "properties": {
+        "option_id": {
+          "$ref": "#/$defs/slug"
+        },
+        "probability_bp": {
+          "maximum": 10000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "option_id",
+        "probability_bp"
+      ],
+      "type": "object"
+    },
+    "date": {
+      "format": "date",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+    },
+    "dateInterval": {
+      "additionalProperties": false,
+      "properties": {
+        "credibility_bp": {
+          "maximum": 10000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "lower": {
+          "$ref": "#/$defs/date"
+        },
+        "upper": {
+          "$ref": "#/$defs/date"
+        }
+      },
+      "required": [
+        "lower",
+        "upper",
+        "credibility_bp"
+      ],
+      "type": "object"
+    },
+    "dateQuantile": {
+      "additionalProperties": false,
+      "properties": {
+        "probability_bp": {
+          "maximum": 9999,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "value": {
+          "$ref": "#/$defs/date"
+        }
+      },
+      "required": [
+        "probability_bp",
+        "value"
+      ],
+      "type": "object"
+    },
+    "dateValue": {
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "point"
+          ]
+        },
+        {
+          "required": [
+            "interval"
+          ]
+        },
+        {
+          "required": [
+            "quantiles"
+          ]
+        }
+      ],
+      "properties": {
+        "interval": {
+          "$ref": "#/$defs/dateInterval"
+        },
+        "kind": {
+          "const": "date"
+        },
+        "point": {
+          "$ref": "#/$defs/date"
+        },
+        "quantiles": {
+          "items": {
+            "$ref": "#/$defs/dateQuantile"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "decimal": {
+      "description": "An exact decimal encoded as a string. Leading zeros and non-finite values are forbidden.",
+      "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+      "type": "string"
+    },
+    "forecast-seal-private": {
+      "additionalProperties": false,
+      "properties": {
+        "comment": {
+          "minLength": 0,
+          "type": "string"
+        },
+        "key_factors": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "rationale": {
+          "minLength": 0,
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/forecastValue"
+        }
+      },
+      "required": [
+        "value",
+        "rationale",
+        "key_factors",
+        "comment"
+      ],
+      "type": "object"
+    },
+    "forecastValue": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/binaryValue"
+        },
+        {
+          "$ref": "#/$defs/multipleChoiceValue"
+        },
+        {
+          "$ref": "#/$defs/numericValue"
+        },
+        {
+          "$ref": "#/$defs/dateValue"
+        }
+      ]
+    },
+    "multipleChoiceValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "multiple_choice"
+        },
+        "probabilities": {
+          "items": {
+            "$ref": "#/$defs/choiceProbability"
+          },
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "probabilities"
+      ],
+      "type": "object"
+    },
+    "numericInterval": {
+      "additionalProperties": false,
+      "properties": {
+        "credibility_bp": {
+          "maximum": 10000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "lower": {
+          "$ref": "#/$defs/decimal"
+        },
+        "upper": {
+          "$ref": "#/$defs/decimal"
+        }
+      },
+      "required": [
+        "lower",
+        "upper",
+        "credibility_bp"
+      ],
+      "type": "object"
+    },
+    "numericQuantile": {
+      "additionalProperties": false,
+      "properties": {
+        "probability_bp": {
+          "maximum": 9999,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "value": {
+          "$ref": "#/$defs/decimal"
+        }
+      },
+      "required": [
+        "probability_bp",
+        "value"
+      ],
+      "type": "object"
+    },
+    "numericValue": {
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "point"
+          ]
+        },
+        {
+          "required": [
+            "interval"
+          ]
+        },
+        {
+          "required": [
+            "quantiles"
+          ]
+        }
+      ],
+      "properties": {
+        "interval": {
+          "$ref": "#/$defs/numericInterval"
+        },
+        "kind": {
+          "const": "numeric"
+        },
+        "point": {
+          "$ref": "#/$defs/decimal"
+        },
+        "quantiles": {
+          "items": {
+            "$ref": "#/$defs/numericQuantile"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "slug": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "type": "string"
+    }
+  },
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/forecast-seal-private/v1",
+  "$ref": "#/$defs/forecast-seal-private",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

@@ -28,6 +28,15 @@ ledger protects its forecast bundle only while the key
 and private input remain separate. Reveal is irreversible publication of the
 private fields and requires explicit approval.
 
+Ordinary public ledger values supplied through CLI flags are visible in process
+listings, shell history, terminal logs, and job metadata. Do not place a private
+forecast value, rationale, key factor, working comment, raw key, salt, or
+credential in those flags or an environment variable. `forecast seal` accepts
+those private fields only through protected `--secret-input` (or the legacy
+protected full `--input`) and writes keys only to protected `--key-file`
+destinations. Sealed initial forecasts use `--initial-secret-input` for the same
+reason.
+
 `timestamp stamp` sends the SHA-256 digest of the canonical target, a random
 nonce, and request timing to the selected RFC 3161 authority. Omission selects
 the current FreeTSA HTTPS profile. It does not send forecast plaintext unless

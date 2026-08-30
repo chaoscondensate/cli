@@ -614,7 +614,7 @@ func TestHelpSuggestionsCompletionAndVersionJSON(t *testing.T) {
 		}
 	}
 	code, stdout, stderr = runCLI("forecast-ledger", "version")
-	if code != 0 || stderr != "" || !strings.Contains(stdout, "timestamp support: rfc3161/sha256") || !strings.Contains(stdout, "auto=freetsa, retained CA bundle; local verification") {
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "Timestamp support: rfc3161/sha256") || !strings.Contains(stdout, "auto=freetsa, retained CA bundle; local verification") {
 		t.Fatalf("human version does not describe RFC 3161 support: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	code, stdout, stderr = runCLI("forecast-ledger", "timestamp", "--help")

@@ -217,6 +217,15 @@ type SealedForecastInput struct {
 	SupersedesForecastID *ledger.Slug         `json:"supersedes_forecast_id,omitempty"`
 }
 
+// SealedForecastPrivateInput is the protected portion of direct CLI sealing.
+// Public selectors and metadata stay in argv; these values never do.
+type SealedForecastPrivateInput struct {
+	Value      ledger.ForecastValue `json:"value"`
+	Rationale  string               `json:"rationale"`
+	KeyFactors []string             `json:"key_factors"`
+	Comment    string               `json:"comment"`
+}
+
 type KeyHintUpdateInput struct {
 	KeyHint string `json:"key_hint"`
 }

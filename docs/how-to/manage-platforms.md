@@ -14,47 +14,38 @@ Platform records describe external or local places associated with questions.
 They do not publish data or contact a service. Every command names the ledger
 with `--file`.
 
-Create `platform.yaml`:
-
-```yaml
-name: Metaculus
-kind: scoring_platform
-url: https://www.metaculus.com/
-account:
-  username: example-user
-```
-
-Add it under a stable ID:
+Add a platform under a stable ID. The v1.2.0 contract requires both its name and
+kind, so an ID alone reports those missing flags instead of inventing defaults:
 
 ```sh
 forecast-ledger platform add \
   --file ledger.yaml \
   --platform metaculus \
-  --input platform.yaml
+  --name Metaculus \
+  --kind scoring_platform \
+  --url https://www.metaculus.com/ \
+  --account-username example-user
 ```
 
 The supported kinds are `scoring_platform`, `prediction_market`,
 `self_hosted`, `internal`, and `informal`. URLs must be absolute. Account data
 must contain at least one of username, user ID, or profile URL.
 
-Update only named fields with a closed JSON or YAML patch:
-
-```yaml
-name: Metaculus forecasting
-url: null
-account:
-  profile_url: https://www.metaculus.com/accounts/profile/example-user/
-```
+Update only named fields and use explicit clear flags for removal:
 
 ```sh
 forecast-ledger platform update \
   --file ledger.yaml \
   --platform metaculus \
-  --input platform-patch.yaml
+  --name "Metaculus forecasting" \
+  --clear-url \
+  --account-profile-url https://www.metaculus.com/accounts/profile/example-user/
 ```
 
-Omitted fields stay unchanged. `null` removes an optional URL, account, or
-account field. It cannot remove the required name or kind.
+Omitted fields stay unchanged. `--clear-url`, `--clear-account`, and the
+account-field clear flags remove optional values. They cannot remove the
+required name or kind. `--input` remains an optional closed-document batch mode
+and cannot be combined with these authoring flags.
 
 List and inspect records without mutation:
 

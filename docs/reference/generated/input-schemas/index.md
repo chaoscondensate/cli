@@ -19,6 +19,7 @@ These closed Draft 2020-12 schemas validate JSON or YAML operation input after b
 - [`dispute`](dispute.schema.json)
 - [`forecast-create`](forecast-create.schema.json)
 - [`forecast-seal`](forecast-seal.schema.json)
+- [`forecast-seal-private`](forecast-seal-private.schema.json)
 - [`init`](init.schema.json)
 - [`key-hint-update`](key-hint-update.schema.json)
 - [`platform-create`](platform-create.schema.json)

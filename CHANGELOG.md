@@ -3,10 +3,18 @@
 Notable user-visible changes to Forecast Ledger CLI are recorded here. Release
 tags and downloadable files are published on GitHub Releases.
 
-## 0.5.1 - 2026-08-30
+## 0.5.2 - 2026-08-30
 
 ### Changed
 
+- Make direct CLI flags the complete ordinary authoring path for ledger,
+  platform, question, lifecycle, and public forecast data. Closed `--input`
+  documents remain optional, mutually exclusive batch inputs.
+- Split direct sealed-forecast authoring into public metadata flags and a
+  protected `--secret-input`; sealed initial forecasts use
+  `--initial-secret-input`. Private values and keys remain outside argv.
+- Present human `version` metadata as compact labeled lines with terminal-safe
+  color policy while preserving stable JSON.
 - Make `timestamp stamp` and `timestamp_stamp` default to the qualified
   one-entry FreeTSA catalog. `--tsa-provider`/`tsa_provider` can name the
   built-in profile; custom `tsa_url` and `ca_bundle` remain a required-together

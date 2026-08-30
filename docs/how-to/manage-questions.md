@@ -10,34 +10,27 @@ prerequisites: ../getting-started/create-ledger.md
 next: manage-public-forecasts.md
 -->
 
-Forecast Ledger v1.1 allows a question to exist before its first forecast.
+Forecast Ledger v1.2 allows a question to exist before its first forecast.
 `question add` always creates the typed question and optionally creates its
 first public or sealed forecast in the same atomic operation.
 
-The question type is a required scalar flag. Do not repeat `type` inside the
-closed input document. For a backlog question, `question.yaml` can contain:
-
-```yaml
-title: Will the launch happen by the deadline?
-resolution_criteria: Resolve from the operator's public launch record.
-forecast_window:
-  closes_at: "2026-12-31T23:59:59Z"
-expected_resolution_at: "2027-01-15T12:00:00Z"
-```
-
-Then run:
+The question type and all ordinary question data are direct flags:
 
 ```sh
 forecast-ledger question add \
   --file ledger.yaml \
   --question q-launch \
   --type binary \
-  --input question.yaml
+  --title "Will the launch happen by the deadline?" \
+  --resolution-criteria "Resolve from the operator's public launch record." \
+  --closes-at 2026-12-31T23:59:59Z \
+  --expected-resolution-at 2027-01-15T12:00:00Z
 ```
 
 The supported types are `binary`, `multiple_choice`, `numeric`, and `date`.
-Multiple-choice questions require at least two unique options. Numeric questions
-require a unit. Binary and date questions accept neither options nor a unit.
+Multiple-choice questions require at least two repeated `--option id,label`
+values. Numeric questions require `--unit-name` and may use `--unit-symbol` or
+`--unit-ucum-code`. Binary and date questions accept neither options nor a unit.
 Every referenced platform must already exist, and question and forecast IDs
 must be unique in their respective ledger-wide namespaces.
 
@@ -46,28 +39,25 @@ Omit `initial_forecast` to leave `forecasts: []`, then use `forecast add` or
 implicitly supersede anything; an explicit supersedes ID must already exist in
 that question.
 
-When a supplied `initial_forecast.visibility` is `sealed`, the entire input is private and
-the command requires a new protected `--key-file`. A public first forecast must
-not supply that flag. The protected key is created before the ledger update; if
-the update fails, the key is retained and recovery output tells you what to do.
+For a sealed initial forecast, public ID, visibility, times and note remain
+flags; value, rationale, key factors and comment use protected
+`--initial-secret-input`. The command also requires a new protected
+`--key-file`. A public first forecast must not supply those protected flags.
+The protected key is created before the ledger update; if the update fails, the
+key is retained and recovery output tells you what to do.
 Dry-run validates the destination and prospective shape without generating a
 real key, salt, or nonce. `--key-file` is invalid when `initial_forecast` is
 absent or public.
 
-Update only the allowed fields with a closed patch:
-
-```yaml
-status: closed
-forecast_window:
-  closes_at: "2026-10-01T22:00:00+01:00"
-notes: Ready for resolution review.
-```
+Update only allowed fields; omitted flags stay unchanged:
 
 ```sh
 forecast-ledger question update \
   --file ledger.yaml \
   --question q-launch \
-  --input question-patch.yaml
+  --status closed \
+  --closes-at 2026-10-01T22:00:00+01:00 \
+  --notes "Ready for resolution review."
 ```
 
 An updated window must still contain every existing forecast. Question ID,
@@ -98,7 +88,9 @@ source:
 forecast-ledger question resolve \
   --file ledger.yaml \
   --question q-launch \
-  --input resolution.yaml \
+  --outcome-boolean=true \
+  --outcome-known-at 2027-01-02T00:00:00Z \
+  --source "Official result,https://example.com/result,2027-01-02T00:10:00Z" \
   --yes
 ```
 
@@ -108,7 +100,9 @@ Source URLs must be absolute. Forecasts and integrity evidence are retained.
 
 Use `question annul` to record that a question cannot be resolved under its
 criteria, or `question dispute` to challenge a resolved or annulled record.
-These commands also require input and approval. Forecast Ledger v1 stores only
+These commands require `--reason`, optional repeated `--source`, and approval.
+`--input` remains an optional mutually exclusive batch mode on all authoring
+leaves. Forecast Ledger v1 stores only
 the current resolution object: resolve-after-dispute, annul of a terminal state,
 or dispute replaces that object. The file itself does not provide internal
 resolution history and does not infer Git or another external history system.

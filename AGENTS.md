@@ -101,6 +101,16 @@ Primary results go to stdout; diagnostics, warnings, progress, and errors go to
 stderr. `--json` emits one stable JSON value without decoration. Non-TTY output,
 `NO_COLOR`, `TERM=dumb`, and `--no-color` contain no color or animation.
 
+Every CLI command that creates or changes ledger data must provide ordinary
+flags or a dedicated subcommand for every non-secret authorable field. A user
+must not have to prepare JSON or YAML merely to perform a normal CLI workflow;
+`--input` may remain only as an optional, documented batch or compatibility
+mode. Keep authoring flags leaf-local, add flag-only acceptance coverage and a
+copyable example, and update the maintained command-surface inventory whenever
+a request field changes. Private forecast values, keys, salts, credentials, and
+other secrets remain the exception: they must use protected files or stdin and
+must never enter argv or environment variables.
+
 MCP v1 uses stdio only and protocol stdout contains no human logs. The server is
 read-write and online by default within explicit, named, non-overlapping ledger,
 package-output, and secret roots. Optional `--read-only` and `--offline` modes

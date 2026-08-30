@@ -119,24 +119,48 @@ forecast-ledger init \
 ```
 
 The embedded Forecast Ledger v1.2.0 contract permits zero questions and questions
-with zero forecasts. Add them when they are ready; `--input` is optional on
-`init`, and `initial_forecast` is optional in question input. See [Create a
-ledger](docs/getting-started/create-ledger.md) for the empty-first, combined,
-dry-run, team, and sealed-key workflows.
+with zero forecasts. All ordinary non-secret authoring is available through
+flags. `--input` remains an optional, mutually exclusive batch mode; protected
+private forecast bundles use `--secret-input` or `--initial-secret-input` and
+never enter argv. See [Create a ledger](docs/getting-started/create-ledger.md)
+for empty-first, combined, dry-run, team, and sealed-key workflows.
 
 Root display and current forecaster metadata can later be changed with a closed
 patch, without rewriting question or forecast history:
 
 ```sh
-forecast-ledger ledger update --file ledger.yaml --input metadata-patch.yaml
+forecast-ledger ledger update \
+  --file ledger.yaml \
+  --title "My forecast archive" \
+  --description "Public forecast history"
 ```
 
 Platform records can be managed locally with `platform add`, `update`, `list`,
 `show`, and approved `remove`; see [Manage platform records](docs/how-to/manage-platforms.md).
 
+```sh
+forecast-ledger platform add \
+  --file ledger.yaml \
+  --platform metaculus \
+  --name Metaculus \
+  --kind scoring_platform \
+  --url https://www.metaculus.com/
+```
+
 Typed questions can be added before their first forecast, updated within the v1
 evidence rules, listed, shown, resolved, annulled, or disputed; see
 [Manage questions and resolutions](docs/how-to/manage-questions.md).
+
+```sh
+forecast-ledger question add \
+  --file ledger.yaml \
+  --question q-launch \
+  --type binary \
+  --title "Will the launch happen?" \
+  --resolution-criteria "Resolve from the operator's public launch record." \
+  --closes-at 2026-12-31T23:59:59Z \
+  --expected-resolution-at 2027-01-15T12:00:00Z
+```
 
 Append the first public forecast, or a later revision without modifying an
 earlier record:
@@ -146,7 +170,10 @@ forecast-ledger forecast add \
   --file ledger.yaml \
   --question q-launch \
   --forecast f-launch-001 \
-  --input forecast.yaml
+  --forecasted-at 2026-09-01T09:00:00+01:00 \
+  --value-kind binary \
+  --probability-bp 6500 \
+  --rationale "Evidence moved slightly in favor."
 ```
 
 See [Manage public forecasts](docs/how-to/manage-public-forecasts.md) for typed
@@ -159,7 +186,8 @@ forecast-ledger forecast seal \
   --file ledger.yaml \
   --question q-launch \
   --forecast f-launch-002 \
-  --input private-forecast.yaml \
+  --forecasted-at 2026-09-01T10:00:00+01:00 \
+  --secret-input private-forecast.yaml \
   --key-file f-launch-002.key
 forecast-ledger forecast reveal \
   --file ledger.yaml \

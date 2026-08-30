@@ -44,8 +44,8 @@ The following commands have connected application services:
 
 | Command | Behavior | Network |
 | --- | --- | --- |
-| `forecast-ledger init --file <new-path> ... [--input <path|->]` | Exclusively creates a schema-valid JSON/YAML ledger. Optional input may add root metadata, one question, and an optional first public or sealed forecast. A sealed forecast requires a separate new `--key-file`. | None |
-| `forecast-ledger ledger update --file <path> --input <path|->` | Minimally patches allowed root and current forecaster metadata. | None |
+| `forecast-ledger init --file <new-path> ... [authoring flags] [--input <path|->]` | Exclusively creates a schema-valid JSON/YAML ledger. Direct flags can add root metadata, platforms, one question, and an optional first public forecast. Sealed private values use protected `--initial-secret-input`; optional `--input` is a mutually exclusive batch mode. | None |
+| `forecast-ledger ledger update --file <path> <set-or-clear flags>` | Minimally patches allowed root and current forecaster metadata; optional `--input` is a mutually exclusive batch mode. | None |
 | `forecast-ledger platform add|update|list|show|remove ...` | Creates, patches, lists, inspects, or removes unreferenced platform records. List/show accept `--file -`; removal requires approval. | None |
 | `forecast-ledger question add|update|list|show|resolve|annul|dispute ...` | Creates a typed question with an optional first public or sealed forecast, applies safe patches, reads redacted summaries, and records approved lifecycle claims. List/show accept `--file -`. | None |
 | `forecast-ledger forecast add|list|show|seal|reveal ...`, `forecast key-hint update ...` | Appends public or sealed forecasts, authenticates approved reveal, repairs safe logical hints, or reads redacted history. List/show accept `--file -`. | None |
@@ -56,7 +56,7 @@ The following commands have connected application services:
 | `forecast-ledger mcp serve --ledger-root <name=path> ...` | Starts a protocol-clean stdio server with closed CLI-parity tools and redacted addressed resources. Default is read-write/online within roots; read-only/offline are whole-server modes and reveal is separately default-off. | Explicit TSA only for timestamp stamp unless server is offline |
 | `forecast-ledger validate --file <path>` | Parses and validates an embedded-schema JSON or YAML ledger. Eligible for `--file -`. | None |
 | `forecast-ledger status --file <path>` | Validates a ledger and summarizes questions, forecasts, and timestamp states. Eligible for `--file -`. | None |
-| `forecast-ledger version [--json]` | Reports binary, source, Go, schema, and MCP protocol metadata. | None |
+| `forecast-ledger version [--json]` | Reports labeled binary, source, Go, schema, MCP, and RFC 3161 metadata; human labels may use TTY-safe color while plain/JSON/non-TTY output remains undecorated. | None |
 | `forecast-ledger completion <shell>` | Generates Bash, Zsh, Fish, or PowerShell completion text through urfave. | None |
 
 The root exposes stable presentation flags `--json`, `--plain`, `--quiet`,

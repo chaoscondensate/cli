@@ -13,20 +13,21 @@ import (
 type InputSchemaName string
 
 const (
-	InputSchemaInit              InputSchemaName = "init"
-	InputSchemaRootMetadata      InputSchemaName = "root-metadata-patch"
-	InputSchemaPlatformCreate    InputSchemaName = "platform-create"
-	InputSchemaPlatformPatch     InputSchemaName = "platform-patch"
-	InputSchemaQuestionAdd       InputSchemaName = "question-add"
-	InputSchemaQuestionPatch     InputSchemaName = "question-patch"
-	InputSchemaForecastCreate    InputSchemaName = "forecast-create"
-	InputSchemaForecastSeal      InputSchemaName = "forecast-seal"
-	InputSchemaKeyHintUpdate     InputSchemaName = "key-hint-update"
-	InputSchemaResolution        InputSchemaName = "resolution"
-	InputSchemaAnnul             InputSchemaName = "annul"
-	InputSchemaDispute           InputSchemaName = "dispute"
-	InputSchemaPublicationBuild  InputSchemaName = "publication-build"
-	InputSchemaPublicationVerify InputSchemaName = "publication-verify"
+	InputSchemaInit                InputSchemaName = "init"
+	InputSchemaRootMetadata        InputSchemaName = "root-metadata-patch"
+	InputSchemaPlatformCreate      InputSchemaName = "platform-create"
+	InputSchemaPlatformPatch       InputSchemaName = "platform-patch"
+	InputSchemaQuestionAdd         InputSchemaName = "question-add"
+	InputSchemaQuestionPatch       InputSchemaName = "question-patch"
+	InputSchemaForecastCreate      InputSchemaName = "forecast-create"
+	InputSchemaForecastSeal        InputSchemaName = "forecast-seal"
+	InputSchemaForecastSealPrivate InputSchemaName = "forecast-seal-private"
+	InputSchemaKeyHintUpdate       InputSchemaName = "key-hint-update"
+	InputSchemaResolution          InputSchemaName = "resolution"
+	InputSchemaAnnul               InputSchemaName = "annul"
+	InputSchemaDispute             InputSchemaName = "dispute"
+	InputSchemaPublicationBuild    InputSchemaName = "publication-build"
+	InputSchemaPublicationVerify   InputSchemaName = "publication-verify"
 )
 
 const inputSchemaVersion = "1"
@@ -34,7 +35,7 @@ const inputSchemaVersion = "1"
 var inputSchemaNames = []InputSchemaName{
 	InputSchemaInit, InputSchemaRootMetadata, InputSchemaPlatformCreate,
 	InputSchemaPlatformPatch, InputSchemaQuestionAdd, InputSchemaQuestionPatch,
-	InputSchemaForecastCreate, InputSchemaForecastSeal, InputSchemaKeyHintUpdate,
+	InputSchemaForecastCreate, InputSchemaForecastSeal, InputSchemaForecastSealPrivate, InputSchemaKeyHintUpdate,
 	InputSchemaResolution, InputSchemaAnnul, InputSchemaDispute,
 	InputSchemaPublicationBuild, InputSchemaPublicationVerify,
 }
@@ -175,6 +176,12 @@ func operationDefinitions() map[InputSchemaName]any {
 		}, map[string]any{"minProperties": 1}),
 		InputSchemaForecastCreate: ref("publicForecastInput"),
 		InputSchemaForecastSeal:   ref("sealedForecastInput"),
+		InputSchemaForecastSealPrivate: closedObject(
+			[]string{"value", "rationale", "key_factors", "comment"},
+			map[string]any{
+				"value": ref("forecastValue"), "rationale": stringValue(0),
+				"key_factors": arrayOf(stringValue(1), 0), "comment": stringValue(0),
+			}, nil),
 		InputSchemaKeyHintUpdate: closedObject([]string{"key_hint"}, map[string]any{
 			"key_hint": map[string]any{"type": "string", "pattern": `^[a-z][a-z0-9+.-]*:[A-Za-z0-9._~+-]+$`},
 		}, nil),

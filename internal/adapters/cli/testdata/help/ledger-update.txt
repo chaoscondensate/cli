@@ -6,13 +6,30 @@ USAGE:
 
 DESCRIPTION:
    Example:
-     forecast-ledger ledger update --file ledger.yaml --input metadata-patch.yaml
+     forecast-ledger ledger update --file ledger.yaml --title 'Forecast archive' --timezone Europe/London
+
+   Use direct flags for normal authoring. --input is an optional, mutually exclusive batch mode.
 
 OPTIONS:
-   --file string, -f string   Ledger file path
-   --input string, -i string  Closed JSON or YAML input file; use - for stdin
-   --dry-run                  Validate and show the planned change without writing
-   --help, -h                 show help
+   --file string, -f string                             Ledger file path
+   --input string, -i string                            Closed JSON or YAML input file; use - for stdin
+   --title string                                       Replace ledger title
+   --clear-title                                        Remove ledger title
+   --description string                                 Replace ledger description
+   --clear-description                                  Remove ledger description
+   --timezone string                                    Replace default IANA timezone
+   --forecaster-kind string                             Replace forecaster kind: individual or team
+   --forecaster-name string                             Replace forecaster display name
+   --clear-contact                                      Remove forecaster contact
+   --clear-profiles                                     Remove forecaster profiles
+   --clear-members                                      Remove team members
+   --contact-email string                               Forecaster contact email
+   --contact-website string                             Forecaster contact website URL
+   --profile string [ --profile string ]                Forecaster profile as service,url[,username]; repeat for more
+   --member string [ --member string ]                  Team member as id,name[,role]; repeat for more
+   --member-profile string [ --member-profile string ]  Member profile as member-id,service,url[,username]; repeat for more
+   --dry-run                                            Validate and show the planned change without writing
+   --help, -h                                           show help
 
 GLOBAL OPTIONS:
    --json              Write stable JSON output
