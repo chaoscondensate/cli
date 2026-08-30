@@ -14,6 +14,7 @@ import (
 	"github.com/chaoscondensate/cli/internal/buildinfo"
 	"github.com/chaoscondensate/cli/internal/presentation"
 	"github.com/chaoscondensate/cli/internal/service"
+	"github.com/chaoscondensate/cli/internal/storage"
 	urfavecli "github.com/urfave/cli/v3"
 )
 
@@ -122,7 +123,7 @@ func TestEveryAuthoringLeafReachesDirectModeWithoutRequiredInput(t *testing.T) {
 				t.Fatalf("setup init code=%d stderr=%q", code, stderr)
 			}
 			privatePath := filepath.Join(directory, "private.json")
-			if err := os.WriteFile(privatePath, []byte(`{"value":{"kind":"binary","probability_bp":5000},"rationale":"private","key_factors":[],"comment":"private"}`), 0o600); err != nil {
+			if err := storage.CreateProtectedFile(privatePath, []byte(`{"value":{"kind":"binary","probability_bp":5000},"rationale":"private","key_factors":[],"comment":"private"}`)); err != nil {
 				t.Fatal(err)
 			}
 			keyPath := filepath.Join(directory, "forecast.key")
@@ -138,7 +139,7 @@ func TestEveryAuthoringLeafReachesDirectModeWithoutRequiredInput(t *testing.T) {
 func TestDirectBuildersMatchRetainedDocumentSchemas(t *testing.T) {
 	directory := t.TempDir()
 	privatePath := filepath.Join(directory, "private.json")
-	if err := os.WriteFile(privatePath, []byte(`{"value":{"kind":"binary","probability_bp":6400},"rationale":"Private","key_factors":["Factor"],"comment":"Comment"}`), 0o600); err != nil {
+	if err := storage.CreateProtectedFile(privatePath, []byte(`{"value":{"kind":"binary","probability_bp":6400},"rationale":"Private","key_factors":["Factor"],"comment":"Comment"}`)); err != nil {
 		t.Fatal(err)
 	}
 	tests := []struct {
@@ -426,7 +427,7 @@ func TestFlagOnlyLifecycleAndProtectedSeal(t *testing.T) {
 	}
 	privatePath := filepath.Join(directory, "private.json")
 	privateJSON := `{"value":{"kind":"binary","probability_bp":7000},"rationale":"secret-rationale","key_factors":["private-factor"],"comment":"secret-comment"}`
-	if err := os.WriteFile(privatePath, []byte(privateJSON), 0o600); err != nil {
+	if err := storage.CreateProtectedFile(privatePath, []byte(privateJSON)); err != nil {
 		t.Fatal(err)
 	}
 	keyPath := filepath.Join(directory, "forecast.key")
@@ -498,7 +499,7 @@ func TestFlagOnlySealedInitialForecast(t *testing.T) {
 	directory := t.TempDir()
 	privatePath := filepath.Join(directory, "initial-private.json")
 	privateJSON := `{"value":{"kind":"binary","probability_bp":7200},"rationale":"sealed rationale","key_factors":[],"comment":"sealed comment"}`
-	if err := os.WriteFile(privatePath, []byte(privateJSON), 0o600); err != nil {
+	if err := storage.CreateProtectedFile(privatePath, []byte(privateJSON)); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(directory, "ledger.json")
