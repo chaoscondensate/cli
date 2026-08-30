@@ -34,8 +34,8 @@ forecast-ledger forecast add \
   --file ledger.yaml \
   --question q-launch \
   --forecast f-launch-002 \
-  --forecasted-at 2026-09-01T09:00:00+01:00 \
-  --recorded-at 2026-09-01T09:01:00+01:00 \
+  --forecasted-at "1 Sep 2026 09:00" \
+  --recorded-at "1 Sep 2026 09:01" \
   --value-kind binary \
   --probability-bp 6500 \
   --rationale "Evidence moved slightly in favor of the outcome." \
@@ -43,17 +43,24 @@ forecast-ledger forecast add \
   --supersedes-forecast f-launch-001
 ```
 
-The question must be open. `forecasted_at` must be inside its forecast window
-and must not follow `recorded_at`. If `recorded_at` is omitted, the command
-captures it once from the local clock and returns the exact stored value. This
-self-reported time is not cryptographic proof.
+The question must be open. `forecasted_at` must not precede an optional window
+opening and must not follow `recorded_at`. If `forecasted_at` is omitted, the
+command captures one current instant, formats it in the ledger timezone, and
+uses it for both omitted forecast and record times. This self-reported time is
+not cryptographic proof.
+
+Timestamp flags accept exact RFC 3339 or deterministic local forms such as
+`2030-08-10 14:05`, `10 Aug 2030 14:05`, and `August 10 2030`. Local forms use
+the ledger `default_timezone`. Forecast and evidence timestamps require a time;
+date-only input is rejected. Skipped or repeated DST wall times require an
+explicit numeric offset.
 
 Use `--dry-run` to parse and validate the prospective append without writing.
 The result cannot guarantee that another process will not change the ledger
 before a later real command.
 
-`--input` remains an optional closed JSON/YAML batch mode. It cannot be mixed
-with document-mapped authoring flags.
+Public forecast authoring is flag-only; there is no generic request-document
+mode.
 
 List the complete revision history in recorded order or inspect one record:
 
@@ -75,10 +82,6 @@ identities when present. This is retained ledger data, not a fresh verification;
 the command opens no network connection and labels stored verified evidence
 accordingly. Because stdin contains only ledger bytes, these commands do not
 resolve or check sibling target or timestamp files.
-
-In optional YAML batch mode, quote timestamps. The decoder also accepts a YAML
-timestamp scalar in a known timestamp field, but rejects that implicit type in
-ordinary text fields.
 
 For a question with no forecasts, `forecast list` returns an empty list.
 Selecting any forecast with `forecast show` returns `not_found`; it never

@@ -11,7 +11,7 @@ temporary CA database are generated in a confined temporary directory and are
 not retained.
 
 The checked-in target is the exact canonical target for
-`q-election-coalition` / `f-election-coalition-001` in the pinned v1.2.0
+`q-election-coalition` / `f-election-coalition-001` in the pinned v1.3.0
 individual-ledger fixture (SHA-256
 `0ac2fd85615071ded99db80f41e33d0ac879af474c7a5b39793c95bfb925fc5f`).
 The checked-in request and response were generated with OpenSSL 3.6.0. The Go

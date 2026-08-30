@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Exact immutable v1.3.0 contract
 The application SHALL embed Forecast Ledger schema version `1.3.0` from one exact upstream commit and published release asset. The checked-in source record, build metadata, contributor instructions, and conformance tests SHALL declare the same full commit ID, release-archive SHA-256, and schema SHA-256. Validation SHALL use only the embedded bytes and SHALL NOT fetch a tag, branch, schema, or fixture at build-command runtime or ledger-operation runtime.
@@ -41,6 +41,10 @@ The application SHALL validate all published v1.3.0 valid fixtures, SHALL reject
 - **WHEN** the complete v1.3.0 target and seal vectors are executed
 - **THEN** application output matches every published vector byte-for-byte
 
+#### Scenario: Cryptographic vector remains enforced
+- **WHEN** the pinned v1.3.0 forecast-seal vector is executed
+- **THEN** the cryptographic output matches the published vector exactly
+
 ### Requirement: One v1.3.0 identity across public surfaces
 Every application surface that reports or records the supported schema SHALL use the same embedded v1.3.0 version, exact commit, schema digest, and applicable release digest. This includes CLI version output, MCP initialization metadata and resources, validation results, generated schemas and examples, publication manifests, documentation, package metadata, and release checks.
 
@@ -51,41 +55,3 @@ Every application surface that reports or records the supported schema SHALL use
 #### Scenario: Publication records the exact contract
 - **WHEN** a publication package is built from a v1.3.0 ledger
 - **THEN** its manifest records the same version, commit, and schema digest as the running binary
-
-## REMOVED Requirements
-
-### Requirement: Exact immutable v1.2.0 contract
-**Reason**: Forecast Ledger v1.3.0 replaces the v1.2.0 contract and receives a new exact provenance pin.
-
-**Migration**: Vendor the unchanged v1.3.0 release bytes and update the exact commit, archive digest, schema digest, attribution, fixture, and build metadata records together.
-
-#### Scenario: Old embedded bytes are absent
-- **WHEN** the v1.3.0 binary is built
-- **THEN** no runtime embed or current metadata points to the v1.2.0 schema or conformance directory
-
-### Requirement: Exclusive v1.2.0 admission without compatibility
-**Reason**: Exclusive admission moves to schema version 1.3.0.
-
-**Migration**: Existing v1.2.0 files remain unchanged and are rejected by this binary; conversion is not added by this change.
-
-#### Scenario: Old admission rule is unavailable
-- **WHEN** a v1.2.0 ledger is supplied
-- **THEN** the application reports that v1.3.0 is the sole supported version and performs no side effect
-
-### Requirement: Published v1.2.0 conformance corpus
-**Reason**: The release gate must use the complete published v1.3.0 corpus and vectors.
-
-**Migration**: Replace the embedded upstream corpus atomically while retaining any separately identified CLI regression coverage that remains applicable.
-
-#### Scenario: Old corpus is not authoritative
-- **WHEN** conformance runs for the v1.3.0 binary
-- **THEN** pass/fail authority comes from the exact pinned v1.3.0 fixtures
-
-### Requirement: One v1.2.0 identity across public surfaces
-**Reason**: Every public surface must identify the newly embedded v1.3.0 contract.
-
-**Migration**: Regenerate and review all version, MCP, publication, documentation, package, and release metadata from the new exact pins.
-
-#### Scenario: Old public identity is absent
-- **WHEN** current generated and public surfaces are audited
-- **THEN** none identifies v1.2.0 as the supported embedded contract

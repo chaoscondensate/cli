@@ -17,30 +17,35 @@ import (
 )
 
 type toolInput struct {
-	File           string          `json:"file,omitempty"`
-	Platform       string          `json:"platform,omitempty"`
-	Question       string          `json:"question,omitempty"`
-	Forecast       string          `json:"forecast,omitempty"`
-	Type           string          `json:"type,omitempty"`
-	Input          json.RawMessage `json:"input,omitempty"`
-	InputFile      string          `json:"input_file,omitempty"`
-	KeyFile        string          `json:"key_file,omitempty"`
-	KeyHint        string          `json:"key_hint,omitempty"`
-	LedgerID       string          `json:"ledger_id,omitempty"`
-	Timezone       string          `json:"timezone,omitempty"`
-	ForecasterID   string          `json:"forecaster_id,omitempty"`
-	ForecasterName string          `json:"forecaster_name,omitempty"`
-	ForecasterKind string          `json:"forecaster_kind,omitempty"`
-	Output         string          `json:"output,omitempty"`
-	Manifest       string          `json:"manifest,omitempty"`
-	RevealedAt     string          `json:"revealed_at,omitempty"`
-	TSAProvider    string          `json:"tsa_provider,omitempty"`
-	TSAURL         string          `json:"tsa_url,omitempty"`
-	CABundle       string          `json:"ca_bundle,omitempty"`
-	All            bool            `json:"all,omitempty"`
-	DryRun         bool            `json:"dry_run,omitempty"`
-	Confirm        bool            `json:"confirm,omitempty"`
-	CheckSources   bool            `json:"check_sources,omitempty"`
+	File                   string          `json:"file,omitempty"`
+	Platform               string          `json:"platform,omitempty"`
+	Question               string          `json:"question,omitempty"`
+	Forecast               string          `json:"forecast,omitempty"`
+	Type                   string          `json:"type,omitempty"`
+	Request                json.RawMessage `json:"-"`
+	SecretInputFile        string          `json:"secret_input_file,omitempty"`
+	InitialSecretInputFile string          `json:"initial_secret_input_file,omitempty"`
+	KeyFile                string          `json:"key_file,omitempty"`
+	KeyHint                string          `json:"key_hint,omitempty"`
+	LedgerID               string          `json:"ledger_id,omitempty"`
+	Timezone               string          `json:"timezone,omitempty"`
+	ForecasterID           string          `json:"forecaster_id,omitempty"`
+	ForecasterName         string          `json:"forecaster_name,omitempty"`
+	ForecasterKind         string          `json:"forecaster_kind,omitempty"`
+	ForecastedAt           string          `json:"forecasted_at,omitempty"`
+	RecordedAt             string          `json:"recorded_at,omitempty"`
+	PublicNote             string          `json:"public_note,omitempty"`
+	SupersedesForecastID   string          `json:"supersedes_forecast_id,omitempty"`
+	Output                 string          `json:"output,omitempty"`
+	Manifest               string          `json:"manifest,omitempty"`
+	RevealedAt             string          `json:"revealed_at,omitempty"`
+	TSAProvider            string          `json:"tsa_provider,omitempty"`
+	TSAURL                 string          `json:"tsa_url,omitempty"`
+	CABundle               string          `json:"ca_bundle,omitempty"`
+	All                    bool            `json:"all,omitempty"`
+	DryRun                 bool            `json:"dry_run,omitempty"`
+	Confirm                bool            `json:"confirm,omitempty"`
+	CheckSources           bool            `json:"check_sources,omitempty"`
 }
 
 type toolEnvelope struct {
@@ -59,7 +64,7 @@ func (s *Server) toolHandler(def service.OperationDefinition, allowed map[string
 		default:
 			return errorToolResult(def.Name, app.NewError(app.CodeConflict, "MCP concurrent request limit is reached", nil)), nil
 		}
-		input, err := decodeToolArguments(request.Params.Arguments, s.maxToolBytes, allowed, required)
+		input, err := decodeToolArguments(request.Params.Arguments, s.maxToolBytes, def, allowed, required)
 		if err != nil {
 			return errorToolResult(def.Name, err), nil
 		}
@@ -76,7 +81,7 @@ func (s *Server) toolHandler(def service.OperationDefinition, allowed map[string
 	}
 }
 
-func decodeToolArguments(arguments json.RawMessage, maxBytes int, allowed map[string]bool, required []string) (toolInput, error) {
+func decodeToolArguments(arguments json.RawMessage, maxBytes int, def service.OperationDefinition, allowed map[string]bool, required []string) (toolInput, error) {
 	if len(arguments) > maxBytes {
 		return toolInput{}, app.NewError(app.CodeUsage, "tool arguments exceed the size limit", nil)
 	}
@@ -104,11 +109,39 @@ func decodeToolArguments(arguments json.RawMessage, maxBytes int, allowed map[st
 	}
 	var input toolInput
 	decoder := json.NewDecoder(bytes.NewReader(arguments))
-	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&input); err != nil {
 		return toolInput{}, app.NewError(app.CodeUsage, "tool arguments have invalid types", err)
 	}
+	if def.RequestSchema != "" && def.RequestMode != service.RequestSecret {
+		fields, err := requestSchemaFields(def.RequestSchema)
+		if err != nil {
+			return toolInput{}, err
+		}
+		request := make(map[string]json.RawMessage)
+		for name := range fields {
+			if value, present := raw[name]; present {
+				request[name] = value
+			}
+		}
+		input.Request, err = json.Marshal(request)
+		if err != nil {
+			return toolInput{}, app.NewError(app.CodeInternal, "direct MCP request cannot be assembled", err)
+		}
+	}
 	return input, nil
+}
+
+func requestSchemaFields(name service.InputSchemaName) (map[string]bool, error) {
+	schema, err := service.DirectRequestSchema(name)
+	if err != nil {
+		return nil, err
+	}
+	properties, _ := schema["properties"].(map[string]any)
+	result := make(map[string]bool, len(properties))
+	for field := range properties {
+		result[field] = true
+	}
+	return result, nil
 }
 
 func (s *Server) dispatch(parent context.Context, def service.OperationDefinition, input toolInput) (any, string, string, error) {
@@ -121,6 +154,7 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 	ctx := execution.Context()
 	fileMustExist := def.Name != service.OperationLedgerInit
 	file := ""
+	timezone := "UTC"
 	if input.File != "" {
 		fileRoot := service.RootLedger
 		if def.Name == service.OperationPublicationVerify {
@@ -132,18 +166,27 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 		}
 	}
 	if fileMustExist && file != "" && def.Name != service.OperationPublicationVerify {
-		if _, err := service.LoadAndValidateLedger(ctx, file, nil); err != nil {
-			return nil, "", "", err
+		loaded, loadErr := service.LoadAndValidateLedger(ctx, file, nil)
+		if loadErr != nil {
+			return nil, "", "", loadErr
 		}
+		timezone = loaded.Model.DefaultTimezone
 	}
-	now := ledger.Timestamp(s.effects.Clock.Now().UTC().Format(time.RFC3339))
+	if def.Name == service.OperationLedgerInit {
+		timezone = input.Timezone
+	}
+	location, err := time.LoadLocation(timezone)
+	if err != nil {
+		return nil, "", "", app.NewError(app.CodeInvalidData, "default timezone is invalid", err)
+	}
+	now := ledger.Timestamp(s.effects.Clock.Now().In(location).Format(time.RFC3339))
 
 	switch def.Name {
 	case service.OperationLedgerInit:
 		return s.dispatchInit(ctx, file, input, now)
 	case service.OperationLedgerUpdate:
 		var value service.RootMetadataPatchInput
-		if err := decodeInline(ctx, input.Input, service.InputSchemaRootMetadata, &value); err != nil {
+		if err := decodeDirectRequest(ctx, input.Request, service.InputSchemaRootMetadata, &value); err != nil {
 			return nil, "", "", err
 		}
 		if input.DryRun {
@@ -166,7 +209,7 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 		result, err := service.StatusForLedger(loaded)
 		return result, "ledger.status", "Ledger status was read", err
 	case service.OperationPlatformAdd, service.OperationPlatformUpdate:
-		return dispatchPlatformMutation(ctx, def.Name, file, ledger.Slug(input.Platform), input.Input, input.DryRun)
+		return dispatchPlatformMutation(ctx, def.Name, file, ledger.Slug(input.Platform), input.Request, input.DryRun)
 	case service.OperationPlatformList:
 		id, items, err := service.LoadPlatformList(ctx, file, nil)
 		return map[string]any{"ledger_id": id, "platforms": items}, "platform.list", "Platforms were read", err
@@ -184,7 +227,7 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 		return s.dispatchQuestionAdd(ctx, file, input, now)
 	case service.OperationQuestionUpdate:
 		var value service.QuestionPatchInput
-		if err := decodeInline(ctx, input.Input, service.InputSchemaQuestionPatch, &value); err != nil {
+		if err := decodeDirectRequest(ctx, input.Request, service.InputSchemaQuestionPatch, &value); err != nil {
 			return nil, "", "", err
 		}
 		if input.DryRun {
@@ -200,11 +243,14 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 		id, result, err := service.LoadQuestionShow(ctx, file, nil, ledger.Slug(input.Question))
 		return map[string]any{"ledger_id": id, "question": result}, "question.show", "Question was read", err
 	case service.OperationQuestionResolve, service.OperationQuestionAnnul, service.OperationQuestionDispute:
-		return dispatchQuestionTerminal(ctx, def.Name, file, ledger.Slug(input.Question), input.Input, now, input.DryRun)
+		return dispatchQuestionTerminal(ctx, def.Name, file, ledger.Slug(input.Question), input.Request, now, input.DryRun)
 	case service.OperationForecastAdd:
 		var value service.ForecastCreateInput
-		if err := decodeInline(ctx, input.Input, service.InputSchemaForecastCreate, &value); err != nil {
+		if err := decodeDirectRequest(ctx, input.Request, service.InputSchemaForecastCreate, &value); err != nil {
 			return nil, "", "", err
+		}
+		if value.ForecastedAt == "" {
+			value.ForecastedAt = now
 		}
 		if input.DryRun {
 			result, err := service.PlanPublicForecastAddFile(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), value, now)
@@ -309,14 +355,25 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 }
 
 func (s *Server) dispatchInit(ctx context.Context, file string, input toolInput, operationAt ledger.Timestamp) (any, string, string, error) {
-	if input.InputFile == "" && inlineVisibility(input.Input, true) == ledger.VisibilitySealed {
-		return nil, "", "", app.NewError(app.CodeUsage, "sealed initialization must use a protected input_file reference", nil)
+	if input.InitialSecretInputFile == "" && directVisibility(input.Request, true) == ledger.VisibilitySealed {
+		return nil, "", "", app.NewError(app.CodeUsage, "sealed initialization must use initial_secret_input_file", nil)
 	}
 	var value service.InitInput
-	if len(input.Input) > 0 || input.InputFile != "" {
-		if err := s.decodePublicOrProtected(ctx, input, service.InputSchemaInit, &value); err != nil {
+	if err := decodeDirectRequest(ctx, input.Request, service.InputSchemaInit, &value); err != nil {
+		return nil, "", "", err
+	}
+	if input.InitialSecretInputFile != "" {
+		if value.Question == nil || value.Question.InitialForecast == nil || value.Question.InitialForecast.Visibility != ledger.VisibilitySealed {
+			return nil, "", "", app.NewError(app.CodeUsage, "initial_secret_input_file requires direct sealed initial-forecast metadata", nil)
+		}
+		var private service.SealedForecastPrivateInput
+		if err := s.decodeProtected(ctx, input.InitialSecretInputFile, service.InputSchemaForecastSealPrivate, &private); err != nil {
 			return nil, "", "", err
 		}
+		mergeInitialForecastPrivate(value.Question.InitialForecast, private)
+	}
+	if value.Question != nil && value.Question.InitialForecast != nil && value.Question.InitialForecast.ForecastedAt == "" {
+		value.Question.InitialForecast.ForecastedAt = operationAt
 	}
 	root, err := service.BuildLedgerRootAt(service.InitRootRequest{LedgerID: ledger.Slug(input.LedgerID), Timezone: input.Timezone, ForecasterID: ledger.Slug(input.ForecasterID), ForecasterName: input.ForecasterName, ForecasterKind: ledger.ForecasterKind(input.ForecasterKind), Input: value}, operationAt)
 	if err != nil {
@@ -346,8 +403,8 @@ func (s *Server) dispatchInit(ctx context.Context, file string, input toolInput,
 	case service.CreationPublicForecast:
 		model, err = service.BuildInitialPublicLedgerAt(root, *value.Question, operationAt)
 	case service.CreationSealedForecast:
-		if input.InputFile == "" || keyPath == "" {
-			return nil, "", "", app.NewError(app.CodeUsage, "sealed initialization requires input_file and key_file in a secret root", nil)
+		if input.InitialSecretInputFile == "" || keyPath == "" {
+			return nil, "", "", app.NewError(app.CodeUsage, "sealed initialization requires initial_secret_input_file and key_file in a secret root", nil)
 		}
 		if input.DryRun {
 			model, err = service.PlanInitialSealedLedgerAt(root, *value.Question, operationAt)
@@ -391,7 +448,7 @@ func (s *Server) dispatchInit(ctx context.Context, file string, input toolInput,
 func dispatchPlatformMutation(ctx context.Context, operation service.OperationName, file string, id ledger.Slug, raw json.RawMessage, dryRun bool) (any, string, string, error) {
 	if operation == service.OperationPlatformAdd {
 		var value service.PlatformCreateInput
-		if err := decodeInline(ctx, raw, service.InputSchemaPlatformCreate, &value); err != nil {
+		if err := decodeDirectRequest(ctx, raw, service.InputSchemaPlatformCreate, &value); err != nil {
 			return nil, "", "", err
 		}
 		if dryRun {
@@ -402,7 +459,7 @@ func dispatchPlatformMutation(ctx context.Context, operation service.OperationNa
 		return result, "platform.added", "Platform was added", err
 	}
 	var value service.PlatformPatchInput
-	if err := decodeInline(ctx, raw, service.InputSchemaPlatformPatch, &value); err != nil {
+	if err := decodeDirectRequest(ctx, raw, service.InputSchemaPlatformPatch, &value); err != nil {
 		return nil, "", "", err
 	}
 	if dryRun {
@@ -414,12 +471,25 @@ func dispatchPlatformMutation(ctx context.Context, operation service.OperationNa
 }
 
 func (s *Server) dispatchQuestionAdd(ctx context.Context, file string, input toolInput, now ledger.Timestamp) (any, string, string, error) {
-	if input.InputFile == "" && inlineVisibility(input.Input, false) == ledger.VisibilitySealed {
-		return nil, "", "", app.NewError(app.CodeUsage, "a sealed first forecast must use a protected input_file reference", nil)
+	if input.InitialSecretInputFile == "" && directVisibility(input.Request, false) == ledger.VisibilitySealed {
+		return nil, "", "", app.NewError(app.CodeUsage, "a sealed first forecast must use initial_secret_input_file", nil)
 	}
 	var value service.QuestionAddInput
-	if err := s.decodePublicOrProtected(ctx, input, service.InputSchemaQuestionAdd, &value); err != nil {
+	if err := decodeDirectRequest(ctx, input.Request, service.InputSchemaQuestionAdd, &value); err != nil {
 		return nil, "", "", err
+	}
+	if input.InitialSecretInputFile != "" {
+		if value.InitialForecast == nil || value.InitialForecast.Visibility != ledger.VisibilitySealed {
+			return nil, "", "", app.NewError(app.CodeUsage, "initial_secret_input_file requires direct sealed initial-forecast metadata", nil)
+		}
+		var private service.SealedForecastPrivateInput
+		if err := s.decodeProtected(ctx, input.InitialSecretInputFile, service.InputSchemaForecastSealPrivate, &private); err != nil {
+			return nil, "", "", err
+		}
+		mergeInitialForecastPrivate(value.InitialForecast, private)
+	}
+	if value.InitialForecast != nil && value.InitialForecast.ForecastedAt == "" {
+		value.InitialForecast.ForecastedAt = now
 	}
 	normalized := service.NormalizedQuestionCreate{ID: ledger.Slug(input.Question), Type: ledger.QuestionType(input.Type), Input: value}
 	shape, err := service.ClassifyQuestionAddInput(value)
@@ -445,8 +515,8 @@ func (s *Server) dispatchQuestionAdd(ctx context.Context, file string, input too
 		result, err := service.CommitQuestionAddPublicFile(ctx, file, normalized, now)
 		return result, "question.added", "Question and first forecast were added", err
 	}
-	if shape != service.CreationSealedForecast || input.InputFile == "" || input.KeyFile == "" {
-		return nil, "", "", app.NewError(app.CodeUsage, "a sealed first forecast requires input_file and key_file in a secret root", nil)
+	if shape != service.CreationSealedForecast || input.InitialSecretInputFile == "" || input.KeyFile == "" {
+		return nil, "", "", app.NewError(app.CodeUsage, "a sealed first forecast requires initial_secret_input_file and key_file in a secret root", nil)
 	}
 	keyPath, err := s.roots.Resolve(service.RootSecret, input.KeyFile, false)
 	if err != nil {
@@ -464,7 +534,7 @@ func dispatchQuestionTerminal(ctx context.Context, operation service.OperationNa
 	switch operation {
 	case service.OperationQuestionResolve:
 		var value service.ResolutionInput
-		if err := decodeInline(ctx, raw, service.InputSchemaResolution, &value); err != nil {
+		if err := decodeDirectRequest(ctx, raw, service.InputSchemaResolution, &value); err != nil {
 			return nil, "", "", err
 		}
 		if dryRun {
@@ -475,7 +545,7 @@ func dispatchQuestionTerminal(ctx context.Context, operation service.OperationNa
 		return result, "question.resolved", "Question was resolved", err
 	case service.OperationQuestionAnnul:
 		var value service.AnnulInput
-		if err := decodeInline(ctx, raw, service.InputSchemaAnnul, &value); err != nil {
+		if err := decodeDirectRequest(ctx, raw, service.InputSchemaAnnul, &value); err != nil {
 			return nil, "", "", err
 		}
 		if dryRun {
@@ -486,7 +556,7 @@ func dispatchQuestionTerminal(ctx context.Context, operation service.OperationNa
 		return result, "question.annulled", "Question was annulled", err
 	default:
 		var value service.DisputeInput
-		if err := decodeInline(ctx, raw, service.InputSchemaDispute, &value); err != nil {
+		if err := decodeDirectRequest(ctx, raw, service.InputSchemaDispute, &value); err != nil {
 			return nil, "", "", err
 		}
 		if dryRun {
@@ -499,12 +569,29 @@ func dispatchQuestionTerminal(ctx context.Context, operation service.OperationNa
 }
 
 func (s *Server) dispatchForecastSeal(ctx context.Context, file string, input toolInput, now ledger.Timestamp) (any, string, string, error) {
-	if input.InputFile == "" || input.KeyFile == "" || len(input.Input) > 0 {
-		return nil, "", "", app.NewError(app.CodeUsage, "forecast_seal requires protected input_file and new key_file references", nil)
+	if input.SecretInputFile == "" || input.KeyFile == "" {
+		return nil, "", "", app.NewError(app.CodeUsage, "forecast_seal requires secret_input_file and key_file references", nil)
 	}
-	var value service.SealedForecastInput
-	if err := s.decodeProtected(ctx, input.InputFile, service.InputSchemaForecastSeal, &value); err != nil {
+	var private service.SealedForecastPrivateInput
+	if err := s.decodeProtected(ctx, input.SecretInputFile, service.InputSchemaForecastSealPrivate, &private); err != nil {
 		return nil, "", "", err
+	}
+	value := service.SealedForecastInput{Value: private.Value, Rationale: private.Rationale, KeyFactors: private.KeyFactors, Comment: private.Comment}
+	if input.ForecastedAt != "" {
+		value.ForecastedAt = ledger.Timestamp(input.ForecastedAt)
+	} else if value.ForecastedAt == "" {
+		value.ForecastedAt = now
+	}
+	if input.RecordedAt != "" {
+		recorded := ledger.Timestamp(input.RecordedAt)
+		value.RecordedAt = &recorded
+	}
+	if input.PublicNote != "" {
+		value.PublicNote = &input.PublicNote
+	}
+	if input.SupersedesForecastID != "" {
+		supersedes := ledger.Slug(input.SupersedesForecastID)
+		value.SupersedesForecastID = &supersedes
 	}
 	keyPath, err := s.roots.Resolve(service.RootSecret, input.KeyFile, false)
 	if err != nil {
@@ -538,16 +625,6 @@ func (s *Server) dispatchForecastReveal(ctx context.Context, file string, input 
 	return result, "forecast.revealed", "Forecast was authenticated and revealed", err
 }
 
-func (s *Server) decodePublicOrProtected(ctx context.Context, input toolInput, schema service.InputSchemaName, destination any) error {
-	if input.InputFile != "" {
-		if len(input.Input) > 0 {
-			return app.NewError(app.CodeUsage, "input and input_file cannot be combined", nil)
-		}
-		return s.decodeProtected(ctx, input.InputFile, schema, destination)
-	}
-	return decodeInline(ctx, input.Input, schema, destination)
-}
-
 func (s *Server) decodeProtected(ctx context.Context, reference string, schema service.InputSchemaName, destination any) error {
 	path, err := s.roots.Resolve(service.RootSecret, reference, true)
 	if err != nil {
@@ -561,9 +638,9 @@ func (s *Server) decodeProtected(ctx context.Context, reference string, schema s
 	return service.DecodeOperationInput(ctx, "-", bytes.NewReader(data), schema, destination)
 }
 
-func decodeInline(ctx context.Context, raw json.RawMessage, schema service.InputSchemaName, destination any) error {
+func decodeDirectRequest(ctx context.Context, raw json.RawMessage, schema service.InputSchemaName, destination any) error {
 	if len(bytes.TrimSpace(raw)) == 0 {
-		return app.NewError(app.CodeUsage, "input is required", nil)
+		return app.NewError(app.CodeUsage, "direct request fields are required", nil)
 	}
 	return service.DecodeOperationInput(ctx, "-", bytes.NewReader(raw), schema, destination)
 }
@@ -579,7 +656,7 @@ func optionalTimestamp(value, field string) (ledger.Timestamp, error) {
 	return result, nil
 }
 
-func inlineVisibility(raw json.RawMessage, init bool) ledger.ForecastVisibility {
+func directVisibility(raw json.RawMessage, init bool) ledger.ForecastVisibility {
 	var envelope struct {
 		Question *struct {
 			InitialForecast struct {
@@ -597,6 +674,16 @@ func inlineVisibility(raw json.RawMessage, init bool) ledger.ForecastVisibility 
 		return envelope.Question.InitialForecast.Visibility
 	}
 	return envelope.InitialForecast.Visibility
+}
+
+func mergeInitialForecastPrivate(target *service.InitialForecastInput, private service.SealedForecastPrivateInput) {
+	if target == nil {
+		return
+	}
+	target.Value = private.Value
+	target.Rationale = &private.Rationale
+	target.KeyFactors = &private.KeyFactors
+	target.Comment = &private.Comment
 }
 
 func resultFailureCode(data any) app.ErrorCode {

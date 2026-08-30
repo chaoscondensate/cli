@@ -5,10 +5,10 @@ Defines deterministic, non-LLM date and timestamp authoring that is convenient f
 ## ADDED Requirements
 
 ### Requirement: CLI accepts a bounded human date grammar
-Applicable direct CLI timestamp flags SHALL accept exact Forecast Ledger RFC 3339 plus a documented English, locale-independent allowlist: ISO calendar dates `YYYY-MM-DD`; calendar dates `D Mon YYYY`, `D Month YYYY`, `Mon D YYYY`, and `Month D YYYY`; and those date forms followed by a 24-hour `HH:MM` or `HH:MM:SS` time with an optional `Z` or numeric `±HH:MM` offset. Month matching SHALL be ASCII case-insensitive. The parser MUST use deterministic grammar and timezone rules without an LLM, network request, locale database, or fuzzy natural-language parser.
+Applicable direct CLI timestamp flags SHALL accept exact Forecast Ledger RFC 3339 plus a documented English, locale-independent allowlist: ISO calendar dates `YYYY-MM-DD`; calendar dates `D Mon YYYY`, `D Month YYYY`, `Mon D YYYY`, and `Month D YYYY`; and those date forms followed by a 24-hour `HH:MM` or `HH:MM:SS` local time. Exact RFC 3339 is the explicit-offset form. Month matching SHALL be ASCII case-insensitive. The parser MUST use deterministic grammar and timezone rules without an LLM, network request, locale database, or fuzzy natural-language parser.
 
 #### Scenario: Parse the requested human date
-- **WHEN** `--closes-at "10 Aug 2030"` is supplied for a ledger whose default timezone is `Europe/London`
+- **WHEN** `--expected-resolution-at "10 Aug 2030"` is supplied for a ledger whose default timezone is `Europe/London`
 - **THEN** it is accepted as the end of 10 August 2030 in that timezone and normalized to an RFC 3339 timestamp with seconds and the applicable explicit offset
 
 #### Scenario: Preserve exact input
@@ -16,7 +16,7 @@ Applicable direct CLI timestamp flags SHALL accept exact Forecast Ledger RFC 333
 - **THEN** the parser preserves the represented instant and explicit offset without applying a calendar-date default
 
 ### Requirement: Missing time and offset use field-specific deterministic defaults
-Date-only input SHALL be accepted only for planned question scheduling fields. `opens_at` date-only input SHALL mean `00:00:00` at the start of that local date; `closes_at` and `expected_resolution_at` date-only input SHALL mean `23:59:59` at the end of that local date. A human timestamp with a time but no offset SHALL use the ledger `default_timezone`; during init it SHALL use the required init timezone. No input SHALL use the host process timezone. Explicit creation, forecast, recording, outcome, retrieval, publication, reveal, or cryptographic evidence timestamps MUST include a time, whether expressed in exact RFC 3339 or another allowed human timestamp form.
+Date-only input SHALL be accepted only for planned question scheduling fields. `opens_at` date-only input SHALL mean `00:00:00` at the start of that local date; `expected_resolution_at` date-only input SHALL mean `23:59:59` at the end of that local date. A human timestamp with a time but no offset SHALL use the ledger `default_timezone`; during init it SHALL use the required init timezone. No input SHALL use the host process timezone. Explicit creation, forecast, recording, outcome, retrieval, publication, reveal, or cryptographic evidence timestamps MUST include a time, whether expressed in exact RFC 3339 or another allowed human timestamp form.
 
 #### Scenario: Opening date starts the day
 - **WHEN** `--opens-at 2030-08-10` is supplied for a valid question
@@ -67,9 +67,9 @@ Every accepted human CLI value SHALL be normalized before domain chronology chec
 - **WHEN** forecast seal omits `forecasted_at`
 - **THEN** sealing targets the single derived operation instant and retains the existing atomic key-before-ledger behavior
 
-#### Scenario: Current time is after close
-- **WHEN** forecast creation omits `forecasted_at` and the operation instant is after the question close
-- **THEN** the command returns the normal after-close validation error and creates no forecast, key, or journal effect
+#### Scenario: Current time is before an opening
+- **WHEN** forecast creation omits `forecasted_at` and the operation instant precedes an optional question opening
+- **THEN** the command returns the normal before-open validation error and creates no forecast, key, or journal effect
 
 #### Scenario: Explicit forecast time still wins
 - **WHEN** the caller supplies a valid explicit `forecasted_at`

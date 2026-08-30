@@ -41,8 +41,8 @@ forecast-ledger forecast seal \
 
 Public forecast and record times, `--public-note`, and
 `--supersedes-forecast` remain ordinary flags. Value, rationale, key factors,
-and comment never enter argv. The legacy full protected `--input` document is
-still accepted as a mutually exclusive compatibility mode.
+and comment never enter argv. A generic full request document is not accepted.
+Only the purpose-named private bundle channel is file/stdin based.
 
 The key destination must be new. On POSIX it is created with mode `0600`; on
 Windows it receives an owner-only ACL. The key is made durable before the
@@ -55,7 +55,7 @@ forecast ID, random salt, forecast and recorded times, typed value, rationale,
 key factors, and comment. Associated data also authenticates the scheme and
 commitment digest. It does not bind the ledger ID, public note, supersession,
 key hint, forecaster, or question wording. A separate `forecast-envelope/v1`
-target binds the listed public context. After reveal publishes the key, anyone
+target binds the question ID and public forecast record. After reveal publishes the key, anyone
 with the retained ciphertext can recover the private bundle.
 
 Reveal only with explicit approval:

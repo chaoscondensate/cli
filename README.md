@@ -118,11 +118,11 @@ forecast-ledger init \
   --forecaster-name "My Name"
 ```
 
-The embedded Forecast Ledger v1.2.0 contract permits zero questions and questions
-with zero forecasts. All ordinary non-secret authoring is available through
-flags. `--input` remains an optional, mutually exclusive batch mode; protected
-private forecast bundles use `--secret-input` or `--initial-secret-input` and
-never enter argv. See [Create a ledger](docs/getting-started/create-ledger.md)
+The embedded Forecast Ledger v1.3.0 contract permits zero questions and questions
+with zero forecasts. All ordinary non-secret authoring is available only through
+flags or direct MCP properties. Protected private forecast bundles use the
+purpose-named `--secret-input` or `--initial-secret-input` channels and never
+enter argv. See [Create a ledger](docs/getting-started/create-ledger.md)
 for empty-first, combined, dry-run, team, and sealed-key workflows.
 
 Root display and current forecaster metadata can later be changed with a closed
@@ -158,8 +158,7 @@ forecast-ledger question add \
   --type binary \
   --title "Will the launch happen?" \
   --resolution-criteria "Resolve from the operator's public launch record." \
-  --closes-at 2026-12-31T23:59:59Z \
-  --expected-resolution-at 2027-01-15T12:00:00Z
+  --expected-resolution-at "15 Jan 2027"
 ```
 
 Append the first public forecast, or a later revision without modifying an
@@ -170,14 +169,14 @@ forecast-ledger forecast add \
   --file ledger.yaml \
   --question q-launch \
   --forecast f-launch-001 \
-  --forecasted-at 2026-09-01T09:00:00+01:00 \
   --value-kind binary \
   --probability-bp 6500 \
   --rationale "Evidence moved slightly in favor."
 ```
 
 See [Manage public forecasts](docs/how-to/manage-public-forecasts.md) for typed
-values, global IDs, supersession, dry-run, list/show, and stdin behavior.
+values, global IDs, supersession, human-readable dates, default forecast time,
+dry-run, and list/show behavior.
 
 Keep a forecast private until an authenticated reveal:
 

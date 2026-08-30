@@ -101,18 +101,6 @@ func (v *semanticValidator) validate() {
 
 func (v *semanticValidator) validateQuestion(index int, question *ledger.Question, platformIDs map[ledger.Slug]struct{}) []ledger.Slug {
 	pointer := "/questions/" + strconv.Itoa(index)
-	opensAt := question.CreatedAt
-	if question.ForecastWindow.OpensAt != nil {
-		opensAt = *question.ForecastWindow.OpensAt
-	}
-	opens := parseTimestamp(opensAt)
-	closes := parseTimestamp(question.ForecastWindow.ClosesAt)
-	if opens.After(closes) {
-		v.add("semantic.forecast_window", pointer+"/forecast_window", "opens_at must not be after closes_at")
-	}
-	if parseTimestamp(question.ExpectedResolutionAt).Before(closes) {
-		v.add("semantic.expected_resolution", pointer+"/expected_resolution_at", "expected resolution must not be before the forecast window closes")
-	}
 	if question.PlatformRefs != nil {
 		for refIndex, ref := range *question.PlatformRefs {
 			if _, exists := platformIDs[ref.Platform]; !exists {
@@ -141,8 +129,8 @@ func (v *semanticValidator) validateQuestion(index int, question *ledger.Questio
 		if forecasted.After(recorded) {
 			v.add("semantic.forecast_chronology", forecastPointer+"/recorded_at", "recorded_at must not be before forecasted_at")
 		}
-		if forecasted.Before(opens) || forecasted.After(closes) {
-			v.add("semantic.forecast_window", forecastPointer+"/forecasted_at", "forecasted_at must be inside the forecast window")
+		if question.ForecastWindow != nil && forecasted.Before(parseTimestamp(question.ForecastWindow.OpensAt)) {
+			v.add("semantic.forecast_window", forecastPointer+"/forecasted_at", "forecasted_at must not precede forecast_window.opens_at")
 		}
 		if !previousRecorded.IsZero() && recorded.Before(previousRecorded) {
 			v.add("semantic.forecast_order", forecastPointer, "forecasts must be ordered by recorded_at")

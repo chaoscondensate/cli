@@ -119,7 +119,7 @@ func TestParseYAMLRejectsMultipleDocumentsAndHonorsLimits(t *testing.T) {
 }
 
 func TestParseYAMLUpstreamFixtureAndJSONSemanticParity(t *testing.T) {
-	yamlData, err := os.ReadFile(filepath.Join("..", "schema", "testdata", "forecast-ledger", "v1.2.0", "team-ledger.yaml"))
+	yamlData, err := os.ReadFile(filepath.Join("..", "schema", "testdata", "forecast-ledger", "v1.3.0", "team-ledger.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}

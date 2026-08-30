@@ -22,7 +22,7 @@ func TestForecastTargetUsesExactClosedProjectionAndExcludedStatus(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if target.SHA256 != "0ac2fd85615071ded99db80f41e33d0ac879af474c7a5b39793c95bfb925fc5f" || target.Size != 981 {
+	if target.SHA256 != "b360d603065bfcc064392cf364f1cc599650ff6e924a244427eca40e76e8f3bb" || target.Size != 421 {
 		t.Fatalf("pinned target vector changed: sha256=%s size=%d", target.SHA256, target.Size)
 	}
 	parsed, err := document.ParseJSON(bytes.NewReader(target.Bytes), document.DefaultLimits)
@@ -30,14 +30,8 @@ func TestForecastTargetUsesExactClosedProjectionAndExcludedStatus(t *testing.T) 
 		t.Fatal(err)
 	}
 	root := parsed.Root.Any().(map[string]any)
-	if len(root) != 4 || root["schema"] != ForecastEnvelopeSchema || root["ledger_id"] != "alex-example-forecasts" {
+	if len(root) != 3 || root["schema"] != ForecastEnvelopeSchema || root["question_id"] != "q-election-coalition" {
 		t.Fatalf("target root = %#v", root)
-	}
-	question := root["question"].(map[string]any)
-	for _, excluded := range []string{"status", "platform_refs", "tags", "notes", "forecasts", "resolution"} {
-		if _, exists := question[excluded]; exists {
-			t.Fatalf("target question contains %q", excluded)
-		}
 	}
 	forecast := root["forecast"].(map[string]any)
 	if _, exists := forecast["integrity"]; exists {
@@ -52,10 +46,10 @@ func TestForecastTargetUsesExactClosedProjectionAndExcludedStatus(t *testing.T) 
 	if err != nil || !bytes.Equal(target.Bytes, changedTarget.Bytes) {
 		t.Fatalf("excluded status changed target: %v", err)
 	}
-	changed.Questions[1].Title = "Changed meaning"
+	changed.Questions[1].Forecasts[0].RecordedAt = "2026-08-06T13:03:00+01:00"
 	changedTarget, err = BuildForecastTarget(changed, "q-election-coalition", "f-election-coalition-001")
 	if err != nil || bytes.Equal(target.Bytes, changedTarget.Bytes) {
-		t.Fatalf("included title did not change target: %v", err)
+		t.Fatalf("included forecast field did not change target: %v", err)
 	}
 }
 

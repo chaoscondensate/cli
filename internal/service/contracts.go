@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/chaoscondensate/cli/internal/ledger"
 )
 
 // OperationName is the stable public identifier of an application action.
@@ -119,6 +121,16 @@ type Warning struct {
 	Code    string         `json:"code"`
 	Message string         `json:"message"`
 	Details map[string]any `json:"details,omitempty"`
+}
+
+// TimeNormalization records a non-canonical CLI value and the exact timestamp
+// passed to the shared service. MCP requests are already exact and omit it.
+type TimeNormalization struct {
+	Field      string           `json:"field"`
+	Raw        string           `json:"raw"`
+	Normalized ledger.Timestamp `json:"normalized"`
+	Timezone   string           `json:"timezone"`
+	DatePolicy string           `json:"date_policy"`
 }
 
 // EffectKind and EffectAction describe planned or completed external effects.

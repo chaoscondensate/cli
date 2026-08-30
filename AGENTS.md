@@ -16,15 +16,15 @@ content is English and should use short, plain terms.
 
 When sources disagree, use this order:
 
-1. The exact embedded Forecast Ledger v1.2.0 contract and its published
+1. The exact embedded Forecast Ledger v1.3.0 contract and its published
    conformance fixtures.
 2. Published English v1 documentation and exact-commit reference tools.
 3. Accepted OpenSpec artifacts in this repository.
 4. Older Research material, which is background only.
 
 The authoritative upstream commit is
-`6c2fe3df99223945b8d1613a03f95796b3c7d1e2`. The embedded schema SHA-256 is
-`d609982f0fcea1ce076fdb32b44ef0eebe3265754eea7065de9d78a857dab5b8`.
+`32218f682b3a650f41153e98817473bf429973a7`. The embedded schema SHA-256 is
+`f673e4f3fc867a83d8c42a6992c6020ea28359a293580c8c742fe9dcdcd8d2c1`.
 Never fetch a floating tag at build or runtime.
 Do not edit vendored contract or fixture bytes by hand. Update the exact commit,
 digests, attribution, compatibility decision, and conformance tests together.
@@ -102,14 +102,22 @@ stderr. `--json` emits one stable JSON value without decoration. Non-TTY output,
 `NO_COLOR`, `TERM=dumb`, and `--no-color` contain no color or animation.
 
 Every CLI command that creates or changes ledger data must provide ordinary
-flags or a dedicated subcommand for every non-secret authorable field. A user
-must not have to prepare JSON or YAML merely to perform a normal CLI workflow;
-`--input` may remain only as an optional, documented batch or compatibility
-mode. Keep authoring flags leaf-local, add flag-only acceptance coverage and a
-copyable example, and update the maintained command-surface inventory whenever
-a request field changes. Private forecast values, keys, salts, credentials, and
-other secrets remain the exception: they must use protected files or stdin and
-must never enter argv or environment variables.
+leaf-local flags or a dedicated subcommand for every non-secret authorable
+field. Generic `--input` document modes and public side-loaded JSON/YAML files
+are forbidden. MCP authoring tools must expose closed, direct request properties;
+generic `input` wrappers and public `input_file` properties are forbidden. Add
+direct-surface acceptance coverage and a copyable example, and update the
+maintained command-surface inventory whenever a request field changes. Private
+forecast values, keys, salts, credentials, and other secrets remain the only
+exception: they must use purpose-named protected files or stdin and must never
+enter argv or environment variables.
+
+Application-authored MyPC YAML must be readable by people. Every populated
+mapping and sequence written or replaced by the application uses expanded block
+style with two-space nesting and stable field order; flow-style `{...}` and
+`[...]` are forbidden for populated collections. Explicit `{}` and `[]` remain
+allowed for empty collections. Source-preserving mutations must not reformat
+unrelated bytes.
 
 MCP v1 uses stdio only and protocol stdout contains no human logs. The server is
 read-write and online by default within explicit, named, non-overlapping ledger,

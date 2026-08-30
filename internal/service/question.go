@@ -29,14 +29,14 @@ type IntegrityCounts struct {
 }
 
 type QuestionSummary struct {
-	ID                   ledger.Slug           `json:"id"`
-	Title                string                `json:"title"`
-	Type                 ledger.QuestionType   `json:"type"`
-	Status               ledger.QuestionStatus `json:"status"`
-	ForecastWindow       ledger.ForecastWindow `json:"forecast_window"`
-	ExpectedResolutionAt ledger.Timestamp      `json:"expected_resolution_at"`
-	ForecastCount        int                   `json:"forecast_count"`
-	Integrity            IntegrityCounts       `json:"integrity"`
+	ID                   ledger.Slug            `json:"id"`
+	Title                string                 `json:"title"`
+	Type                 ledger.QuestionType    `json:"type"`
+	Status               ledger.QuestionStatus  `json:"status"`
+	ForecastWindow       *ledger.ForecastWindow `json:"forecast_window,omitempty"`
+	ExpectedResolutionAt ledger.Timestamp       `json:"expected_resolution_at"`
+	ForecastCount        int                    `json:"forecast_count"`
+	Integrity            IntegrityCounts        `json:"integrity"`
 }
 
 type QuestionForecastSummary struct {
@@ -52,7 +52,7 @@ type QuestionView struct {
 	Status               ledger.QuestionStatus     `json:"status"`
 	ResolutionCriteria   string                    `json:"resolution_criteria"`
 	CreatedAt            ledger.Timestamp          `json:"created_at"`
-	ForecastWindow       ledger.ForecastWindow     `json:"forecast_window"`
+	ForecastWindow       *ledger.ForecastWindow    `json:"forecast_window,omitempty"`
 	ExpectedResolutionAt ledger.Timestamp          `json:"expected_resolution_at"`
 	Options              *[]ledger.Option          `json:"options,omitempty"`
 	Unit                 *ledger.Unit              `json:"unit,omitempty"`
@@ -114,14 +114,32 @@ func BuildQuestionUpdate(model *ledger.Ledger, id ledger.Slug, input QuestionPat
 		}
 	}
 	if input.ForecastWindow.Set {
-		if input.ForecastWindow.Null || !input.ForecastWindow.Value.ClosesAt.Set || input.ForecastWindow.Value.ClosesAt.Null {
-			return QuestionMutation{}, invalidField("forecast_window.closes_at", "closing time is required")
-		}
-		closing := input.ForecastWindow.Value.ClosesAt.Value
-		if closing != question.ForecastWindow.ClosesAt {
-			updated.ForecastWindow.ClosesAt = closing
-			patches = append(patches, replacePatch(base+"/forecast_window/closes_at", closing))
-			covered = true
+		if input.ForecastWindow.Null {
+			if question.ForecastWindow != nil {
+				updated.ForecastWindow = nil
+				patches = append(patches, document.PatchOperation{Kind: document.PatchRemove, Pointer: base + "/forecast_window"})
+				covered = true
+			}
+		} else if input.ForecastWindow.Value.OpensAt.Set {
+			if input.ForecastWindow.Value.OpensAt.Null {
+				return QuestionMutation{}, invalidField("forecast_window.opens_at", "use clear forecast window to remove the optional window")
+			}
+			opening := input.ForecastWindow.Value.OpensAt.Value
+			if question.ForecastWindow == nil || opening != question.ForecastWindow.OpensAt {
+				updated.ForecastWindow = &ledger.ForecastWindow{OpensAt: opening}
+				kind := document.PatchReplace
+				pointer := base + "/forecast_window/opens_at"
+				if question.ForecastWindow == nil {
+					kind = document.PatchAdd
+					pointer = base + "/forecast_window"
+				}
+				value := any(opening)
+				if question.ForecastWindow == nil {
+					value = updated.ForecastWindow
+				}
+				patches = append(patches, document.PatchOperation{Kind: kind, Pointer: pointer, Value: value})
+				covered = true
+			}
 		}
 	}
 	if input.ExpectedResolutionAt.Set {
@@ -172,20 +190,14 @@ func BuildQuestionUpdate(model *ledger.Ledger, id ledger.Slug, input QuestionPat
 		}
 	}
 	opening := updated.CreatedAt
-	if updated.ForecastWindow.OpensAt != nil {
-		opening = *updated.ForecastWindow.OpensAt
+	if updated.ForecastWindow != nil {
+		opening = updated.ForecastWindow.OpensAt
 	}
-	if err := ValidateChronology(opening, "forecast_window.opens_at", updated.ForecastWindow.ClosesAt, "forecast_window.closes_at", true); err != nil {
-		return QuestionMutation{}, err
-	}
-	if err := ValidateChronology(updated.ForecastWindow.ClosesAt, "forecast_window.closes_at", updated.ExpectedResolutionAt, "expected_resolution_at", true); err != nil {
+	if _, err := ParseTimestamp(updated.ExpectedResolutionAt, "expected_resolution_at"); err != nil {
 		return QuestionMutation{}, err
 	}
 	for _, forecast := range updated.Forecasts {
 		if err := ValidateChronology(opening, "forecast_window.opens_at", forecast.ForecastedAt, "forecasted_at", true); err != nil {
-			return QuestionMutation{}, app.NewError(app.CodeConflict, "changed forecast window would exclude an existing forecast", err)
-		}
-		if err := ValidateChronology(forecast.ForecastedAt, "forecasted_at", updated.ForecastWindow.ClosesAt, "forecast_window.closes_at", true); err != nil {
 			return QuestionMutation{}, app.NewError(app.CodeConflict, "changed forecast window would exclude an existing forecast", err)
 		}
 	}
@@ -482,8 +494,10 @@ func questionPointerEqual(before, after ledger.Question, field string) bool {
 		left, right = before.Title, after.Title
 	case "resolution_criteria":
 		left, right = before.ResolutionCriteria, after.ResolutionCriteria
-	case "forecast_window/closes_at":
-		left, right = before.ForecastWindow.ClosesAt, after.ForecastWindow.ClosesAt
+	case "forecast_window/opens_at":
+		left, right = before.ForecastWindow.OpensAt, after.ForecastWindow.OpensAt
+	case "forecast_window":
+		left, right = before.ForecastWindow, after.ForecastWindow
 	case "expected_resolution_at":
 		left, right = before.ExpectedResolutionAt, after.ExpectedResolutionAt
 	case "platform_refs":

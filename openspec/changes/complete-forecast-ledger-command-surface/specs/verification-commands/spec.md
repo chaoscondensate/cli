@@ -1,3 +1,8 @@
+> Supersession note (2026-08-30): generic authoring documents, public
+> `--input`, MCP `input`/public `input_file`, v1.2.0 identity, and the old target
+> shape below are historical implementation facts. `make-authoring-direct-readable`
+> owns their v1.3.0 replacements and takes precedence.
+
 ## Purpose
 
 Defines a layered, non-mutating verification command that reports exactly which ledger, content, timing, reveal, outcome, and package claims are supported without collapsing them into a misleading boolean.

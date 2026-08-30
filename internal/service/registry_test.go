@@ -21,8 +21,8 @@ func TestOperationRegistryIsCompleteAndUnique(t *testing.T) {
 			t.Fatalf("duplicate MCP tool %q", definition.MCPTool)
 		}
 		tools[definition.MCPTool] = struct{}{}
-		if definition.InputSchema != "" {
-			if _, err := InputSchema(definition.InputSchema); err != nil {
+		if definition.RequestSchema != "" {
+			if _, err := InputSchema(definition.RequestSchema); err != nil {
 				t.Fatalf("operation %q input: %v", definition.Name, err)
 			}
 		}

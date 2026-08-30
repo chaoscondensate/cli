@@ -19,8 +19,8 @@ func TestPrivateInputPermissionFailureNamesInputArgument(t *testing.T) {
 		t.Fatal(err)
 	}
 	var destination service.SealedForecastInput
-	err := decodePrivateOperationInput(context.Background(), path, strings.NewReader(""), service.InputSchemaForecastSeal, &destination)
-	if app.ErrorCodeOf(err) != app.CodeConflict || !strings.Contains(err.Error(), "--input") || strings.Contains(err.Error(), "key file") {
+	err := decodePrivateOperationInputForArgument(context.Background(), path, strings.NewReader(""), service.InputSchemaForecastSealPrivate, &destination, "--secret-input")
+	if app.ErrorCodeOf(err) != app.CodeConflict || !strings.Contains(err.Error(), "--secret-input") || strings.Contains(err.Error(), "key file") {
 		t.Fatalf("permission error = %v", err)
 	}
 }

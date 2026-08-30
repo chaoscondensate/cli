@@ -129,9 +129,6 @@
       "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
       "type": "string"
     },
-    "forecast-seal": {
-      "$ref": "#/$defs/sealedForecastInput"
-    },
     "forecastValue": {
       "oneOf": [
         {
@@ -147,6 +144,125 @@
           "$ref": "#/$defs/dateValue"
         }
       ]
+    },
+    "forecastWindow": {
+      "additionalProperties": false,
+      "properties": {
+        "opens_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      },
+      "required": [
+        "opens_at"
+      ],
+      "type": "object"
+    },
+    "initialForecastInput": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "visibility": {
+                "const": "public"
+              }
+            },
+            "required": [
+              "visibility"
+            ]
+          },
+          "then": {
+            "required": [
+              "value"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "visibility": {
+                "const": "sealed"
+              }
+            },
+            "required": [
+              "visibility"
+            ]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "value"
+                  ]
+                },
+                {
+                  "required": [
+                    "rationale"
+                  ]
+                },
+                {
+                  "required": [
+                    "key_factors"
+                  ]
+                },
+                {
+                  "required": [
+                    "comment"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "properties": {
+        "comment": {
+          "minLength": 0,
+          "type": "string"
+        },
+        "forecasted_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "id": {
+          "$ref": "#/$defs/slug"
+        },
+        "key_factors": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "public_note": {
+          "minLength": 0,
+          "type": "string"
+        },
+        "rationale": {
+          "minLength": 0,
+          "type": "string"
+        },
+        "recorded_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "supersedes_forecast_id": {
+          "$ref": "#/$defs/slug"
+        },
+        "value": {
+          "$ref": "#/$defs/forecastValue"
+        },
+        "visibility": {
+          "enum": [
+            "public",
+            "sealed"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "visibility"
+      ],
+      "type": "object"
     },
     "multipleChoiceValue": {
       "additionalProperties": false,
@@ -250,47 +366,100 @@
       ],
       "type": "object"
     },
-    "sealedForecastInput": {
+    "option": {
       "additionalProperties": false,
       "properties": {
-        "comment": {
-          "minLength": 0,
-          "type": "string"
-        },
-        "forecasted_at": {
-          "$ref": "#/$defs/timestamp"
-        },
-        "key_factors": {
-          "items": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "public_note": {
-          "minLength": 0,
-          "type": "string"
-        },
-        "rationale": {
-          "minLength": 0,
-          "type": "string"
-        },
-        "recorded_at": {
-          "$ref": "#/$defs/timestamp"
-        },
-        "supersedes_forecast_id": {
+        "id": {
           "$ref": "#/$defs/slug"
         },
-        "value": {
-          "$ref": "#/$defs/forecastValue"
+        "label": {
+          "minLength": 1,
+          "type": "string"
         }
       },
       "required": [
-        "forecasted_at",
-        "value",
-        "rationale",
-        "key_factors",
-        "comment"
+        "id",
+        "label"
+      ],
+      "type": "object"
+    },
+    "platformRef": {
+      "additionalProperties": false,
+      "properties": {
+        "platform": {
+          "$ref": "#/$defs/slug"
+        },
+        "question_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "url": {
+          "format": "uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "platform"
+      ],
+      "type": "object"
+    },
+    "question-add": {
+      "$ref": "#/$defs/questionAddInput"
+    },
+    "questionAddInput": {
+      "additionalProperties": false,
+      "properties": {
+        "created_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "expected_resolution_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "forecast_window": {
+          "$ref": "#/$defs/forecastWindow"
+        },
+        "initial_forecast": {
+          "$ref": "#/$defs/initialForecastInput"
+        },
+        "notes": {
+          "minLength": 0,
+          "type": "string"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/option"
+          },
+          "minItems": 2,
+          "type": "array"
+        },
+        "platform_refs": {
+          "items": {
+            "$ref": "#/$defs/platformRef"
+          },
+          "type": "array"
+        },
+        "resolution_criteria": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "$ref": "#/$defs/slug"
+          },
+          "type": "array"
+        },
+        "title": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "unit": {
+          "$ref": "#/$defs/unit"
+        }
+      },
+      "required": [
+        "title",
+        "resolution_criteria",
+        "expected_resolution_at"
       ],
       "type": "object"
     },
@@ -305,9 +474,30 @@
       "format": "date-time",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
       "type": "string"
+    },
+    "unit": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "symbol": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "ucum_code": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
     }
   },
-  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/forecast-seal/v1",
-  "$ref": "#/$defs/forecast-seal",
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/question-add/v1",
+  "$ref": "#/$defs/question-add",
   "$schema": "https://json-schema.org/draft/2020-12/schema"
 }

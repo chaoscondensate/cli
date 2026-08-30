@@ -8,11 +8,10 @@ DESCRIPTION:
    Example:
      forecast-ledger ledger update --file ledger.yaml --title 'Forecast archive' --timezone Europe/London
 
-   Use direct flags for normal authoring. --input is an optional, mutually exclusive batch mode.
+   Use direct flags for authoring.
 
 OPTIONS:
    --file string, -f string                             Ledger file path
-   --input string, -i string                            Closed JSON or YAML input file; use - for stdin
    --title string                                       Replace ledger title
    --clear-title                                        Remove ledger title
    --description string                                 Replace ledger description

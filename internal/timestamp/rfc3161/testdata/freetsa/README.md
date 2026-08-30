@@ -25,9 +25,9 @@ ECDSA-with-SHA-512 signature.
 
 | File | SHA-256 |
 | --- | --- |
-| `target.txt` | `0ac2fd85615071ded99db80f41e33d0ac879af474c7a5b39793c95bfb925fc5f` |
-| `request.tsq` | `de76a83e68832390a86ffabd8c8b1227fb44259caa2b5af54e431b72a9f85611` |
-| `response.tsr` | `af9cfc38e47957ab71e85ae88baf2b5cbe9acdfcd645f16b46099960717dd4a4` |
+| `target.txt` | `b360d603065bfcc064392cf364f1cc599650ff6e924a244427eca40e76e8f3bb` |
+| `request.tsq` | `ac3584ff6ad33516e6c301129eef5035d0f667af9951dce1fbbc25375e29144a` |
+| `response.tsr` | `60a77a574f6140e6f2270d0db490eb733fcd57653dc3f7eae0ce0c1e69fc589a` |
 | `tsa.pem` | `8bfb0305bb64e2571ca507552ef3245cb1c2fee8728e0ff8689225081ea13467` |
 
 The exact root bundle is

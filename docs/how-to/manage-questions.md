@@ -10,7 +10,7 @@ prerequisites: ../getting-started/create-ledger.md
 next: manage-public-forecasts.md
 -->
 
-Forecast Ledger v1.2 allows a question to exist before its first forecast.
+Forecast Ledger v1.3 allows a question to exist before its first forecast.
 `question add` always creates the typed question and optionally creates its
 first public or sealed forecast in the same atomic operation.
 
@@ -23,8 +23,7 @@ forecast-ledger question add \
   --type binary \
   --title "Will the launch happen by the deadline?" \
   --resolution-criteria "Resolve from the operator's public launch record." \
-  --closes-at 2026-12-31T23:59:59Z \
-  --expected-resolution-at 2027-01-15T12:00:00Z
+  --expected-resolution-at "15 Jan 2027"
 ```
 
 The supported types are `binary`, `multiple_choice`, `numeric`, and `date`.
@@ -34,7 +33,7 @@ values. Numeric questions require `--unit-name` and may use `--unit-symbol` or
 Every referenced platform must already exist, and question and forecast IDs
 must be unique in their respective ledger-wide namespaces.
 
-Omit `initial_forecast` to leave `forecasts: []`, then use `forecast add` or
+Omit `--initial-forecast` to leave `forecasts: []`, then use `forecast add` or
 `forecast seal` when the first forecast is ready. A first forecast does not
 implicitly supersede anything; an explicit supersedes ID must already exist in
 that question.
@@ -56,7 +55,7 @@ forecast-ledger question update \
   --file ledger.yaml \
   --question q-launch \
   --status closed \
-  --closes-at 2026-10-01T22:00:00+01:00 \
+  --opens-at "1 Oct 2026 09:00" \
   --notes "Ready for resolution review."
 ```
 
@@ -101,8 +100,7 @@ Source URLs must be absolute. Forecasts and integrity evidence are retained.
 Use `question annul` to record that a question cannot be resolved under its
 criteria, or `question dispute` to challenge a resolved or annulled record.
 These commands require `--reason`, optional repeated `--source`, and approval.
-`--input` remains an optional mutually exclusive batch mode on all authoring
-leaves. Forecast Ledger v1 stores only
+All public lifecycle data is supplied by flags. Forecast Ledger v1 stores only
 the current resolution object: resolve-after-dispute, annul of a terminal state,
 or dispute replaces that object. The file itself does not provide internal
 resolution history and does not infer Git or another external history system.

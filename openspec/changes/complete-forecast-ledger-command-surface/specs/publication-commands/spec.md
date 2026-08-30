@@ -1,3 +1,8 @@
+> Supersession note (2026-08-30): generic authoring documents, public
+> `--input`, MCP `input`/public `input_file`, v1.2.0 identity, and the old target
+> shape below are historical implementation facts. `make-authoring-direct-readable`
+> owns their v1.3.0 replacements and takes precedence.
+
 ## Purpose
 
 Defines deterministic, transport-neutral evidence-package creation and local verification so a ledger and its exact public evidence can be copied or published without source control, hosted services, secrets, or machine-specific paths.

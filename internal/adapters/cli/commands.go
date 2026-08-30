@@ -22,6 +22,10 @@ import (
 )
 
 func NewCommand(stdin io.Reader, stdout, stderr io.Writer) *urfavecli.Command {
+	return newCommandWithEffects(stdin, stdout, stderr, service.ProductionEffects())
+}
+
+func newCommandWithEffects(stdin io.Reader, stdout, stderr io.Writer, effects service.Effects) *urfavecli.Command {
 	info := buildinfo.Current()
 	root := &urfavecli.Command{
 		Name:                      "forecast-ledger",
@@ -37,6 +41,7 @@ func NewCommand(stdin io.Reader, stdout, stderr io.Writer) *urfavecli.Command {
 		Reader:    stdin,
 		Writer:    stdout,
 		ErrWriter: stderr,
+		Metadata:  map[string]any{"effects": effects},
 		Flags: []urfavecli.Flag{
 			&urfavecli.BoolFlag{Name: "json", Usage: "Write stable JSON output"},
 			&urfavecli.BoolFlag{Name: "plain", Usage: "Write plain text without decoration"},
@@ -89,11 +94,18 @@ func NewCommand(stdin io.Reader, stdout, stderr io.Writer) *urfavecli.Command {
 	return root
 }
 
+func commandEffects(command *urfavecli.Command) service.Effects {
+	if effects, ok := command.Root().Metadata["effects"].(service.Effects); ok {
+		return effects
+	}
+	return service.ProductionEffects()
+}
+
 func ledgerCommand() *urfavecli.Command {
 	authorFlags := rootPatchFlags()
-	flags := append([]urfavecli.Flag{fileFlag(false), optionalInputFlag()}, authorFlags...)
+	flags := append([]urfavecli.Flag{fileFlag(false)}, authorFlags...)
 	command := leaf("update", "Update ledger and current forecaster metadata", "forecast-ledger ledger update --file ledger.yaml --title 'Forecast archive' --timezone Europe/London", false, flags)
-	command.Description += "\n\nUse direct flags for normal authoring. --input is an optional, mutually exclusive batch mode."
+	command.Description += "\n\nUse direct flags for authoring."
 	command.Action = ledgerUpdateAction
 	return group("ledger", "Manage ledger metadata", command)
 }
@@ -102,20 +114,9 @@ func ledgerUpdateAction(ctx context.Context, command *urfavecli.Command) error {
 	runtime := RuntimeFromCommand(command)
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
-	var input service.RootMetadataPatchInput
-	documentMode, err := directOrDocument(command, allMappedFlags(rootPatchFlags())...)
+	input, err := buildRootPatchInput(command)
 	if err != nil {
 		return err
-	}
-	if documentMode {
-		if err := service.DecodeOperationInput(operationContext, command.String("input"), command.Root().Reader, service.InputSchemaRootMetadata, &input); err != nil {
-			return err
-		}
-	} else {
-		input, err = buildRootPatchInput(command)
-		if err != nil {
-			return err
-		}
 	}
 	var result service.RootMetadataFileResult
 	code, message := "ledger.updated", "Ledger metadata was updated"
@@ -142,14 +143,13 @@ func initCommand() *urfavecli.Command {
 		&urfavecli.StringFlag{Name: "forecaster-id", Required: true, Usage: "Stable forecaster ID"},
 		&urfavecli.StringFlag{Name: "forecaster-name", Required: true, Usage: "Forecaster display name"},
 		&urfavecli.StringFlag{Name: "forecaster-kind", Value: "individual", Usage: "Forecaster kind: individual or team"},
-		optionalInputFlag(),
 		&urfavecli.StringFlag{Name: "key-file", OnlyOnce: true, TakesFile: true, Usage: "New protected key file; required only for a sealed first forecast"},
 	}
 	flags = append(flags, authorFlags...)
 	command := leaf("init", "Create a new ledger", "forecast-ledger init --file ledger.yaml --ledger-id my-forecasts --timezone Europe/London --forecaster-id me --forecaster-name 'My Name'", false,
 		flags)
 	command.Action = initAction
-	command.Description += "\n\nAll non-secret ledger, platform, question, and public initial-forecast data can be supplied through flags. --input is an optional, mutually exclusive batch mode. Omitted initial times use one operation-clock observation; an explicit ledger created_at is not copied into recorded_at."
+	command.Description += "\n\nAll non-secret ledger, platform, question, and public initial-forecast data are supplied through flags. Omitted initial times use one operation-clock observation."
 	return command
 }
 
@@ -157,24 +157,28 @@ func initAction(ctx context.Context, command *urfavecli.Command) error {
 	runtime := RuntimeFromCommand(command)
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
-	var input service.InitInput
-	inputPath := command.String("input")
-	documentMode, err := directOrDocument(command, allMappedFlags(append(rootAuthoringFlags(), initNestedFlags()...))...)
+	effects := commandEffects(command)
+	operationAt, err := formatOperationTime(effects.Clock.Now(), command.String("timezone"))
 	if err != nil {
 		return err
 	}
-	if documentMode {
-		if err := service.DecodeOperationInput(operationContext, inputPath, command.Root().Reader, service.InputSchemaInit, &input); err != nil {
-			return err
-		}
-	} else {
-		input, err = buildInitInput(operationContext, command, command.Root().Reader)
-		if err != nil {
+	if command.IsSet("initial-forecast") && !command.IsSet("initial-forecasted-at") {
+		if err := command.Set("initial-forecasted-at", string(operationAt)); err != nil {
 			return err
 		}
 	}
-	effects := service.ProductionEffects()
-	operationAt, err := service.CaptureOperationTime(effects.Clock)
+	var normalizedTimes []service.TimeNormalization
+	for _, item := range []struct {
+		name   string
+		policy dateOnlyPolicy
+	}{{"created-at", dateOnlyRejected}, {"question-created-at", dateOnlyRejected}, {"question-opens-at", dateOnlyStart}, {"question-expected-resolution-at", dateOnlyEnd}, {"initial-forecasted-at", dateOnlyRejected}, {"initial-recorded-at", dateOnlyRejected}} {
+		normalized, err := normalizeSetTimeWithMetadata(command, item.name, command.String("timezone"), item.policy)
+		if err != nil {
+			return err
+		}
+		normalizedTimes = appendTimeNormalization(normalizedTimes, normalized)
+	}
+	input, err := buildInitInput(operationContext, command, command.Root().Reader)
 	if err != nil {
 		return err
 	}
@@ -204,12 +208,8 @@ func initAction(ctx context.Context, command *urfavecli.Command) error {
 	case service.CreationPublicForecast:
 		model, err = service.BuildInitialPublicLedgerAt(root, *input.Question, operationAt)
 	case service.CreationSealedForecast:
-		protectedInputPath := inputPath
-		protectedArgument := "--input"
-		if protectedInputPath == "" {
-			protectedInputPath = command.String("initial-secret-input")
-			protectedArgument = "--initial-secret-input"
-		}
+		protectedInputPath := command.String("initial-secret-input")
+		protectedArgument := "--initial-secret-input"
 		if protectedInputPath != "-" {
 			if err := storage.CheckProtectedFile(protectedInputPath); err != nil {
 				return protectedArgumentError(err, protectedArgument)
@@ -248,7 +248,9 @@ func initAction(ctx context.Context, command *urfavecli.Command) error {
 			}
 			effects = append([]service.SideEffect{{Kind: service.EffectKey, Action: service.EffectCreate, Status: service.EffectDeferred, Path: filepath.Base(resolvedKey), Owned: true, Rollback: service.RollbackRetainSecret}}, effects...)
 		}
-		return presenterFor(command).Success("ledger.init.planned", "Ledger initialization is valid; no files were written", service.NewInitResult(model, effects, service.Recovery{State: service.RecoveryNone}))
+		result := service.NewInitResult(model, effects, service.Recovery{State: service.RecoveryNone})
+		result.NormalizedTimes = normalizedTimes
+		return presenterFor(command).Success("ledger.init.planned", "Ledger initialization is valid; no files were written", result)
 	}
 	recovery := service.Recovery{State: service.RecoveryNone}
 	if shape == service.CreationSealedForecast {
@@ -266,7 +268,9 @@ func initAction(ctx context.Context, command *urfavecli.Command) error {
 	if shape == service.CreationSealedForecast {
 		completedEffects = append([]service.SideEffect{{Kind: service.EffectKey, Action: service.EffectCreate, Status: service.EffectCompleted, Path: filepath.Base(keyPath), Owned: true, Rollback: service.RollbackRetainSecret}}, completedEffects...)
 	}
-	return presenterFor(command).Success("ledger.initialized", "Ledger was created", service.NewInitResult(model, completedEffects, recovery))
+	result := service.NewInitResult(model, completedEffects, recovery)
+	result.NormalizedTimes = normalizedTimes
+	return presenterFor(command).Success("ledger.initialized", "Ledger was created", result)
 }
 
 func withRecovery(err error, recovery service.Recovery) error {
@@ -311,13 +315,13 @@ func ledgerReadCommand(name, usage string, stdinAllowed bool) *urfavecli.Command
 }
 
 func platformCommand() *urfavecli.Command {
-	addFlags := append([]urfavecli.Flag{fileFlag(false), platformFlag(), optionalInputFlag()}, platformCreateFlags()...)
+	addFlags := append([]urfavecli.Flag{fileFlag(false), platformFlag()}, platformCreateFlags()...)
 	add := leaf("add", "Add a platform", "forecast-ledger platform add --file ledger.yaml --platform metaculus --name Metaculus --kind scoring_platform", false, addFlags)
-	add.Description += "\n\nUse direct flags for normal authoring. --input is an optional, mutually exclusive batch mode."
+	add.Description += "\n\nUse direct flags for authoring."
 	add.Action = platformAddAction
-	updateFlags := append([]urfavecli.Flag{fileFlag(false), platformFlag(), optionalInputFlag()}, platformPatchFlags()...)
+	updateFlags := append([]urfavecli.Flag{fileFlag(false), platformFlag()}, platformPatchFlags()...)
 	update := leaf("update", "Update a platform", "forecast-ledger platform update --file ledger.yaml --platform metaculus --url https://www.metaculus.com", false, updateFlags)
-	update.Description += "\n\nOmitted fields are unchanged. Use --clear-url or --clear-account for explicit removal. --input is optional and mutually exclusive with authoring flags."
+	update.Description += "\n\nOmitted fields are unchanged. Use --clear-url or --clear-account for explicit removal."
 	update.Action = platformUpdateAction
 	list := leaf("list", "List platforms", "forecast-ledger platform list --file ledger.yaml", true, []urfavecli.Flag{fileFlag(true)})
 	list.Action = platformListAction
@@ -332,20 +336,9 @@ func platformAddAction(ctx context.Context, command *urfavecli.Command) error {
 	runtime := RuntimeFromCommand(command)
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
-	var input service.PlatformCreateInput
-	documentMode, err := directOrDocument(command, allMappedFlags(platformCreateFlags())...)
+	input, err := buildPlatformCreateInput(command)
 	if err != nil {
 		return err
-	}
-	if documentMode {
-		if err := service.DecodeOperationInput(operationContext, command.String("input"), command.Root().Reader, service.InputSchemaPlatformCreate, &input); err != nil {
-			return err
-		}
-	} else {
-		input, err = buildPlatformCreateInput(command)
-		if err != nil {
-			return err
-		}
 	}
 	id := ledger.Slug(command.String("platform"))
 	var result service.PlatformFileResult
@@ -366,20 +359,9 @@ func platformUpdateAction(ctx context.Context, command *urfavecli.Command) error
 	runtime := RuntimeFromCommand(command)
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
-	var input service.PlatformPatchInput
-	documentMode, err := directOrDocument(command, allMappedFlags(platformPatchFlags())...)
+	input, err := buildPlatformPatchInput(command)
 	if err != nil {
 		return err
-	}
-	if documentMode {
-		if err := service.DecodeOperationInput(operationContext, command.String("input"), command.Root().Reader, service.InputSchemaPlatformPatch, &input); err != nil {
-			return err
-		}
-	} else {
-		input, err = buildPlatformPatchInput(command)
-		if err != nil {
-			return err
-		}
 	}
 	id := ledger.Slug(command.String("platform"))
 	var result service.PlatformFileResult
@@ -460,31 +442,31 @@ func platformRemoveAction(ctx context.Context, command *urfavecli.Command) error
 }
 
 func questionCommand() *urfavecli.Command {
-	addFlags := []urfavecli.Flag{fileFlag(false), questionFlag(), &urfavecli.StringFlag{Name: "type", Required: true, Usage: "Question type: binary, multiple_choice, numeric, or date"}, optionalInputFlag(), &urfavecli.StringFlag{Name: "key-file", OnlyOnce: true, TakesFile: true, Usage: "New protected key file; required only for a sealed first forecast"}}
+	addFlags := []urfavecli.Flag{fileFlag(false), questionFlag(), &urfavecli.StringFlag{Name: "type", Required: true, Usage: "Question type: binary, multiple_choice, numeric, or date"}, &urfavecli.StringFlag{Name: "key-file", OnlyOnce: true, TakesFile: true, Usage: "New protected key file; required only for a sealed first forecast"}}
 	addFlags = append(addFlags, questionCreateFlags(true)...)
-	add := leaf("add", "Add a question, optionally with its first forecast", "forecast-ledger question add --file ledger.yaml --question q-launch --type binary --title 'Will it launch?' --resolution-criteria 'Resolves yes on launch' --closes-at 2027-01-01T00:00:00Z --expected-resolution-at 2027-02-01T00:00:00Z", false, addFlags)
-	add.Description += "\n\nUse direct flags for ordinary authoring. Repeated structured values use the documented CSV field order. --input is an optional, mutually exclusive batch mode; sealed private data remains protected."
+	add := leaf("add", "Add a question, optionally with its first forecast", "forecast-ledger question add --file ledger.yaml --question q-launch --type binary --title 'Will it launch?' --resolution-criteria 'Resolves yes on launch' --expected-resolution-at '2 Feb 2027'", false, addFlags)
+	add.Description += "\n\nUse direct flags for authoring. Repeated structured values use the documented CSV field order; sealed private data remains protected."
 	add.Action = questionAddAction
-	updateFlags := append([]urfavecli.Flag{fileFlag(false), questionFlag(), optionalInputFlag()}, questionPatchFlags()...)
+	updateFlags := append([]urfavecli.Flag{fileFlag(false), questionFlag()}, questionPatchFlags()...)
 	update := leaf("update", "Update allowed question fields", "forecast-ledger question update --file ledger.yaml --question q-launch --title 'Updated title' --tag launch --tag space", false, updateFlags)
-	update.Description += "\n\nOmitted fields are unchanged; --clear-* removes optional values. --input is optional and mutually exclusive with authoring flags."
+	update.Description += "\n\nOmitted fields are unchanged; --clear-* removes optional values."
 	update.Action = questionUpdateAction
 	list := leaf("list", "List questions", "forecast-ledger question list --file ledger.yaml", true, []urfavecli.Flag{fileFlag(true)})
 	list.Action = questionListAction
 	show := leaf("show", "Show a question", "forecast-ledger question show --file ledger.yaml --question q-launch", true, []urfavecli.Flag{fileFlag(true), questionFlag()})
 	show.Description += "\n\nNormal human and plain output includes public business fields and redacted forecast summaries."
 	show.Action = questionShowAction
-	resolveFlags := append([]urfavecli.Flag{fileFlag(false), questionFlag(), optionalInputFlag()}, lifecycleFlags(true)...)
+	resolveFlags := append([]urfavecli.Flag{fileFlag(false), questionFlag()}, lifecycleFlags(true)...)
 	resolve := leaf("resolve", "Resolve a question", "forecast-ledger question resolve --file ledger.yaml --question q-launch --outcome-boolean=true --outcome-known-at 2027-01-02T00:00:00Z --source 'Official result,https://example.com/result,2027-01-02T00:10:00Z' --yes", false, resolveFlags)
 	resolve.Action = questionResolveAction
-	annulFlags := append([]urfavecli.Flag{fileFlag(false), questionFlag(), optionalInputFlag()}, lifecycleFlags(false)...)
+	annulFlags := append([]urfavecli.Flag{fileFlag(false), questionFlag()}, lifecycleFlags(false)...)
 	annul := leaf("annul", "Annul a question", "forecast-ledger question annul --file ledger.yaml --question q-launch --reason 'Question became unresolvable' --yes", false, annulFlags)
 	annul.Action = questionAnnulAction
-	disputeFlags := append([]urfavecli.Flag{fileFlag(false), questionFlag(), optionalInputFlag()}, lifecycleFlags(false)...)
+	disputeFlags := append([]urfavecli.Flag{fileFlag(false), questionFlag()}, lifecycleFlags(false)...)
 	dispute := leaf("dispute", "Dispute a resolution", "forecast-ledger question dispute --file ledger.yaml --question q-launch --reason 'Source conflicts with the recorded outcome' --yes", false, disputeFlags)
 	dispute.Action = questionDisputeAction
 	for _, command := range []*urfavecli.Command{resolve, annul, dispute} {
-		command.Description += "\n\nUse repeated --source values as title,url,retrieved-at[,publisher[,published-at[,sha256]]]. --input is optional and mutually exclusive with authoring flags."
+		command.Description += "\n\nUse repeated --source values as title,url,retrieved-at[,publisher[,published-at[,sha256]]]."
 	}
 	return group("question", "Manage forecast questions", add, update, list, show, resolve, annul, dispute)
 }
@@ -493,23 +475,35 @@ func questionAddAction(ctx context.Context, command *urfavecli.Command) error {
 	runtime := RuntimeFromCommand(command)
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
-	var input service.QuestionAddInput
-	documentMode, err := directOrDocument(command, allMappedFlags(questionCreateFlags(true))...)
+	timezone, err := mutationTimezone(operationContext, command)
 	if err != nil {
 		return err
 	}
-	if documentMode {
-		if err := service.DecodeOperationInput(operationContext, command.String("input"), command.Root().Reader, service.InputSchemaQuestionAdd, &input); err != nil {
-			return err
-		}
-	} else {
-		input, err = buildQuestionAddInput(operationContext, command, command.Root().Reader)
-		if err != nil {
+	observedAt, err := formatOperationTime(commandEffects(command).Clock.Now(), timezone)
+	if err != nil {
+		return err
+	}
+	if command.IsSet("initial-forecast") && !command.IsSet("initial-forecasted-at") {
+		if err := command.Set("initial-forecasted-at", string(observedAt)); err != nil {
 			return err
 		}
 	}
+	var normalizedTimes []service.TimeNormalization
+	for _, item := range []struct {
+		name   string
+		policy dateOnlyPolicy
+	}{{"created-at", dateOnlyRejected}, {"opens-at", dateOnlyStart}, {"expected-resolution-at", dateOnlyEnd}, {"initial-forecasted-at", dateOnlyRejected}, {"initial-recorded-at", dateOnlyRejected}} {
+		normalized, err := normalizeSetTimeWithMetadata(command, item.name, timezone, item.policy)
+		if err != nil {
+			return err
+		}
+		normalizedTimes = appendTimeNormalization(normalizedTimes, normalized)
+	}
+	input, err := buildQuestionAddInput(operationContext, command, command.Root().Reader)
+	if err != nil {
+		return err
+	}
 	normalized := service.NormalizedQuestionCreate{ID: ledger.Slug(command.String("question")), Type: ledger.QuestionType(command.String("type")), Input: input}
-	observedAt := ledger.Timestamp(service.ProductionEffects().Clock.Now().Format(time.RFC3339))
 	keyPath := command.String("key-file")
 	shape, err := service.ClassifyQuestionAddInput(input)
 	if err != nil {
@@ -536,12 +530,8 @@ func questionAddAction(ctx context.Context, command *urfavecli.Command) error {
 		}
 	case service.CreationSealedForecast:
 		message = "Question and initial forecast were added"
-		protectedInputPath := command.String("input")
-		protectedArgument := "--input"
-		if protectedInputPath == "" {
-			protectedInputPath = command.String("initial-secret-input")
-			protectedArgument = "--initial-secret-input"
-		}
+		protectedInputPath := command.String("initial-secret-input")
+		protectedArgument := "--initial-secret-input"
 		if protectedInputPath != "-" {
 			if err := storage.CheckProtectedFile(protectedInputPath); err != nil {
 				return protectedArgumentError(err, protectedArgument)
@@ -553,12 +543,13 @@ func questionAddAction(ctx context.Context, command *urfavecli.Command) error {
 		if runtime.DryRun {
 			result, err = service.PlanQuestionAddSealedFile(operationContext, command.String("file"), keyPath, normalized, observedAt)
 		} else {
-			result, err = service.CommitQuestionAddSealedFile(operationContext, command.String("file"), keyPath, normalized, observedAt, service.ProductionEffects())
+			result, err = service.CommitQuestionAddSealedFile(operationContext, command.String("file"), keyPath, normalized, observedAt, commandEffects(command))
 		}
 	}
 	if err != nil {
 		return withRecovery(err, result.Recovery)
 	}
+	result.NormalizedTimes = normalizedTimes
 	if runtime.DryRun {
 		code, message = "question.add.planned", "Question addition is valid; no file was changed"
 	}
@@ -569,20 +560,24 @@ func questionUpdateAction(ctx context.Context, command *urfavecli.Command) error
 	runtime := RuntimeFromCommand(command)
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
-	var input service.QuestionPatchInput
-	documentMode, err := directOrDocument(command, allMappedFlags(questionPatchFlags())...)
+	timezone, err := mutationTimezone(operationContext, command)
 	if err != nil {
 		return err
 	}
-	if documentMode {
-		if err := service.DecodeOperationInput(operationContext, command.String("input"), command.Root().Reader, service.InputSchemaQuestionPatch, &input); err != nil {
-			return err
-		}
-	} else {
-		input, err = buildQuestionPatchInput(command)
-		if err != nil {
-			return err
-		}
+	var normalizedTimes []service.TimeNormalization
+	normalized, err := normalizeSetTimeWithMetadata(command, "opens-at", timezone, dateOnlyStart)
+	if err != nil {
+		return err
+	}
+	normalizedTimes = appendTimeNormalization(normalizedTimes, normalized)
+	normalized, err = normalizeSetTimeWithMetadata(command, "expected-resolution-at", timezone, dateOnlyEnd)
+	if err != nil {
+		return err
+	}
+	normalizedTimes = appendTimeNormalization(normalizedTimes, normalized)
+	input, err := buildQuestionPatchInput(command)
+	if err != nil {
+		return err
 	}
 	id := ledger.Slug(command.String("question"))
 	var result service.QuestionFileResult
@@ -599,6 +594,7 @@ func questionUpdateAction(ctx context.Context, command *urfavecli.Command) error
 	if err != nil {
 		return err
 	}
+	result.NormalizedTimes = normalizedTimes
 	return presenterFor(command).Success(code, message, result)
 }
 
@@ -683,19 +679,23 @@ func questionDisputeAction(ctx context.Context, command *urfavecli.Command) erro
 	})
 }
 
-func questionTerminalAction(ctx context.Context, command *urfavecli.Command, schema service.InputSchemaName, input any, directFlags []urfavecli.Flag, buildDirect func(*urfavecli.Command) error, verb string, execute func(context.Context, ledger.Slug, ledger.Timestamp, bool) (service.QuestionFileResult, error)) error {
+func questionTerminalAction(ctx context.Context, command *urfavecli.Command, _ service.InputSchemaName, _ any, _ []urfavecli.Flag, buildDirect func(*urfavecli.Command) error, verb string, execute func(context.Context, ledger.Slug, ledger.Timestamp, bool) (service.QuestionFileResult, error)) error {
 	runtime := RuntimeFromCommand(command)
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
-	documentMode, err := directOrDocument(command, allMappedFlags(directFlags)...)
+	timezone, err := mutationTimezone(operationContext, command)
 	if err != nil {
 		return err
 	}
-	if documentMode {
-		if err := service.DecodeOperationInput(operationContext, command.String("input"), command.Root().Reader, schema, input); err != nil {
+	var normalizedTimes []service.TimeNormalization
+	for _, name := range []string{"outcome-known-at", "recorded-at"} {
+		normalized, err := normalizeSetTimeWithMetadata(command, name, timezone, dateOnlyRejected)
+		if err != nil {
 			return err
 		}
-	} else if err := buildDirect(command); err != nil {
+		normalizedTimes = appendTimeNormalization(normalizedTimes, normalized)
+	}
+	if err := buildDirect(command); err != nil {
 		return err
 	}
 	id := ledger.Slug(command.String("question"))
@@ -708,11 +708,12 @@ func questionTerminalAction(ctx context.Context, command *urfavecli.Command, sch
 			return app.NewError(app.CodeConflict, "question lifecycle change was not approved", nil)
 		}
 	}
-	observedAt := ledger.Timestamp(service.ProductionEffects().Clock.Now().Format(time.RFC3339))
+	observedAt := ledger.Timestamp(commandEffects(command).Clock.Now().Format(time.RFC3339))
 	result, err := execute(operationContext, id, observedAt, runtime.DryRun)
 	if err != nil {
 		return err
 	}
+	result.NormalizedTimes = normalizedTimes
 	code, message := "question."+verb+"d", "Question was "+verb+"d"
 	if verb == "annul" {
 		code, message = "question.annulled", "Question was annulled; the question and forecasts were retained"
@@ -724,18 +725,18 @@ func questionTerminalAction(ctx context.Context, command *urfavecli.Command, sch
 }
 
 func forecastCommand() *urfavecli.Command {
-	addFlags := append([]urfavecli.Flag{fileFlag(false), questionFlag(), forecastFlag(), optionalInputFlag()}, forecastCreateFlags()...)
+	addFlags := append([]urfavecli.Flag{fileFlag(false), questionFlag(), forecastFlag()}, forecastCreateFlags()...)
 	add := leaf("add", "Add a public forecast", "forecast-ledger forecast add --file ledger.yaml --question q-launch --forecast f-002 --forecasted-at 2026-12-01T12:00:00Z --value-kind binary --probability-bp 6500", false, addFlags)
-	add.Description += "\n\nUse --value-kind with --probability-bp, repeated --choice-probability, --point, --interval, or repeated --quantile as applicable. --input is an optional, mutually exclusive batch mode."
+	add.Description += "\n\nUse --value-kind with --probability-bp, repeated --choice-probability, --point, --interval, or repeated --quantile as applicable."
 	add.Action = forecastAddAction
 	list := leaf("list", "List forecasts", "forecast-ledger forecast list --file ledger.yaml --question q-launch", true, []urfavecli.Flag{fileFlag(true), questionFlag()})
 	list.Action = forecastListAction
 	show := leaf("show", "Show a forecast", "forecast-ledger forecast show --file ledger.yaml --question q-launch --forecast f-001", true, []urfavecli.Flag{fileFlag(true), questionFlag(), forecastFlag()})
 	show.Description += "\n\nNormal human and plain output includes type-aware public values and safe stored integrity evidence; sealed private fields stay redacted. No network check is performed."
 	show.Action = forecastShowAction
-	sealFlags := append([]urfavecli.Flag{fileFlag(false), questionFlag(), forecastFlag(), optionalInputFlag(), secretOutputFlag()}, forecastSealPublicFlags()...)
+	sealFlags := append([]urfavecli.Flag{fileFlag(false), questionFlag(), forecastFlag(), secretOutputFlag()}, forecastSealPublicFlags()...)
 	seal := leaf("seal", "Create and append a sealed forecast", "forecast-ledger forecast seal --file ledger.yaml --question q-launch --forecast f-002 --forecasted-at 2026-12-01T12:00:00Z --secret-input private.yaml --key-file secret.key", false, sealFlags)
-	seal.Description += "\n\nDirect mode keeps value, rationale, key factors, and comment in protected --secret-input while public times, note, and supersedes ID use flags. Legacy full protected --input remains available and is mutually exclusive with direct mode."
+	seal.Description += "\n\nValue, rationale, key factors, and comment stay in protected --secret-input while public times, note, and supersedes ID use flags."
 	seal.Action = forecastSealAction
 	reveal := leaf("reveal", "Verify and reveal a sealed forecast", "forecast-ledger forecast reveal --file ledger.yaml --question q-launch --forecast f-002 --key-file secret.key --yes", false, []urfavecli.Flag{fileFlag(false), questionFlag(), forecastFlag(), &urfavecli.StringFlag{Name: "key-file", Required: true, TakesFile: true, Usage: "Protected key file"}, &urfavecli.StringFlag{Name: "revealed-at", OnlyOnce: true, Usage: "Explicit RFC 3339 reveal time; defaults to the current clock"}})
 	reveal.Action = forecastRevealAction
@@ -748,22 +749,31 @@ func forecastAddAction(ctx context.Context, command *urfavecli.Command) error {
 	runtime := RuntimeFromCommand(command)
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
-	var input service.ForecastCreateInput
-	documentMode, err := directOrDocument(command, allMappedFlags(forecastCreateFlags())...)
+	timezone, err := mutationTimezone(operationContext, command)
 	if err != nil {
 		return err
 	}
-	if documentMode {
-		if err := service.DecodeOperationInput(operationContext, command.String("input"), command.Root().Reader, service.InputSchemaForecastCreate, &input); err != nil {
-			return err
-		}
-	} else {
-		input, err = buildForecastCreateInput(command)
-		if err != nil {
+	observedAt, err := formatOperationTime(commandEffects(command).Clock.Now(), timezone)
+	if err != nil {
+		return err
+	}
+	if !command.IsSet("forecasted-at") {
+		if err := command.Set("forecasted-at", string(observedAt)); err != nil {
 			return err
 		}
 	}
-	observedAt := ledger.Timestamp(service.ProductionEffects().Clock.Now().Format(time.RFC3339))
+	var normalizedTimes []service.TimeNormalization
+	for _, name := range []string{"forecasted-at", "recorded-at"} {
+		normalized, err := normalizeSetTimeWithMetadata(command, name, timezone, dateOnlyRejected)
+		if err != nil {
+			return err
+		}
+		normalizedTimes = appendTimeNormalization(normalizedTimes, normalized)
+	}
+	input, err := buildForecastCreateInput(command)
+	if err != nil {
+		return err
+	}
 	questionID, forecastID := ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast"))
 	var result service.ForecastFileResult
 	code, message := "forecast.added", "Forecast was added"
@@ -776,6 +786,7 @@ func forecastAddAction(ctx context.Context, command *urfavecli.Command) error {
 	if err != nil {
 		return err
 	}
+	result.NormalizedTimes = normalizedTimes
 	return presenterFor(command).Success(code, message, result)
 }
 
@@ -823,39 +834,44 @@ func forecastSealAction(ctx context.Context, command *urfavecli.Command) error {
 	runtime := RuntimeFromCommand(command)
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
-	var input service.SealedForecastInput
-	inputPath := command.String("input")
-	directFlags := allMappedFlags(forecastSealPublicFlags())
-	if inputPath != "" {
-		for _, name := range directFlags {
-			if command.IsSet(name) {
-				return app.NewError(app.CodeUsage, "--input cannot be combined with direct sealed-forecast flags such as --"+name, nil)
-			}
-		}
-		if err := decodePrivateOperationInput(operationContext, inputPath, command.Root().Reader, service.InputSchemaForecastSeal, &input); err != nil {
-			return err
-		}
-	} else {
-		var err error
-		input, err = buildSealedForecastInput(operationContext, command, command.Root().Reader)
-		if err != nil {
+	timezone, err := mutationTimezone(operationContext, command)
+	if err != nil {
+		return err
+	}
+	observedAt, err := formatOperationTime(commandEffects(command).Clock.Now(), timezone)
+	if err != nil {
+		return err
+	}
+	if !command.IsSet("forecasted-at") {
+		if err := command.Set("forecasted-at", string(observedAt)); err != nil {
 			return err
 		}
 	}
-	observedAt := ledger.Timestamp(service.ProductionEffects().Clock.Now().Format(time.RFC3339))
+	var normalizedTimes []service.TimeNormalization
+	for _, name := range []string{"forecasted-at", "recorded-at"} {
+		normalized, err := normalizeSetTimeWithMetadata(command, name, timezone, dateOnlyRejected)
+		if err != nil {
+			return err
+		}
+		normalizedTimes = appendTimeNormalization(normalizedTimes, normalized)
+	}
+	input, err := buildSealedForecastInput(operationContext, command, command.Root().Reader)
+	if err != nil {
+		return err
+	}
 	questionID, forecastID := ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast"))
 	var result service.ForecastFileResult
-	var err error
 	code, message := "forecast.sealed", "Sealed forecast and protected key were created"
 	if runtime.DryRun {
 		result, err = service.PlanForecastSealFile(operationContext, command.String("file"), command.String("key-file"), questionID, forecastID, input, observedAt)
 		code, message = "forecast.seal.planned", "Sealed forecast creation is valid; no key or ledger file was changed"
 	} else {
-		result, err = service.CommitForecastSealFile(operationContext, command.String("file"), command.String("key-file"), questionID, forecastID, input, observedAt, service.ProductionEffects())
+		result, err = service.CommitForecastSealFile(operationContext, command.String("file"), command.String("key-file"), questionID, forecastID, input, observedAt, commandEffects(command))
 	}
 	if err != nil {
 		return withRecovery(err, result.Recovery)
 	}
+	result.NormalizedTimes = normalizedTimes
 	return presenterFor(command).Success(code, message, result)
 }
 
@@ -873,7 +889,7 @@ func forecastRevealAction(ctx context.Context, command *urfavecli.Command) error
 	}
 	revealedAt := ledger.Timestamp(command.String("revealed-at"))
 	if revealedAt == "" {
-		revealedAt = ledger.Timestamp(service.ProductionEffects().Clock.Now().Format(time.RFC3339))
+		revealedAt = ledger.Timestamp(commandEffects(command).Clock.Now().Format(time.RFC3339))
 	}
 	var result service.ForecastFileResult
 	code, message := "forecast.revealed", "Forecast was authenticated and revealed"
@@ -914,10 +930,6 @@ func forecastKeyHintUpdateAction(ctx context.Context, command *urfavecli.Command
 		return err
 	}
 	return presenterFor(command).Success(code, message, result)
-}
-
-func decodePrivateOperationInput(ctx context.Context, path string, stdin io.Reader, schema service.InputSchemaName, destination any) error {
-	return decodePrivateOperationInputForArgument(ctx, path, stdin, schema, destination, "--input")
 }
 
 func decodePrivateOperationInputForArgument(ctx context.Context, path string, stdin io.Reader, schema service.InputSchemaName, destination any, argument string) error {
@@ -1077,7 +1089,7 @@ func timestampStampAction(ctx context.Context, command *urfavecli.Command) error
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
 	result, err := service.CommitTimestampStamp(operationContext, command.String("file"), ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast")), service.TimestampStampOptions{
-		DryRun: runtime.DryRun, Offline: command.Bool("offline"), TSAProvider: command.String("tsa-provider"), TSAURL: command.String("tsa-url"), CABundlePath: command.String("ca-bundle"), Effects: service.ProductionEffects(),
+		DryRun: runtime.DryRun, Offline: command.Bool("offline"), TSAProvider: command.String("tsa-provider"), TSAURL: command.String("tsa-url"), CABundlePath: command.String("ca-bundle"), Effects: commandEffects(command),
 	})
 	if err != nil && result.FailureCode == "" {
 		return withRecovery(err, result.Recovery)
@@ -1130,7 +1142,7 @@ func timestampVerifyAction(ctx context.Context, command *urfavecli.Command) erro
 	runtime := RuntimeFromCommand(command)
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
-	result, err := service.CommitTimestampVerify(operationContext, command.String("file"), ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast")), service.TimestampVerifyOptions{DryRun: runtime.DryRun, Effects: service.ProductionEffects()})
+	result, err := service.CommitTimestampVerify(operationContext, command.String("file"), ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast")), service.TimestampVerifyOptions{DryRun: runtime.DryRun, Effects: commandEffects(command)})
 	if err != nil {
 		return err
 	}
@@ -1590,21 +1602,6 @@ func platformFlag() *urfavecli.StringFlag {
 }
 func secretOutputFlag() *urfavecli.StringFlag {
 	return &urfavecli.StringFlag{Name: "key-file", Required: true, OnlyOnce: true, TakesFile: true, Usage: "New protected key file"}
-}
-func inputFlag() *urfavecli.StringFlag {
-	return &urfavecli.StringFlag{Name: "input", Aliases: []string{"i"}, Required: true, OnlyOnce: true, TakesFile: true, Usage: "Closed JSON or YAML input file; use - for stdin",
-		Validator: func(value string) error {
-			if strings.TrimSpace(value) == "" {
-				return errors.New("input path is empty")
-			}
-			return nil
-		}}
-}
-
-func optionalInputFlag() *urfavecli.StringFlag {
-	flag := inputFlag()
-	flag.Required = false
-	return flag
 }
 func requireTargetSelection(ctx context.Context, command *urfavecli.Command) (context.Context, error) {
 	all := command.Bool("all")

@@ -26,12 +26,17 @@ package="$work/package"
 backdated_ledger="$work/backdated-ledger.json"
 
 # A historical ledger creation time must not become the default initial
-# recorded_at. The omitted recorded_at below comes from this init operation.
-printf '%s\n' '{"created_at":"2020-01-01T00:00:00Z","question":{"id":"q-backdated","title":"Will the event happen?","type":"binary","resolution_criteria":"Resolve from the named source.","created_at":"2020-01-01T00:00:00Z","forecast_window":{"opens_at":"2020-01-01T00:00:00Z","closes_at":"2099-01-01T00:00:00Z"},"expected_resolution_at":"2099-01-02T00:00:00Z","initial_forecast":{"id":"f-backdated-001","visibility":"public","forecasted_at":"2020-01-01T00:00:00Z","value":{"kind":"binary","probability_bp":5000}}}}' |
-  "$binary" --json init --file "$backdated_ledger" --ledger-id backdated --timezone UTC --forecaster-id dogfood --forecaster-name Dogfood --input - >/dev/null
+# forecasted_at or recorded_at. Both omitted values come from this operation.
+"$binary" --json init --file "$backdated_ledger" --ledger-id backdated --timezone UTC \
+  --forecaster-id dogfood --forecaster-name Dogfood --created-at 2020-01-01T00:00:00Z \
+  --question q-backdated --question-type binary --question-title "Will the event happen?" \
+  --question-resolution-criteria "Resolve from the named source." \
+  --question-created-at 2020-01-01T00:00:00Z --question-expected-resolution-at 2099-01-02T00:00:00Z \
+  --initial-forecast f-backdated-001 --initial-value-kind binary --initial-probability-bp 5000 >/dev/null
 backdated_show=$("$binary" --json forecast show --file "$backdated_ledger" --question q-backdated --forecast f-backdated-001)
-if grep -F '"recorded_at":"2020-01-01T00:00:00Z"' <<<"$backdated_show" >/dev/null; then
-  echo "init copied historical created_at into recorded_at" >&2
+if grep -F '"forecasted_at":"2020-01-01T00:00:00Z"' <<<"$backdated_show" >/dev/null ||
+   grep -F '"recorded_at":"2020-01-01T00:00:00Z"' <<<"$backdated_show" >/dev/null; then
+  echo "init copied historical created_at into forecast times" >&2
   exit 1
 fi
 
@@ -41,22 +46,23 @@ fi
   --timezone UTC \
   --forecaster-id dogfood-forecaster \
   --forecaster-name "Dogfood Forecaster" \
-  --input internal/adapters/cli/testdata/input/init-public.json >/dev/null
+  --created-at 2026-01-01T00:00:00Z \
+  --question q-one --question-type binary --question-title "Will it happen?" \
+  --question-resolution-criteria "Resolve from the named source." \
+  --question-created-at 2026-01-01T00:00:00Z --question-expected-resolution-at 2027-01-01T00:00:00Z \
+  --initial-forecast f-one --initial-forecasted-at 2026-01-01T00:00:00Z \
+  --initial-recorded-at 2026-01-01T00:00:00Z --initial-value-kind binary --initial-probability-bp 5000 >/dev/null
 
-printf '%s\n' '{"title":"Dogfood ledger","description":"Cross-platform command lifecycle"}' |
-  "$binary" --json ledger update --file "$ledger" --input - >/dev/null
+"$binary" --json ledger update --file "$ledger" --title "Dogfood ledger" --description "Cross-platform command lifecycle" >/dev/null
 
-printf '%s\n' '{"name":"Dogfood platform","kind":"internal"}' |
-  "$binary" --json platform add --file "$ledger" --platform dogfood --input - >/dev/null
-printf '%s\n' '{"name":"Updated dogfood platform"}' |
-  "$binary" --json platform update --file "$ledger" --platform dogfood --input - >/dev/null
+"$binary" --json platform add --file "$ledger" --platform dogfood --name "Dogfood platform" --kind internal >/dev/null
+"$binary" --json platform update --file "$ledger" --platform dogfood --name "Updated dogfood platform" >/dev/null
 "$binary" --plain platform list --file "$ledger" | grep -F 'dogfood' >/dev/null
 "$binary" --json platform show --file "$ledger" --platform dogfood | grep -F 'Updated dogfood platform' >/dev/null
 "$binary" --json platform remove --file "$ledger" --platform dogfood --yes >/dev/null
 
 set +e
-printf '%s\n' '{"name":"   ","kind":"informal"}' |
-  "$binary" --json platform add --file "$ledger" --platform invalid-diagnostic --input - >"$work/diagnostic.out" 2>"$work/diagnostic.err"
+"$binary" --json platform add --file "$ledger" --platform invalid-diagnostic --name "Invalid diagnostic" --kind informal --url not-a-url >"$work/diagnostic.out" 2>"$work/diagnostic.err"
 diagnostic_exit=$?
 set -e
 if [[ $diagnostic_exit -ne 3 ]] || grep -E '"(line|column)":0' "$work/diagnostic.err" >/dev/null; then
@@ -64,15 +70,21 @@ if [[ $diagnostic_exit -ne 3 ]] || grep -E '"(line|column)":0' "$work/diagnostic
   exit 1
 fi
 
-printf '%s\n' '{"title":"Will the second event happen?","resolution_criteria":"Resolve from the named source.","created_at":"2026-02-01T00:00:00Z","forecast_window":{"closes_at":"2026-12-31T00:00:00Z"},"expected_resolution_at":"2027-01-02T00:00:00Z","initial_forecast":{"id":"f-second-001","visibility":"public","forecasted_at":"2026-02-01T00:00:00Z","recorded_at":"2026-02-01T00:01:00Z","value":{"kind":"binary","probability_bp":4000}}}' |
-  "$binary" --json question add --file "$ledger" --question q-second --type binary --input - >/dev/null
+"$binary" --json question add --file "$ledger" --question q-second --type binary \
+  --title "Will the second event happen?" --resolution-criteria "Resolve from the named source." \
+  --created-at 2026-02-01T00:00:00Z --expected-resolution-at 2027-01-02T00:00:00Z \
+  --initial-forecast f-second-001 --initial-forecasted-at 2026-02-01T00:00:00Z \
+  --initial-recorded-at 2026-02-01T00:01:00Z --initial-value-kind binary --initial-probability-bp 4000 >/dev/null
 
-printf '%s\n' '{"forecasted_at":"2026-03-01T00:00:00Z","recorded_at":"2026-03-01T00:01:00Z","value":{"kind":"binary","probability_bp":6000},"rationale":"Public dogfood revision.","supersedes_forecast_id":"f-one"}' |
-  "$binary" --json forecast add --file "$ledger" --question q-one --forecast f-public-002 --input - >/dev/null
+"$binary" --json forecast add --file "$ledger" --question q-one --forecast f-public-002 \
+  --forecasted-at 2026-03-01T00:00:00Z --recorded-at 2026-03-01T00:01:00Z \
+  --value-kind binary --probability-bp 6000 --rationale "Public dogfood revision." --supersedes-forecast f-one >/dev/null
 
 private_canary='PRIVATE-DOGFOOD-CANARY'
-printf '%s\n' "{\"forecasted_at\":\"2026-04-01T00:00:00Z\",\"recorded_at\":\"2026-04-01T00:01:00Z\",\"value\":{\"kind\":\"binary\",\"probability_bp\":6500},\"rationale\":\"$private_canary\",\"key_factors\":[\"private factor\"],\"comment\":\"private comment\",\"supersedes_forecast_id\":\"f-public-002\"}" |
-  "$binary" --json forecast seal --file "$ledger" --question q-one --forecast f-sealed-003 --input - --key-file "$key" >/dev/null
+printf '%s\n' "{\"value\":{\"kind\":\"binary\",\"probability_bp\":6500},\"rationale\":\"$private_canary\",\"key_factors\":[\"private factor\"],\"comment\":\"private comment\"}" |
+  "$binary" --json forecast seal --file "$ledger" --question q-one --forecast f-sealed-003 \
+  --forecasted-at 2026-04-01T00:00:00Z --recorded-at 2026-04-01T00:01:00Z \
+  --supersedes-forecast f-public-002 --secret-input - --key-file "$key" >/dev/null
 
 sealed_output=$("$binary" --plain forecast show --file "$ledger" --question q-one --forecast f-sealed-003)
 if grep -F "$private_canary" <<<"$sealed_output" >/dev/null; then
@@ -112,15 +124,15 @@ if [[ $offline_exit -ne 8 ]]; then
   exit 1
 fi
 
-printf '%s\n' '{"status":"closed","notes":"Closed by dogfood lifecycle."}' |
-  "$binary" --json question update --file "$ledger" --question q-one --input - >/dev/null
-printf '%s\n' '{"outcome":true,"outcome_known_at":"2027-01-01T00:00:00Z","recorded_at":"2027-01-01T00:01:00Z","sources":[{"title":"Official result","url":"https://example.org/result","retrieved_at":"2027-01-01T00:00:30Z"}]}' |
-  "$binary" --json question resolve --file "$ledger" --question q-one --input - --yes >/dev/null
+"$binary" --json question update --file "$ledger" --question q-one --status closed --notes "Closed by dogfood lifecycle." >/dev/null
+"$binary" --json question resolve --file "$ledger" --question q-one --outcome-boolean=true \
+  --outcome-known-at 2027-01-01T00:00:00Z --recorded-at 2027-01-01T00:01:00Z \
+  --source "Official result,https://example.org/result,2027-01-01T00:00:30Z" --yes >/dev/null
 
-printf '%s\n' '{"reason":"The second event was cancelled.","recorded_at":"2027-01-02T00:01:00Z"}' |
-  "$binary" --json question annul --file "$ledger" --question q-second --input - --yes >/dev/null
-printf '%s\n' '{"reason":"The cancellation is under review.","recorded_at":"2027-01-02T00:02:00Z"}' |
-  "$binary" --json question dispute --file "$ledger" --question q-second --input - --yes >/dev/null
+"$binary" --json question annul --file "$ledger" --question q-second \
+  --reason "The second event was cancelled." --recorded-at 2027-01-02T00:01:00Z --yes >/dev/null
+"$binary" --json question dispute --file "$ledger" --question q-second \
+  --reason "The cancellation is under review." --recorded-at 2027-01-02T00:02:00Z --yes >/dev/null
 
 set +e
 verify_output=$("$binary" --plain verify --file "$ledger" --offline)

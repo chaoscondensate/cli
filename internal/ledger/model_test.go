@@ -8,7 +8,7 @@ import (
 )
 
 func TestUnmarshalIndividualFixtureIntoTypedModel(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "schema", "testdata", "forecast-ledger", "v1.2.0", "individual-ledger.json"))
+	data, err := os.ReadFile(filepath.Join("..", "schema", "testdata", "forecast-ledger", "v1.3.0", "individual-ledger.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -17,7 +17,7 @@ func TestUnmarshalIndividualFixtureIntoTypedModel(t *testing.T) {
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatalf("unmarshal fixture: %v", err)
 	}
-	if got.SchemaVersion != "1.2.0" || got.LedgerID != "alex-example-forecasts" {
+	if got.SchemaVersion != "1.3.0" || got.LedgerID != "alex-example-forecasts" {
 		t.Fatalf("unexpected ledger identity: %#v", got)
 	}
 	if len(got.Questions) != 4 {

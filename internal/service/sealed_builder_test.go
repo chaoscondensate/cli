@@ -20,6 +20,7 @@ func TestBuildInitialSealedLedgerProducesValidRedactedForecastAndBoundKey(t *tes
 	}
 	input := binaryInitialQuestion()
 	input.InitialForecast.Visibility = ledger.VisibilitySealed
+	input.InitialForecast.ForecastedAt = ""
 	rationale, comment := "private rationale", "private comment"
 	factors := []string{"base rate"}
 	input.InitialForecast.Rationale = &rationale
@@ -43,6 +44,9 @@ func TestBuildInitialSealedLedgerProducesValidRedactedForecastAndBoundKey(t *tes
 	if forecast.Value != nil || forecast.Rationale != nil || forecast.KeyFactors != nil || forecast.Comment != nil {
 		t.Fatalf("sealed forecast leaked private mirror: %#v", forecast)
 	}
+	if forecast.ForecastedAt != root.CreatedAt || forecast.RecordedAt != root.CreatedAt {
+		t.Fatalf("default times = %q, %q; want %q", forecast.ForecastedAt, forecast.RecordedAt, root.CreatedAt)
+	}
 	if forecast.Commitment.Sealed.KeyHint != "forecast-key:f-one" {
 		t.Fatalf("key hint = %q", forecast.Commitment.Sealed.KeyHint)
 	}
@@ -62,6 +66,30 @@ func TestBuildInitialSealedLedgerRejectsMissingMirrorBeforeEntropy(t *testing.T)
 	_, err = BuildInitialSealedLedger(context.Background(), root, input, Effects{Clock: fixedTestClock{}, Random: counting})
 	if app.ErrorCodeOf(err) != app.CodeInvalidData {
 		t.Fatalf("missing mirror error = %v", err)
+	}
+	if counting.calls != 0 {
+		t.Fatalf("entropy calls = %d", counting.calls)
+	}
+}
+
+func TestOmittedSealedForecastTimeBeforeOpeningFailsBeforeEntropy(t *testing.T) {
+	root, err := BuildLedgerRootAt(InitRootRequest{LedgerID: "research", Timezone: "UTC", ForecasterID: "andrey", ForecasterName: "Andrey"}, "2026-01-01T00:00:00Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := binaryInitialQuestion()
+	input.ForecastWindow = ledger.ForecastWindow{OpensAt: "2026-02-01T00:00:00Z"}
+	input.InitialForecast.Visibility = ledger.VisibilitySealed
+	input.InitialForecast.ForecastedAt = ""
+	rationale, comment := "private rationale", "private comment"
+	factors := []string{"base rate"}
+	input.InitialForecast.Rationale = &rationale
+	input.InitialForecast.KeyFactors = &factors
+	input.InitialForecast.Comment = &comment
+	counting := &countingTestRandom{}
+	_, err = BuildInitialSealedLedgerAt(context.Background(), root, input, "2026-01-15T00:00:00Z", Effects{Clock: fixedTestClock{}, Random: counting})
+	if app.ErrorCodeOf(err) != app.CodeInvalidData {
+		t.Fatalf("before-open error = %v", err)
 	}
 	if counting.calls != 0 {
 		t.Fatalf("entropy calls = %d", counting.calls)

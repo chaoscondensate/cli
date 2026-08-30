@@ -30,7 +30,7 @@ type authoringCommandRoute struct {
 
 // authoringInventory is deliberately executable project memory. Tests check
 // that every route is classified and that ordinary authoring leaves do not
-// regain a required input document.
+// regain a side-loaded public request document.
 var authoringInventory = []authoringCommandRoute{
 	{Path: "init", Schema: service.InputSchemaInit, Fields: routes(
 		"title=--title", "description=--description", "created_at=--created-at", "contact=--contact-email/--contact-website",
@@ -48,12 +48,12 @@ var authoringInventory = []authoringCommandRoute{
 		"name=--name", "kind=--kind", "url=--url/--clear-url", "account=--account-*/--clear-account",
 	)},
 	{Path: "question add", Schema: service.InputSchemaQuestionAdd, Fields: append(routes(
-		"title=--title", "resolution_criteria=--resolution-criteria", "created_at=--created-at", "forecast_window=--opens-at/--closes-at",
+		"title=--title", "resolution_criteria=--resolution-criteria", "created_at=--created-at", "forecast_window=--opens-at",
 		"expected_resolution_at=--expected-resolution-at", "options=--option", "unit=--unit-*", "platform_refs=--platform-ref",
 		"tags=--tag", "notes=--notes", "initial_forecast.public=--initial-*", "initial_forecast.sealed_private=protected --initial-secret-input",
 	), serviceOnlyRoutes("initial_forecast.supersedes_forecast_id=a newly added question has no earlier forecast to supersede")...)},
 	{Path: "question update", Schema: service.InputSchemaQuestionPatch, Fields: routes(
-		"title=--title", "resolution_criteria=--resolution-criteria", "forecast_window=--closes-at", "expected_resolution_at=--expected-resolution-at",
+		"title=--title", "resolution_criteria=--resolution-criteria", "forecast_window=--opens-at/--clear-forecast-window", "expected_resolution_at=--expected-resolution-at",
 		"platform_refs=--platform-ref/--clear-platform-refs", "tags=--tag/--clear-tags", "notes=--notes/--clear-notes", "status=--status",
 	)},
 	{Path: "question resolve", Schema: service.InputSchemaResolution, Fields: routes(
@@ -65,7 +65,7 @@ var authoringInventory = []authoringCommandRoute{
 		"forecasted_at=--forecasted-at", "recorded_at=--recorded-at", "value=--value-kind and type-specific value flags", "rationale=--rationale",
 		"key_factors=--key-factor", "comment=--comment", "public_note=--public-note", "supersedes_forecast_id=--supersedes-forecast",
 	)},
-	{Path: "forecast seal", Schema: service.InputSchemaForecastSeal, Protected: true, Fields: append(routes(
+	{Path: "forecast seal", Schema: service.InputSchemaForecastSealPrivate, Protected: true, Fields: append(routes(
 		"forecasted_at=--forecasted-at", "recorded_at=--recorded-at", "public_note=--public-note", "supersedes_forecast_id=--supersedes-forecast",
 	), protectedRoutes("value=protected --secret-input", "rationale=protected --secret-input", "key_factors=protected --secret-input", "comment=protected --secret-input")...)},
 	{Path: "forecast key-hint update", Schema: service.InputSchemaKeyHintUpdate, Fields: routes("key_hint=--key-hint")},
@@ -97,22 +97,6 @@ func serviceOnlyRoutes(values ...string) []authoringFieldRoute {
 	return result
 }
 
-func directOrDocument(command *urfavecli.Command, mappedFlags ...string) (bool, error) {
-	if strings.TrimSpace(command.String("input")) == "" {
-		return false, nil
-	}
-	var conflicts []string
-	for _, name := range mappedFlags {
-		if command.IsSet(name) {
-			conflicts = append(conflicts, "--"+name)
-		}
-	}
-	if len(conflicts) > 0 {
-		return false, app.NewError(app.CodeUsage, "--input cannot be combined with authoring flags: "+strings.Join(conflicts, ", "), nil)
-	}
-	return true, nil
-}
-
 func requireDirectFlags(command *urfavecli.Command, names ...string) error {
 	var missing []string
 	for _, name := range names {
@@ -123,7 +107,7 @@ func requireDirectFlags(command *urfavecli.Command, names ...string) error {
 	if len(missing) == 0 {
 		return nil
 	}
-	return app.NewError(app.CodeUsage, strings.Join(missing, " and ")+" required when --input is omitted", nil)
+	return app.NewError(app.CodeUsage, strings.Join(missing, " and ")+" required", nil)
 }
 
 func parseCSVValues(flag string, values []string, minimum, maximum int) ([][]string, error) {
@@ -203,7 +187,6 @@ func initNestedFlags() []urfavecli.Flag {
 		&urfavecli.StringFlag{Name: "question-resolution-criteria", OnlyOnce: true, Usage: "Initial question resolution criteria"},
 		&urfavecli.StringFlag{Name: "question-created-at", OnlyOnce: true, Usage: "Initial question RFC 3339 creation time"},
 		&urfavecli.StringFlag{Name: "question-opens-at", OnlyOnce: true, Usage: "Initial question forecast-window opening"},
-		&urfavecli.StringFlag{Name: "question-closes-at", OnlyOnce: true, Usage: "Initial question forecast-window close"},
 		&urfavecli.StringFlag{Name: "question-expected-resolution-at", OnlyOnce: true, Usage: "Initial question expected resolution time"},
 		&urfavecli.StringSliceFlag{Name: "question-option", Usage: "Initial multiple-choice option as id,label; repeat"},
 		&urfavecli.StringFlag{Name: "question-unit-name", OnlyOnce: true, Usage: "Initial numeric unit name"},
@@ -218,7 +201,7 @@ func initNestedFlags() []urfavecli.Flag {
 
 func platformCreateFlags() []urfavecli.Flag {
 	return []urfavecli.Flag{
-		&urfavecli.StringFlag{Name: "name", OnlyOnce: true, Usage: "Platform display name; required without --input"},
+		&urfavecli.StringFlag{Name: "name", OnlyOnce: true, Usage: "Platform display name; required"},
 		&urfavecli.StringFlag{Name: "kind", OnlyOnce: true, Usage: "Platform kind: scoring_platform, prediction_market, self_hosted, internal, or informal"},
 		&urfavecli.StringFlag{Name: "url", OnlyOnce: true, Usage: "Platform URL"},
 		&urfavecli.StringFlag{Name: "account-username", OnlyOnce: true, Usage: "Account username"},
@@ -240,12 +223,11 @@ func platformPatchFlags() []urfavecli.Flag {
 
 func questionCreateFlags(includeInitial bool) []urfavecli.Flag {
 	flags := []urfavecli.Flag{
-		&urfavecli.StringFlag{Name: "title", OnlyOnce: true, Usage: "Question title; required without --input"},
-		&urfavecli.StringFlag{Name: "resolution-criteria", OnlyOnce: true, Usage: "Resolution criteria; required without --input"},
+		&urfavecli.StringFlag{Name: "title", OnlyOnce: true, Usage: "Question title; required"},
+		&urfavecli.StringFlag{Name: "resolution-criteria", OnlyOnce: true, Usage: "Resolution criteria; required"},
 		&urfavecli.StringFlag{Name: "created-at", OnlyOnce: true, Usage: "Explicit RFC 3339 question creation time"},
 		&urfavecli.StringFlag{Name: "opens-at", OnlyOnce: true, Usage: "Explicit RFC 3339 forecast-window opening"},
-		&urfavecli.StringFlag{Name: "closes-at", OnlyOnce: true, Usage: "RFC 3339 forecast-window close; required without --input"},
-		&urfavecli.StringFlag{Name: "expected-resolution-at", OnlyOnce: true, Usage: "RFC 3339 expected resolution time; required without --input"},
+		&urfavecli.StringFlag{Name: "expected-resolution-at", OnlyOnce: true, Usage: "Expected resolution time; RFC 3339, ISO date, or English month date; required"},
 		&urfavecli.StringSliceFlag{Name: "option", Usage: "Multiple-choice option as id,label; repeat for more"},
 		&urfavecli.StringFlag{Name: "unit-name", OnlyOnce: true, Usage: "Numeric question unit name"},
 		&urfavecli.StringFlag{Name: "unit-symbol", OnlyOnce: true, Usage: "Numeric question unit symbol"},
@@ -264,7 +246,8 @@ func questionPatchFlags() []urfavecli.Flag {
 	return []urfavecli.Flag{
 		&urfavecli.StringFlag{Name: "title", OnlyOnce: true, Usage: "Replace question title"},
 		&urfavecli.StringFlag{Name: "resolution-criteria", OnlyOnce: true, Usage: "Replace resolution criteria"},
-		&urfavecli.StringFlag{Name: "closes-at", OnlyOnce: true, Usage: "Replace forecast-window closing time"},
+		&urfavecli.StringFlag{Name: "opens-at", OnlyOnce: true, Usage: "Replace optional forecast-window opening"},
+		&urfavecli.BoolFlag{Name: "clear-forecast-window", Usage: "Remove the optional forecast window"},
 		&urfavecli.StringFlag{Name: "expected-resolution-at", OnlyOnce: true, Usage: "Replace expected resolution time"},
 		&urfavecli.StringSliceFlag{Name: "platform-ref", Usage: "Replace platform refs with platform[,question-id[,url]]; repeat"},
 		&urfavecli.BoolFlag{Name: "clear-platform-refs", Usage: "Remove platform references"},
@@ -295,7 +278,7 @@ func forecastValueFlags(prefix string) []urfavecli.Flag {
 
 func forecastCreateFlags() []urfavecli.Flag {
 	flags := []urfavecli.Flag{
-		&urfavecli.StringFlag{Name: "forecasted-at", OnlyOnce: true, Usage: "RFC 3339 forecast time; required without --input"},
+		&urfavecli.StringFlag{Name: "forecasted-at", OnlyOnce: true, Usage: "Forecast time; defaults to the current time in ledger default_timezone"},
 		&urfavecli.StringFlag{Name: "recorded-at", OnlyOnce: true, Usage: "Explicit RFC 3339 record time; defaults to operation time"},
 		&urfavecli.StringFlag{Name: "rationale", OnlyOnce: true, Usage: "Public forecast rationale"},
 		&urfavecli.StringSliceFlag{Name: "key-factor", Usage: "Public key factor; repeat for more"},
@@ -309,9 +292,9 @@ func forecastCreateFlags() []urfavecli.Flag {
 func initialForecastFlags() []urfavecli.Flag {
 	flags := []urfavecli.Flag{
 		&urfavecli.StringFlag{Name: "initial-forecast", OnlyOnce: true, Usage: "Initial forecast ID; omit to create a backlog question"},
-		&urfavecli.StringFlag{Name: "initial-visibility", OnlyOnce: true, Value: "public", Usage: "Initial visibility: public (sealed uses protected document mode)"},
-		&urfavecli.StringFlag{Name: "initial-forecasted-at", OnlyOnce: true, Usage: "Initial RFC 3339 forecast time"},
-		&urfavecli.StringFlag{Name: "initial-recorded-at", OnlyOnce: true, Usage: "Explicit initial record time"},
+		&urfavecli.StringFlag{Name: "initial-visibility", OnlyOnce: true, Value: "public", Usage: "Initial visibility: public or sealed (sealed uses --initial-secret-input)"},
+		&urfavecli.StringFlag{Name: "initial-forecasted-at", OnlyOnce: true, Usage: "Initial forecast time; defaults to the current time in the ledger timezone"},
+		&urfavecli.StringFlag{Name: "initial-recorded-at", OnlyOnce: true, Usage: "Explicit initial record time; defaults to the same operation time"},
 		&urfavecli.StringFlag{Name: "initial-rationale", OnlyOnce: true, Usage: "Initial public rationale"},
 		&urfavecli.StringSliceFlag{Name: "initial-key-factor", Usage: "Initial public key factor; repeat"},
 		&urfavecli.StringFlag{Name: "initial-comment", OnlyOnce: true, Usage: "Initial public comment"},
@@ -324,7 +307,7 @@ func initialForecastFlags() []urfavecli.Flag {
 func forecastSealPublicFlags() []urfavecli.Flag {
 	return []urfavecli.Flag{
 		&urfavecli.StringFlag{Name: "secret-input", OnlyOnce: true, TakesFile: true, Usage: "Protected JSON or YAML private bundle; use - for stdin"},
-		&urfavecli.StringFlag{Name: "forecasted-at", OnlyOnce: true, Usage: "Public RFC 3339 forecast time; required with --secret-input"},
+		&urfavecli.StringFlag{Name: "forecasted-at", OnlyOnce: true, Usage: "Public forecast time; defaults to the current time in the ledger timezone"},
 		&urfavecli.StringFlag{Name: "recorded-at", OnlyOnce: true, Usage: "Explicit public RFC 3339 record time"},
 		&urfavecli.StringFlag{Name: "public-note", OnlyOnce: true, Usage: "Public note stored outside the sealed bundle"},
 		&urfavecli.StringFlag{Name: "supersedes-forecast", OnlyOnce: true, Usage: "Earlier forecast ID superseded by this sealed revision"},
@@ -473,7 +456,7 @@ func buildRootPatchInput(command *urfavecli.Command) (service.RootMetadataPatchI
 		input.Forecaster = service.Optional[service.ForecasterMetadataPatchInput]{Set: true, Value: forecaster}
 	}
 	if !input.Title.Set && !input.Description.Set && !input.DefaultTimezone.Set && !input.Forecaster.Set {
-		return input, app.NewError(app.CodeUsage, "at least one ledger authoring flag is required when --input is omitted", nil)
+		return input, app.NewError(app.CodeUsage, "at least one ledger authoring flag is required", nil)
 	}
 	return input, nil
 }
@@ -529,7 +512,7 @@ func buildInitInput(operationContext context.Context, command *urfavecli.Command
 		Title: optionalStringValue(command, "title"), Description: optionalStringValue(command, "description"), CreatedAt: optionalTimestampValue(command, "created-at"),
 		Contact: buildContact(command), Profiles: profiles, Members: members, Platforms: platforms,
 	}
-	questionFlags := []string{"question-type", "question-title", "question-resolution-criteria", "question-created-at", "question-opens-at", "question-closes-at", "question-expected-resolution-at", "question-option", "question-unit-name", "question-unit-symbol", "question-unit-ucum-code", "question-platform-ref", "question-tag", "question-notes"}
+	questionFlags := []string{"question-type", "question-title", "question-resolution-criteria", "question-created-at", "question-opens-at", "question-expected-resolution-at", "question-option", "question-unit-name", "question-unit-symbol", "question-unit-ucum-code", "question-platform-ref", "question-tag", "question-notes"}
 	questionFlags = append(questionFlags, allMappedFlags(initialForecastFlags())...)
 	if !command.IsSet("question") {
 		for _, name := range questionFlags {
@@ -539,7 +522,7 @@ func buildInitInput(operationContext context.Context, command *urfavecli.Command
 		}
 		return input, nil
 	}
-	if err := requireDirectFlags(command, "question", "question-type", "question-title", "question-resolution-criteria", "question-closes-at", "question-expected-resolution-at"); err != nil {
+	if err := requireDirectFlags(command, "question", "question-type", "question-title", "question-resolution-criteria", "question-expected-resolution-at"); err != nil {
 		return service.InitInput{}, err
 	}
 	optionRows, err := parseCSVValues("question-option", command.StringSlice("question-option"), 2, 2)
@@ -580,9 +563,9 @@ func buildInitInput(operationContext context.Context, command *urfavecli.Command
 		}
 		unit = &ledger.Unit{Name: command.String("question-unit-name"), Symbol: optionalStringValue(command, "question-unit-symbol"), UCUMCode: optionalStringValue(command, "question-unit-ucum-code")}
 	}
-	window := ledger.ForecastWindow{ClosesAt: ledger.Timestamp(command.String("question-closes-at"))}
+	window := ledger.ForecastWindow{}
 	if command.IsSet("question-opens-at") {
-		window.OpensAt = pointer(ledger.Timestamp(command.String("question-opens-at")))
+		window.OpensAt = ledger.Timestamp(command.String("question-opens-at"))
 	}
 	question := &service.InitialQuestionInput{
 		ID: ledger.Slug(command.String("question")), Title: command.String("question-title"), Type: ledger.QuestionType(command.String("question-type")),
@@ -667,7 +650,7 @@ func buildPlatformPatchInput(command *urfavecli.Command) (service.PlatformPatchI
 		}
 	}
 	if !input.Name.Set && !input.Kind.Set && !input.URL.Set && !input.Account.Set {
-		return service.PlatformPatchInput{}, app.NewError(app.CodeUsage, "at least one platform authoring flag is required when --input is omitted", nil)
+		return service.PlatformPatchInput{}, app.NewError(app.CodeUsage, "at least one platform authoring flag is required", nil)
 	}
 	return input, nil
 }
@@ -718,7 +701,7 @@ func buildForecastValue(command *urfavecli.Command, prefix string) (ledger.Forec
 	}
 	kind := ledger.ForecastValueKind(command.String(name("value-kind")))
 	if kind == "" {
-		return ledger.ForecastValue{}, app.NewError(app.CodeUsage, "--"+name("value-kind")+" required when --input is omitted", nil)
+		return ledger.ForecastValue{}, app.NewError(app.CodeUsage, "--"+name("value-kind")+" required", nil)
 	}
 	switch kind {
 	case ledger.ValueBinary:
@@ -826,7 +809,7 @@ func buildInitialForecast(operationContext context.Context, command *urfavecli.C
 		}
 		return nil, nil
 	}
-	if err := requireDirectFlags(command, "initial-forecast", "initial-forecasted-at"); err != nil {
+	if err := requireDirectFlags(command, "initial-forecast"); err != nil {
 		return nil, err
 	}
 	visibility := ledger.ForecastVisibility(command.String("initial-visibility"))
@@ -872,7 +855,7 @@ func buildInitialForecast(operationContext context.Context, command *urfavecli.C
 }
 
 func buildQuestionAddInput(operationContext context.Context, command *urfavecli.Command, stdin io.Reader) (service.QuestionAddInput, error) {
-	if err := requireDirectFlags(command, "title", "resolution-criteria", "closes-at", "expected-resolution-at"); err != nil {
+	if err := requireDirectFlags(command, "title", "resolution-criteria", "expected-resolution-at"); err != nil {
 		return service.QuestionAddInput{}, err
 	}
 	options, err := parseOptions(command, "option")
@@ -890,9 +873,9 @@ func buildQuestionAddInput(operationContext context.Context, command *urfavecli.
 		}
 		unit = &ledger.Unit{Name: command.String("unit-name"), Symbol: optionalStringValue(command, "unit-symbol"), UCUMCode: optionalStringValue(command, "unit-ucum-code")}
 	}
-	window := ledger.ForecastWindow{ClosesAt: ledger.Timestamp(command.String("closes-at"))}
+	window := ledger.ForecastWindow{}
 	if command.IsSet("opens-at") {
-		window.OpensAt = pointer(ledger.Timestamp(command.String("opens-at")))
+		window.OpensAt = ledger.Timestamp(command.String("opens-at"))
 	}
 	input := service.QuestionAddInput{
 		Title: command.String("title"), ResolutionCriteria: command.String("resolution-criteria"), CreatedAt: optionalTimestampValue(command, "created-at"),
@@ -919,8 +902,13 @@ func buildQuestionPatchInput(command *urfavecli.Command) (service.QuestionPatchI
 	if command.IsSet("resolution-criteria") {
 		input.ResolutionCriteria = service.Optional[string]{Set: true, Value: command.String("resolution-criteria")}
 	}
-	if command.IsSet("closes-at") {
-		input.ForecastWindow = service.Optional[service.ForecastWindowPatchInput]{Set: true, Value: service.ForecastWindowPatchInput{ClosesAt: service.Optional[ledger.Timestamp]{Set: true, Value: ledger.Timestamp(command.String("closes-at"))}}}
+	if command.IsSet("opens-at") && command.Bool("clear-forecast-window") {
+		return input, app.NewError(app.CodeUsage, "--opens-at cannot be combined with --clear-forecast-window", nil)
+	}
+	if command.Bool("clear-forecast-window") {
+		input.ForecastWindow = service.Optional[service.ForecastWindowPatchInput]{Set: true, Null: true}
+	} else if command.IsSet("opens-at") {
+		input.ForecastWindow = service.Optional[service.ForecastWindowPatchInput]{Set: true, Value: service.ForecastWindowPatchInput{OpensAt: service.Optional[ledger.Timestamp]{Set: true, Value: ledger.Timestamp(command.String("opens-at"))}}}
 	}
 	if command.IsSet("expected-resolution-at") {
 		input.ExpectedResolutionAt = service.Optional[ledger.Timestamp]{Set: true, Value: ledger.Timestamp(command.String("expected-resolution-at"))}
@@ -959,13 +947,13 @@ func buildQuestionPatchInput(command *urfavecli.Command) (service.QuestionPatchI
 		input.Status = service.Optional[ledger.QuestionStatus]{Set: true, Value: ledger.QuestionStatus(command.String("status"))}
 	}
 	if !input.Title.Set && !input.ResolutionCriteria.Set && !input.ForecastWindow.Set && !input.ExpectedResolutionAt.Set && !input.PlatformRefs.Set && !input.Tags.Set && !input.Notes.Set && !input.Status.Set {
-		return input, app.NewError(app.CodeUsage, "at least one question authoring flag is required when --input is omitted", nil)
+		return input, app.NewError(app.CodeUsage, "at least one question authoring flag is required", nil)
 	}
 	return input, nil
 }
 
 func buildForecastCreateInput(command *urfavecli.Command) (service.ForecastCreateInput, error) {
-	if err := requireDirectFlags(command, "forecasted-at", "value-kind"); err != nil {
+	if err := requireDirectFlags(command, "value-kind"); err != nil {
 		return service.ForecastCreateInput{}, err
 	}
 	value, err := buildForecastValue(command, "")
@@ -987,7 +975,7 @@ func buildForecastCreateInput(command *urfavecli.Command) (service.ForecastCreat
 }
 
 func buildSealedForecastInput(operationContext context.Context, command *urfavecli.Command, stdin io.Reader) (service.SealedForecastInput, error) {
-	if err := requireDirectFlags(command, "secret-input", "forecasted-at"); err != nil {
+	if err := requireDirectFlags(command, "secret-input"); err != nil {
 		return service.SealedForecastInput{}, err
 	}
 	var private service.SealedForecastPrivateInput
@@ -1039,7 +1027,7 @@ func buildResolutionInput(command *urfavecli.Command) (service.ResolutionInput, 
 		return service.ResolutionInput{}, err
 	}
 	if len(sources) == 0 {
-		return service.ResolutionInput{}, app.NewError(app.CodeUsage, "at least one --source is required when --input is omitted", nil)
+		return service.ResolutionInput{}, app.NewError(app.CodeUsage, "at least one --source is required", nil)
 	}
 	input := service.ResolutionInput{OutcomeKnownAt: ledger.Timestamp(command.String("outcome-known-at")), RecordedAt: optionalTimestampValue(command, "recorded-at"), Sources: sources, Notes: optionalStringValue(command, "notes")}
 	if command.IsSet("outcome-boolean") {

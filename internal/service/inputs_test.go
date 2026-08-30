@@ -92,7 +92,7 @@ func compileInputSchema(t *testing.T, name InputSchemaName) *jsonschema.Schema {
 func minimalQuestionDocument(includeType bool) map[string]any {
 	question := map[string]any{
 		"id": "q-one", "title": "Will it happen?", "resolution_criteria": "Resolve from the named source.",
-		"forecast_window":        map[string]any{"closes_at": "2027-01-01T00:00:00Z"},
+		"forecast_window":        map[string]any{"opens_at": "2026-01-01T00:00:00Z"},
 		"expected_resolution_at": "2027-01-02T00:00:00Z",
 		"initial_forecast": map[string]any{
 			"id": "f-one", "visibility": "public", "forecasted_at": "2026-01-01T00:00:00Z",

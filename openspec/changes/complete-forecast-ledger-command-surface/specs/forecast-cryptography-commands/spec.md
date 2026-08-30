@@ -1,3 +1,8 @@
+> Supersession note (2026-08-30): generic authoring documents, public
+> `--input`, MCP `input`/public `input_file`, v1.2.0 identity, and the old target
+> shape below are historical implementation facts. `make-authoring-direct-readable`
+> owns their v1.3.0 replacements and takes precedence.
+
 ## Purpose
 
 Defines deterministic target construction and the complete secret-safe sealed forecast lifecycle, including artifact collision behavior, protected key handling, and authenticated reveal.

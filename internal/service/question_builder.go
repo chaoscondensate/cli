@@ -107,14 +107,14 @@ func buildQuestionShell(model *ledger.Ledger, input NormalizedQuestionCreate, ob
 		}
 	}
 	window := input.Input.ForecastWindow
-	if window.OpensAt == nil {
-		opening := createdAt
-		window.OpensAt = &opening
+	var storedWindow *ledger.ForecastWindow
+	if window.OpensAt != "" {
+		if _, err := ParseTimestamp(window.OpensAt, "forecast_window.opens_at"); err != nil {
+			return ledger.Question{}, nil, err
+		}
+		storedWindow = &window
 	}
-	if err := ValidateChronology(*window.OpensAt, "forecast_window.opens_at", window.ClosesAt, "forecast_window.closes_at", true); err != nil {
-		return ledger.Question{}, nil, err
-	}
-	if err := ValidateChronology(window.ClosesAt, "forecast_window.closes_at", input.Input.ExpectedResolutionAt, "expected_resolution_at", true); err != nil {
+	if _, err := ParseTimestamp(input.Input.ExpectedResolutionAt, "expected_resolution_at"); err != nil {
 		return ledger.Question{}, nil, err
 	}
 	if err := validateQuestionShape(model, input); err != nil {
@@ -129,7 +129,7 @@ func buildQuestionShell(model *ledger.Ledger, input NormalizedQuestionCreate, ob
 	}
 	question := ledger.Question{
 		ID: input.ID, Title: input.Input.Title, Type: input.Type, Status: ledger.QuestionOpen,
-		ResolutionCriteria: input.Input.ResolutionCriteria, CreatedAt: createdAt, ForecastWindow: window,
+		ResolutionCriteria: input.Input.ResolutionCriteria, CreatedAt: createdAt, ForecastWindow: storedWindow,
 		ExpectedResolutionAt: input.Input.ExpectedResolutionAt,
 		Options:              cloneOptions(input.Input.Options), Unit: cloneUnit(input.Input.Unit),
 		PlatformRefs: clonePlatformRefs(input.Input.PlatformRefs), Tags: cloneSlugs(input.Input.Tags),
@@ -150,7 +150,7 @@ func appendProspectiveQuestion(model *ledger.Ledger, question ledger.Question) (
 	return prospective, nil
 }
 
-func buildInitialPublicForecast(input InitialForecastInput, questionType ledger.QuestionType, options *[]ledger.Option, window ledger.ForecastWindow, observedAt ledger.Timestamp) (ledger.Forecast, error) {
+func buildInitialPublicForecast(input InitialForecastInput, questionType ledger.QuestionType, options *[]ledger.Option, window *ledger.ForecastWindow, observedAt ledger.Timestamp) (ledger.Forecast, error) {
 	if input.Visibility != ledger.VisibilityPublic {
 		return ledger.Forecast{}, invalidField("initial_forecast.visibility", "this builder requires a public initial forecast")
 	}
@@ -160,16 +160,13 @@ func buildInitialPublicForecast(input InitialForecastInput, questionType ledger.
 	if err := ValidateForecastValue(questionType, options, &input.Value); err != nil {
 		return ledger.Forecast{}, err
 	}
-	recordedAt := observedAt
-	if input.RecordedAt != nil {
-		recordedAt = *input.RecordedAt
-	}
-	if err := validateForecastChronology(window, input.ForecastedAt, recordedAt); err != nil {
+	forecastedAt, recordedAt := DefaultForecastTimes(input.ForecastedAt, input.RecordedAt, observedAt)
+	if err := validateForecastChronology(window, forecastedAt, recordedAt); err != nil {
 		return ledger.Forecast{}, err
 	}
 	value := input.Value
 	return ledger.Forecast{
-		ID: input.ID, ForecastedAt: input.ForecastedAt, RecordedAt: recordedAt,
+		ID: input.ID, ForecastedAt: forecastedAt, RecordedAt: recordedAt,
 		Visibility: ledger.VisibilityPublic, Value: &value,
 		Rationale: cloneString(input.Rationale), KeyFactors: cloneStrings(input.KeyFactors),
 		Comment: cloneString(input.Comment), PublicNote: cloneString(input.PublicNote),

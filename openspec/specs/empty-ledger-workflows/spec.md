@@ -7,11 +7,11 @@ Defines predictable authoring and command behavior when a valid ledger has no qu
 ## Requirements
 
 ### Requirement: Initialize a ledger without a question
-`forecast-ledger init` SHALL require an explicit ledger file and scalar identity flags but SHALL NOT require `--input` or a template document. With no input, it SHALL create a valid v1.2.0 document containing explicit empty `platforms` and `questions` collections. Every supported non-secret root metadata and platform value SHALL be authorable through flags. An optional input document MAY remain available as a mutually exclusive batch-input mode.
+`forecast-ledger init` SHALL require an explicit ledger file and scalar identity flags and SHALL NOT accept generic `--input` or a template document. It SHALL create a valid v1.3.0 document containing explicit empty `platforms` and `questions` collections. Every supported non-secret root metadata and platform value SHALL be authorable through flags.
 
 #### Scenario: CLI creates a minimal empty ledger
-- **WHEN** a caller runs `forecast-ledger init` with the required `--file`, ledger ID, timezone, forecaster ID, and forecaster name flags and omits `--input`
-- **THEN** the command creates a locally valid v1.2.0 ledger with explicit empty collections and no forecast or key artifact
+- **WHEN** a caller runs `forecast-ledger init` with the required `--file`, ledger ID, timezone, forecaster ID, and forecaster name flags
+- **THEN** the command creates a locally valid v1.3.0 ledger with explicit empty collections and no forecast or key artifact
 
 #### Scenario: Dry-run plans only the empty ledger
 - **WHEN** the same flag-only command is run with `--dry-run`
@@ -37,7 +37,7 @@ Defines predictable authoring and command behavior when a valid ledger has no qu
 - **THEN** the ledger, commitment, and protected key file are created under the existing atomic secret-handling rules
 
 ### Requirement: Add a question without a forecast
-`forecast-ledger question add` SHALL require the explicit ledger, question ID, question type, and the type-specific question flags, but SHALL NOT require `--input`. Initial-forecast flags SHALL be optional. Omitting them SHALL append a source-preserving question whose `forecasts` value is an explicit empty array. MCP SHALL continue to use its typed object or configured file input and SHALL route through the same application service.
+`forecast-ledger question add` SHALL require the explicit ledger, question ID, question type, and the type-specific question flags and SHALL NOT accept generic `--input`. Initial-forecast flags SHALL be optional. Omitting them SHALL append a source-preserving question whose `forecasts` value is an explicit empty array. MCP SHALL use flattened direct properties and route through the same application service.
 
 #### Scenario: Add question to empty JSON ledger
 - **WHEN** valid type-specific flags add a question without an initial forecast to an empty JSON ledger
@@ -45,7 +45,7 @@ Defines predictable authoring and command behavior when a valid ledger has no qu
 
 #### Scenario: Add question to YAML ledger
 - **WHEN** valid type-specific flags add a question without an initial forecast to a YAML ledger
-- **THEN** it is appended through the same source-preserving mutation path and the resulting YAML remains valid v1.2.0
+- **THEN** it is appended through the same source-preserving mutation path and the resulting YAML remains valid v1.3.0
 
 #### Scenario: Add with an initial forecast remains atomic
 - **WHEN** question-add flags include a valid public forecast or sealed forecast metadata plus protected secret inputs
@@ -73,20 +73,20 @@ CLI and MCP init results SHALL always include `ledger_id`, `schema_version`, `qu
 - **WHEN** init creates one question without a forecast
 - **THEN** the result reports one question and zero forecasts, includes the question ID, and omits forecast ID and visibility
 
-### Requirement: CLI and MCP expose equivalent optional inputs
-The CLI and MCP server SHALL route empty-ledger and backlog-question creation through the same application services. CLI init and question add SHALL accept complete non-secret data from flags without an input document. MCP init SHALL permit both `input` and `input_file` to be absent, while MCP question add SHALL accept exactly one supported typed question-input source. If inline MCP input includes an initial forecast, only a public forecast SHALL be allowed; sealed private forecast data SHALL continue to require a protected `input_file` and `key_file` inside configured roots.
+### Requirement: CLI and MCP expose equivalent direct requests
+The CLI and MCP server SHALL route empty-ledger and backlog-question creation through the same application services. CLI init and question add SHALL accept complete non-secret data from flags. MCP init and question add SHALL expose the corresponding non-secret request fields as top-level tool properties without generic wrappers or public file references. Sealed private forecast data SHALL continue to require purpose-named protected secret references and `key_file` inside configured roots.
 
 #### Scenario: MCP initializes without input
-- **WHEN** an MCP client invokes init with the required file and scalar identity properties but without `input` or `input_file`
+- **WHEN** an MCP client invokes init with the required file and scalar identity properties
 - **THEN** the server creates the same empty ledger as the equivalent CLI command
 
 #### Scenario: MCP adds an inline backlog question
-- **WHEN** an MCP client supplies valid inline question input without `initial_forecast`
+- **WHEN** an MCP client supplies valid direct question properties without `initial_forecast`
 - **THEN** the server appends the question with `forecasts: []` and does not require secret capability
 
 #### Scenario: MCP sealed input remains file-only
-- **WHEN** an MCP client supplies a sealed initial forecast inline
-- **THEN** the server rejects it and directs the caller to the protected file-based input path
+- **WHEN** an MCP client attempts to supply raw sealed initial forecast material inline
+- **THEN** the server rejects it and directs the caller to the purpose-named protected secret reference
 
 ### Requirement: Empty collections are valid read and lifecycle states
 Validation, status, platform operations, question list and show, forecast list, and question update, resolve, annul, and dispute SHALL accept valid ledgers with empty collections whenever their selected record exists. List and status outputs SHALL report empty collections and zero counts without indexing assumptions. Existing question lifecycle and resolution-value rules SHALL apply even when a question has no forecasts.
@@ -142,19 +142,19 @@ Publication build SHALL accept a valid empty ledger and create a deterministic p
 
 #### Scenario: Build package from empty ledger
 - **WHEN** publication build receives a valid ledger with no forecasts
-- **THEN** it creates only the ledger entry and manifest, records the v1.1.0 schema pin, and reports evidence state `complete`
+- **THEN** it creates only the ledger entry and manifest, records the v1.3.0 schema pin, and reports evidence state `complete`
 
 #### Scenario: Verify empty package
 - **WHEN** publication verify checks that package
 - **THEN** it returns `evidence: []`, overall `no_evidence`, application category `incomplete`, zero requests, and the standard limitation that forecast-set completeness is not proved
 
 ### Requirement: Generated contracts and documentation teach empty-first use
-Generated input schemas, MCP tool schemas, CLI help, README, getting-started material, command reference, examples, compatibility notes, and changelog SHALL agree that CLI init and question creation do not require input documents or initial forecasts. CLI examples SHALL show complete flag-only empty-first, platform-add, question-add, and later forecast-add workflows, while protected sealed examples SHALL keep private data out of argv.
+Generated request schemas, MCP tool schemas, CLI help, README, getting-started material, command reference, examples, compatibility notes, and changelog SHALL agree that CLI init and question creation reject generic input documents and do not require initial forecasts. CLI examples SHALL show complete flag-only empty-first, platform-add, question-add, and later forecast-add workflows, while protected sealed examples SHALL keep private data out of argv.
 
 #### Scenario: Generated schemas match runtime behavior
 - **WHEN** maintained schemas and MCP contracts are regenerated and checked
-- **THEN** CLI init and question add have no required `input` flag, MCP preserves its typed request contract, and conditional sealed-input restrictions remain represented
+- **THEN** CLI exposes no generic public document flag, MCP exposes no generic wrapper or public file property, and conditional sealed-input restrictions remain represented
 
 #### Scenario: A new user follows the empty-first documentation
 - **WHEN** a user copies the documented init, platform-add, question-add-without-forecast, and later forecast-add commands
-- **THEN** each command uses real flags, requires no prepared JSON/YAML fragment, and produces a valid v1.2.0 ledger at every step
+- **THEN** each command uses real flags, requires no prepared JSON/YAML fragment, and produces a valid v1.3.0 ledger at every step

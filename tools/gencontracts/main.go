@@ -14,17 +14,17 @@ import (
 const outputRoot = "../../docs/reference/generated"
 
 func main() {
-	must(os.MkdirAll(filepath.Join(outputRoot, "input-schemas"), 0o755))
+	must(os.MkdirAll(filepath.Join(outputRoot, "request-schemas"), 0o755))
 	for _, name := range service.InputSchemaNames() {
 		content, err := service.InputSchema(name)
 		must(err)
 		content = append(content, '\n')
-		mustWrite(filepath.Join(outputRoot, "input-schemas", string(name)+".schema.json"), content)
+		mustWrite(filepath.Join(outputRoot, "request-schemas", string(name)+".schema.json"), content)
 	}
 	mustWrite(filepath.Join(outputRoot, "mcp-tool-schemas.json"), mustJSON(mcpCatalog()))
 	mustWrite(filepath.Join(outputRoot, "result.schema.json"), mustJSON(resultSchema()))
 	mustWrite(filepath.Join(outputRoot, "index.md"), []byte(generatedIndex()))
-	mustWrite(filepath.Join(outputRoot, "input-schemas", "index.md"), []byte(inputSchemaIndex()))
+	mustWrite(filepath.Join(outputRoot, "request-schemas", "index.md"), []byte(requestSchemaIndex()))
 	mustWrite(filepath.Join(outputRoot, "operation-contracts.md"), []byte(markdownReference()))
 }
 
@@ -33,7 +33,7 @@ func mcpCatalog() map[string]any {
 	for _, definition := range service.SortedOperationDefinitions() {
 		entry := map[string]any{
 			"operation":     definition.Name,
-			"input_schema":  toolInputSchema(definition),
+			"tool_schema":   toolRequestSchema(definition),
 			"result_schema": operationResultSchema(definition),
 		}
 		if definition.ResultNotes != "" {
@@ -59,7 +59,7 @@ func operationResultSchema(definition service.OperationDefinition) map[string]an
 	}}}
 }
 
-func toolInputSchema(definition service.OperationDefinition) map[string]any {
+func toolRequestSchema(definition service.OperationDefinition) map[string]any {
 	fileDescription := "Ledger reference as root-name:relative/path"
 	if definition.Name == service.OperationPublicationVerify {
 		fileDescription = "Package ledger reference inside an output root as root-name:relative/path"
@@ -69,23 +69,21 @@ func toolInputSchema(definition service.OperationDefinition) map[string]any {
 	}
 	required := []string{"file"}
 	addSelector(properties, &required, definition.Selection)
-	allOf := make([]any, 0)
-	if definition.InputSchema != "" {
-		inputDocument := inputSchemaDocument(definition.InputSchema)
-		switch definition.InputTransport {
-		case service.InputInline:
-			properties["input"] = inputDocument
-			required = append(required, "input")
-		case service.InputProtectedFile:
-			properties["input_file"] = protectedFileSchema()
-			required = append(required, "input_file")
-		case service.InputInlineOrProtected:
-			properties["input"] = publicInlineInput(definition.Name, inputDocument)
-			properties["input_file"] = protectedFileSchema()
-			allOf = append(allOf, map[string]any{"oneOf": []any{
-				map[string]any{"required": []string{"input"}, "not": map[string]any{"required": []string{"input_file"}}},
-				map[string]any{"required": []string{"input_file"}, "not": map[string]any{"required": []string{"input"}}},
-			}})
+	result := map[string]any{}
+	if definition.RequestSchema != "" && definition.RequestMode != service.RequestSecret {
+		request := directRequestSchema(definition.RequestSchema)
+		for name, property := range request["properties"].(map[string]any) {
+			if _, collision := properties[name]; collision {
+				panic("direct request field collides with selector or control: " + name)
+			}
+			properties[name] = property
+		}
+		required = append(required, schemaStrings(request["required"])...)
+		result["$defs"] = request["$defs"]
+		for _, keyword := range []string{"allOf", "anyOf", "oneOf", "dependentRequired"} {
+			if value, ok := request[keyword]; ok {
+				result[keyword] = value
+			}
 		}
 	}
 	for _, field := range definition.Fields {
@@ -106,28 +104,12 @@ func toolInputSchema(definition service.OperationDefinition) map[string]any {
 		required = append(required, "confirm")
 	}
 	sort.Strings(required)
-	result := map[string]any{
-		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"type":    "object", "additionalProperties": false,
-		"properties": properties, "required": required,
-	}
-	if len(allOf) > 0 {
-		result["allOf"] = allOf
-	}
+	result["$schema"] = "https://json-schema.org/draft/2020-12/schema"
+	result["type"] = "object"
+	result["additionalProperties"] = false
+	result["properties"] = properties
+	result["required"] = required
 	return result
-}
-
-func publicInlineInput(operation service.OperationName, schema any) any {
-	var restriction map[string]any
-	switch operation {
-	case service.OperationLedgerInit:
-		restriction = map[string]any{"properties": map[string]any{"question": map[string]any{"properties": map[string]any{"initial_forecast": map[string]any{"properties": map[string]any{"visibility": map[string]any{"const": "public"}}}}}}}
-	case service.OperationQuestionAdd:
-		restriction = map[string]any{"properties": map[string]any{"initial_forecast": map[string]any{"properties": map[string]any{"visibility": map[string]any{"const": "public"}}}}}
-	default:
-		return schema
-	}
-	return map[string]any{"allOf": []any{schema, restriction}}
 }
 
 func addSelector(properties map[string]any, required *[]string, selection service.SelectionKind) {
@@ -152,16 +134,21 @@ func addSelector(properties map[string]any, required *[]string, selection servic
 	}
 }
 
-func inputSchemaDocument(name service.InputSchemaName) any {
-	content, err := service.InputSchema(name)
+func directRequestSchema(name service.InputSchemaName) map[string]any {
+	document, err := service.DirectRequestSchema(name)
 	must(err)
-	var document any
-	must(json.Unmarshal(content, &document))
 	return document
 }
 
-func protectedFileSchema() map[string]any {
-	return map[string]any{"type": "string", "minLength": 1, "description": "Protected file reference relative to an authorized secret root"}
+func schemaStrings(value any) []string {
+	values, _ := value.([]any)
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if text, ok := value.(string); ok {
+			result = append(result, text)
+		}
+	}
+	return result
 }
 
 func resultSchema() map[string]any {
@@ -247,16 +234,16 @@ func markdownReference() string {
 	builder.WriteString("# Generated operation contracts\n\n")
 	builder.WriteString("<!-- doc-metadata\ncoverage: operation-contracts-v1\nreviewed: 2026-08-29\nowner: interface\ngenerated: true\nsecurity-critical: true\nprerequisites: index.md\nnext: ../index.md\nsource: go generate ./internal/service\n-->\n\n")
 	builder.WriteString("> Generated; do not edit by hand. Run `go generate ./internal/service`.\n\n")
-	builder.WriteString("These declarations are shared inputs for CLI reference and MCP discovery. A declaration does not make a hidden command available.\n\n")
-	builder.WriteString("| Operation | CLI | MCP tool | Selection | Structured input | Dry-run | Confirmation | Network | Result notes |\n")
+	builder.WriteString("These declarations are shared request contracts for CLI reference and MCP discovery. A declaration does not make a hidden command available.\n\n")
+	builder.WriteString("| Operation | CLI | MCP tool | Selection | Request contract | Dry-run | Confirmation | Network | Result notes |\n")
 	builder.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
 	for _, definition := range service.SortedOperationDefinitions() {
-		input := "—"
-		if definition.InputSchema != "" {
-			input = fmt.Sprintf("[%s](input-schemas/%s.schema.json) (%s)", definition.InputSchema, definition.InputSchema, definition.InputTransport)
+		request := "—"
+		if definition.RequestSchema != "" {
+			request = fmt.Sprintf("[%s](request-schemas/%s.schema.json) (%s)", definition.RequestSchema, definition.RequestSchema, definition.RequestMode)
 		}
 		builder.WriteString(fmt.Sprintf("| `%s` | `forecast-ledger %s` | `%s` | `%s` | %s | %t | %t | `%s` | %s |\n",
-			definition.Name, definition.CLI, definition.MCPTool, definition.Selection, input,
+			definition.Name, definition.CLI, definition.MCPTool, definition.Selection, request,
 			definition.Policy.PersistentEffect, definition.Policy.RequiresConfirmation, definition.Policy.Network, definition.ResultNotes))
 	}
 	builder.WriteString("\nThe common [operation result schema](result.schema.json) defines warning, side-effect, and recovery fields. The [MCP tool catalog](mcp-tool-schemas.json) contains closed request schemas.\n\n")
@@ -281,7 +268,7 @@ source: go generate ./internal/service
 > Generated; do not edit by hand. Run ` + "`go generate ./internal/service`" + `.
 
 - [Operation contracts](operation-contracts.md)
-- [Structured input schemas](input-schemas/index.md)
+- [Direct request schemas](request-schemas/index.md)
 - [Common result schema](result.schema.json)
 - [MCP tool schema catalog](mcp-tool-schemas.json)
 
@@ -289,12 +276,12 @@ source: go generate ./internal/service
 `
 }
 
-func inputSchemaIndex() string {
+func requestSchemaIndex() string {
 	var builder strings.Builder
-	builder.WriteString("# Generated structured input schemas\n\n")
+	builder.WriteString("# Generated request schemas\n\n")
 	builder.WriteString("<!-- doc-metadata\ncoverage: operation-contracts-v1\nreviewed: 2026-08-26\nowner: interface\ngenerated: true\nsecurity-critical: true\nprerequisites: ../index.md\nnext: ../operation-contracts.md\nsource: go generate ./internal/service\n-->\n\n")
 	builder.WriteString("> Generated; do not edit by hand. Run `go generate ./internal/service`.\n\n")
-	builder.WriteString("These closed Draft 2020-12 schemas validate JSON or YAML operation input after bounded parsing.\n\n")
+	builder.WriteString("These closed Draft 2020-12 schemas define direct public request fields and purpose-named protected bundles.\n\n")
 	for _, name := range service.InputSchemaNames() {
 		builder.WriteString(fmt.Sprintf("- [`%s`](%s.schema.json)\n", name, name))
 	}

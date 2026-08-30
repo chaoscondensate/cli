@@ -44,8 +44,8 @@ The following commands have connected application services:
 
 | Command | Behavior | Network |
 | --- | --- | --- |
-| `forecast-ledger init --file <new-path> ... [authoring flags] [--input <path|->]` | Exclusively creates a schema-valid JSON/YAML ledger. Direct flags can add root metadata, platforms, one question, and an optional first public forecast. Sealed private values use protected `--initial-secret-input`; optional `--input` is a mutually exclusive batch mode. | None |
-| `forecast-ledger ledger update --file <path> <set-or-clear flags>` | Minimally patches allowed root and current forecaster metadata; optional `--input` is a mutually exclusive batch mode. | None |
+| `forecast-ledger init --file <new-path> ... [authoring flags]` | Exclusively creates a schema-valid JSON/YAML ledger. Direct flags can add root metadata, platforms, one question, and an optional first public forecast. Sealed private values use protected `--initial-secret-input`. | None |
+| `forecast-ledger ledger update --file <path> <set-or-clear flags>` | Minimally patches allowed root and current forecaster metadata through flags only. | None |
 | `forecast-ledger platform add|update|list|show|remove ...` | Creates, patches, lists, inspects, or removes unreferenced platform records. List/show accept `--file -`; removal requires approval. | None |
 | `forecast-ledger question add|update|list|show|resolve|annul|dispute ...` | Creates a typed question with an optional first public or sealed forecast, applies safe patches, reads redacted summaries, and records approved lifecycle claims. List/show accept `--file -`. | None |
 | `forecast-ledger forecast add|list|show|seal|reveal ...`, `forecast key-hint update ...` | Appends public or sealed forecasts, authenticates approved reveal, repairs safe logical hints, or reads redacted history. List/show accept `--file -`. | None |
@@ -85,16 +85,16 @@ for an installed artifact.
 
 | Item | Reviewed value |
 | --- | --- |
-| Forecast Ledger schema | `1.2.0` |
-| Schema commit | `6c2fe3df99223945b8d1613a03f95796b3c7d1e2` |
-| Embedded schema SHA-256 | `d609982f0fcea1ce076fdb32b44ef0eebe3265754eea7065de9d78a857dab5b8` |
+| Forecast Ledger schema | `1.3.0` |
+| Schema commit | `32218f682b3a650f41153e98817473bf429973a7` |
+| Embedded schema SHA-256 | `f673e4f3fc867a83d8c42a6992c6020ea28359a293580c8c742fe9dcdcd8d2c1` |
 | MCP protocol target | `2026-07-28` |
 | Timestamp protocol | RFC 3161 with SHA-256 message imprints, strong SHA-256/384/512 CMS signer digests, ESS v1/v2, built-in FreeTSA HTTPS plus custom HTTPS, retained CA bundle, and no system-root fallback |
 | Go toolchain | `1.27.0` |
 
 Validation uses embedded contract bytes and does not resolve remote schema
 references. Documentation and builds use the exact commit and digest above,
-never a floating tag. This preview cutover is intentionally breaking: v1.1.0
+never a floating tag. This preview cutover is intentionally breaking: older
 ledgers receive an `unsupported_schema_version` warning and are rejected before
 side effects. There is no migration or dual-read path.
 

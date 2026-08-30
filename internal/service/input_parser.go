@@ -36,7 +36,7 @@ func decodeOperationInput(ctx context.Context, source string, stdin io.Reader, s
 		return app.NewError(app.CodeInterrupted, "operation input was interrupted", ctx.Err())
 	}
 	if strings.TrimSpace(source) == "" {
-		return app.NewError(app.CodeUsage, "--input is required", nil)
+		return app.NewError(app.CodeUsage, "request data source is required", nil)
 	}
 
 	parsed, err := parseOperationInputSource(source, stdin, limits)
@@ -87,7 +87,7 @@ func decodeOperationInput(ctx context.Context, source string, stdin io.Reader, s
 func parseOperationInputSource(source string, stdin io.Reader, limits document.Limits) (*document.Document, error) {
 	if source == "-" {
 		if stdin == nil {
-			return nil, app.NewError(app.CodeUsage, "stdin is not available for --input -", nil)
+			return nil, app.NewError(app.CodeUsage, "request data is not available on stdin", nil)
 		}
 		return parseUnknownInputFormat(stdin, limits)
 	}
@@ -171,7 +171,7 @@ func safeInputSchemaIssue(err error) string {
 }
 
 var timestampInputFields = map[string]struct{}{
-	"created_at": {}, "opens_at": {}, "closes_at": {}, "expected_resolution_at": {},
+	"created_at": {}, "opens_at": {}, "expected_resolution_at": {},
 	"forecasted_at": {}, "recorded_at": {}, "outcome_known_at": {},
 	"retrieved_at": {}, "published_at": {},
 }

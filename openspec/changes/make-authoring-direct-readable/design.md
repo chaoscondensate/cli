@@ -65,9 +65,9 @@ Alternative considered: retain an `input` object but forbid files. This was reje
 
 ### 4. Normalize human CLI times inside service orchestration
 
-A bounded authoring-time parser will accept only the layouts named in `friendly-date-authoring`. It will be standard-library based and return a canonical timestamp plus metadata indicating the applied layout, timezone, and field default. Strict `ParseTimestamp` remains unchanged and is always run on the normalized result.
+A bounded authoring-time parser accepts only the layouts named in `friendly-date-authoring`. It is standard-library based and returns a canonical timestamp plus metadata indicating the raw value, timezone, and field default. Strict `ParseTimestamp` remains unchanged and is always run on the normalized result.
 
-Raw CLI time strings must reach the service boundary without first becoming trusted `ledger.Timestamp` values. For file-backed operations, normalization occurs after `LoadAndValidateLedger` supplies `default_timezone` and before the domain builder runs under the mutation plan/transaction. Init normalization uses the explicit timezone in `InitRootRequest`. This avoids adapter-side ledger reads, system-timezone inference, and time-of-check/time-of-use disagreement.
+Raw CLI time strings remain untrusted until the CLI has loaded the ledger through the shared service and obtained `default_timezone`. The CLI then normalizes them immediately before constructing the typed service request; init uses the explicit required timezone. MCP remains strict RFC 3339 and does not use the human grammar. This avoids direct adapter parsing of ledger bytes and system-timezone inference while keeping the human-only grammar out of machine-facing contracts.
 
 MCP properties remain strict RFC 3339. They pass through the same normalization entry point as the canonical case but cannot use the human-only layouts because their schema rejects them first.
 
@@ -78,7 +78,7 @@ Alternatives considered:
 - Host-local timezone was rejected as non-reproducible.
 - UTC for every omitted offset was rejected because the ledger already declares its human scheduling timezone.
 - A fuzzy parser dependency was rejected because it expands grammar silently and makes compatibility difficult to pin.
-- A separate `--closes-on` flag was not selected because the requested interface is the existing timestamp flags; field-specific date-only semantics make that use deterministic.
+- Separate date-only aliases were not selected because field-specific semantics on the existing timestamp flags are deterministic.
 
 ### 5. Capture and format one operation instant
 
@@ -86,7 +86,7 @@ Forecast input types will represent `forecasted_at` as optional until defaults a
 
 Explicit values override only their own fields. Thus an explicit historical `forecasted_at` can coexist with defaulted current `recorded_at`, while both omitted fields are exactly equal as instants and strings. Initial public/sealed forecasts and ordinary public/sealed appends share one default helper before target, commitment, chronology, and patch construction.
 
-The default never changes the question window. An observation after close or before open returns the existing inclusive chronology error, and planning must detect it before any key, journal, or ledger effect.
+The default never changes the optional question opening. An observation before `opens_at` returns the existing inclusive chronology error, and planning detects it before any key, journal, or ledger effect.
 
 Alternative considered: capture separately in adapters and crypto services. This was rejected because calls could cross a second boundary and produce unequal defaults or different offsets.
 
@@ -132,4 +132,4 @@ A release audit searches active/current paths for forbidden generic input surfac
 7. Regenerate help, completion, MCP/request references, update dogfood and public docs, and add release audits.
 8. Run documentation checks and the full Go verification/security suite. Release notes mark the v1.3.0-only, direct-only, flattened-MCP surface as breaking.
 
-Rollback is a normal source rollback before release. After release, do not restore `--input` or wrapper aliases as an emergency compatibility path; any future import feature requires a separate accepted change. Ledger files remain compatible because canonical stored data and schema version do not change.
+Rollback is a normal source rollback before release. After release, do not restore the removed generic public document route or wrapper aliases as an emergency compatibility path; any future import feature requires a separate accepted change. The v1.3.0 schema cutover remains intentionally incompatible with older ledger files.

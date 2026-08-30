@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	ledgerschema "github.com/chaoscondensate/cli/internal/schema"
 )
 
-// InputSchemaName identifies one closed operation input contract. Version 1 is
-// tied to the exact embedded Forecast Ledger 1.2.0 definitions.
+// InputSchemaName identifies one closed operation request contract. Version 1
+// is tied to the exact embedded Forecast Ledger 1.3.0 definitions.
 type InputSchemaName string
 
 const (
@@ -66,6 +67,53 @@ func InputSchema(name InputSchemaName) ([]byte, error) {
 		"$defs":   definitions,
 	}
 	return json.MarshalIndent(document, "", "  ")
+}
+
+// DirectRequestSchema resolves the operation's root definition while retaining
+// its local $defs. Adapters and generators use this one shape when flattening
+// public request fields into their own top-level contracts.
+func DirectRequestSchema(name InputSchemaName) (map[string]any, error) {
+	content, err := InputSchema(name)
+	if err != nil {
+		return nil, err
+	}
+	var document map[string]any
+	if err := json.Unmarshal(content, &document); err != nil {
+		return nil, fmt.Errorf("decode direct request schema %q: %w", name, err)
+	}
+	definitions, _ := document["$defs"].(map[string]any)
+	rootReference, ok := document["$ref"].(string)
+	if !ok {
+		return nil, fmt.Errorf("direct request schema %q has no root reference", name)
+	}
+	current := any(map[string]any{"$ref": rootReference})
+	seen := map[string]bool{}
+	for {
+		object, ok := current.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("direct request schema %q is not an object", name)
+		}
+		reference, ok := object["$ref"].(string)
+		if !ok || len(object) != 1 {
+			result := cloneSchemaObject(object)
+			result["$defs"] = definitions
+			return result, nil
+		}
+		const prefix = "#/$defs/"
+		if !strings.HasPrefix(reference, prefix) || seen[reference] {
+			return nil, fmt.Errorf("direct request schema %q has an invalid root reference", name)
+		}
+		seen[reference] = true
+		current = definitions[strings.TrimPrefix(reference, prefix)]
+	}
+}
+
+func cloneSchemaObject(source map[string]any) map[string]any {
+	result := make(map[string]any, len(source)+1)
+	for key, value := range source {
+		result[key] = value
+	}
+	return result
 }
 
 func reachableDefinitions(all map[string]any, root string) map[string]any {
@@ -237,26 +285,33 @@ func commonInputDefinitions() map[string]any {
 
 	return map[string]any{
 		"initialForecastInput": closedObject(
-			[]string{"id", "visibility", "forecasted_at", "value"}, forecastFields,
+			[]string{"id", "visibility"}, forecastFields,
 			map[string]any{"allOf": []any{
 				map[string]any{
-					"if":   map[string]any{"properties": map[string]any{"visibility": map[string]any{"const": "sealed"}}, "required": []string{"visibility"}},
-					"then": map[string]any{"required": []string{"rationale", "key_factors", "comment"}},
+					"if":   map[string]any{"properties": map[string]any{"visibility": map[string]any{"const": "public"}}, "required": []string{"visibility"}},
+					"then": map[string]any{"required": []string{"value"}},
+				},
+				map[string]any{
+					"if": map[string]any{"properties": map[string]any{"visibility": map[string]any{"const": "sealed"}}, "required": []string{"visibility"}},
+					"then": map[string]any{"not": map[string]any{"anyOf": []any{
+						map[string]any{"required": []string{"value"}}, map[string]any{"required": []string{"rationale"}},
+						map[string]any{"required": []string{"key_factors"}}, map[string]any{"required": []string{"comment"}},
+					}}},
 				},
 			}}),
 		"initialQuestionInput": questionDefinition(initialQuestionFields, []string{
-			"id", "title", "type", "resolution_criteria", "forecast_window", "expected_resolution_at",
+			"id", "title", "type", "resolution_criteria", "expected_resolution_at",
 		}, true),
 		"questionAddInput": questionDefinition(questionFields, []string{
-			"title", "resolution_criteria", "forecast_window", "expected_resolution_at",
+			"title", "resolution_criteria", "expected_resolution_at",
 		}, false),
-		"publicForecastInput": closedObject([]string{"forecasted_at", "value"}, map[string]any{
+		"publicForecastInput": closedObject([]string{"value"}, map[string]any{
 			"forecasted_at": ref("timestamp"), "recorded_at": ref("timestamp"), "value": ref("forecastValue"),
 			"rationale": stringValue(0), "key_factors": arrayOf(stringValue(1), 0), "comment": stringValue(0),
 			"public_note": stringValue(0), "supersedes_forecast_id": ref("slug"),
 		}, nil),
 		"sealedForecastInput": closedObject(
-			[]string{"forecasted_at", "value", "rationale", "key_factors", "comment"},
+			[]string{"value", "rationale", "key_factors", "comment"},
 			map[string]any{
 				"forecasted_at": ref("timestamp"), "recorded_at": ref("timestamp"), "value": ref("forecastValue"),
 				"rationale": stringValue(0), "key_factors": arrayOf(stringValue(1), 0), "comment": stringValue(0),
@@ -271,7 +326,7 @@ func commonInputDefinitions() map[string]any {
 			"username": nullable(stringValue(1)), "user_id": nullable(stringValue(1)),
 			"profile_url": nullable(map[string]any{"type": "string", "format": "uri"}),
 		}, map[string]any{"minProperties": 1}),
-		"forecastWindowPatchInput": closedObject([]string{"closes_at"}, map[string]any{"closes_at": ref("timestamp")}, nil),
+		"forecastWindowPatchInput": closedObject([]string{"opens_at"}, map[string]any{"opens_at": ref("timestamp")}, nil),
 		"evidenceSourceInput": closedObject([]string{"title", "url", "retrieved_at"}, map[string]any{
 			"title": stringValue(1), "url": map[string]any{"type": "string", "format": "uri"},
 			"retrieved_at": ref("timestamp"), "publisher": stringValue(1), "published_at": ref("timestamp"),

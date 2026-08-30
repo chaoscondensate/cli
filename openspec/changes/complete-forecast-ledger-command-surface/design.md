@@ -38,11 +38,11 @@ Operation results are converted to explicit public wire DTOs, including schema-c
 
 Alternative considered: implement commands directly in `internal/adapters/cli` and later copy them into MCP. Rejected because it would make parity, locking, cancellation, errors, and secret review diverge.
 
-### 2. Define versioned closed input schemas next to operations
+### 2. Define versioned closed direct request schemas next to operations
 
-Complex non-secret and private inputs use bounded JSON/YAML documents decoded into dedicated request types. Each action owns a closed schema with explicit null/removal semantics. The CLI accepts a path or stdin; MCP accepts the equivalent typed object or an authorized private-file reference where raw secret values are prohibited. Scalar flags remain only for identifiers and common unambiguous root fields; the already registered required `question add --type` remains the explicit discriminator and is forbidden inside that command's input document. Init instead owns a complete nested initial-question document whose schema includes `type`; both adapters normalize type into the same builder request before validation, so the input schemas intentionally differ without forking domain behavior.
+Each action owns a closed transport-neutral request schema with explicit omission/removal semantics. The CLI maps complete leaf-local flags and repeatable typed groups into that request; MCP flattens the same public fields into top-level tool properties. Generic public document wrappers and file references are unavailable. Where raw secret values are prohibited from argv or MCP properties, purpose-named protected file/stdin references feed the private sub-request. Both adapters normalize into the same builder request before validation.
 
-JSON/YAML input is parsed by the existing bounded document layer so duplicate keys and resource exhaustion fail consistently. Input schemas and JSON result schemas are exported as generated reference artifacts and used by CLI/MCP parity tests.
+Direct request schemas and JSON result schemas are exported as generated reference artifacts and used by CLI/MCP parity tests. Bounded JSON/YAML parsing remains only inside purpose-named protected secret channels and persisted ledger document handling.
 
 The YAML adapter performs one schema-directed normalization before typed decoding: a YAML `!!timestamp` scalar is converted to its RFC 3339 lexical string only when the operation schema declares that exact field as a timestamp. Other YAML tags retain normal closed-schema type checking. Maintained examples still quote timestamps to avoid parser-dependent behavior outside this binary.
 

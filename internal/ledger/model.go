@@ -39,7 +39,7 @@ type Ledger struct {
 }
 
 // LegacyPublication represents optional publication metadata retained by the
-// upstream v1.2.0 schema. The CLI does not require Git and provides no Git
+// upstream v1.3.0 schema. The CLI does not require Git and provides no Git
 // automation; this type exists only for schema-compatible document handling.
 type LegacyPublication struct {
 	History       string       `json:"history" yaml:"history"`
@@ -132,26 +132,25 @@ const (
 )
 
 type Question struct {
-	ID                   Slug           `json:"id" yaml:"id"`
-	Title                string         `json:"title" yaml:"title"`
-	Type                 QuestionType   `json:"type" yaml:"type"`
-	Status               QuestionStatus `json:"status" yaml:"status"`
-	ResolutionCriteria   string         `json:"resolution_criteria" yaml:"resolution_criteria"`
-	CreatedAt            Timestamp      `json:"created_at" yaml:"created_at"`
-	ForecastWindow       ForecastWindow `json:"forecast_window" yaml:"forecast_window"`
-	ExpectedResolutionAt Timestamp      `json:"expected_resolution_at" yaml:"expected_resolution_at"`
-	Options              *[]Option      `json:"options,omitempty" yaml:"options,omitempty"`
-	Unit                 *Unit          `json:"unit,omitempty" yaml:"unit,omitempty"`
-	PlatformRefs         *[]PlatformRef `json:"platform_refs,omitempty" yaml:"platform_refs,omitempty"`
-	Tags                 *[]Slug        `json:"tags,omitempty" yaml:"tags,omitempty"`
-	Notes                *string        `json:"notes,omitempty" yaml:"notes,omitempty"`
-	Forecasts            []Forecast     `json:"forecasts" yaml:"forecasts"`
-	Resolution           *Resolution    `json:"resolution,omitempty" yaml:"resolution,omitempty"`
+	ID                   Slug            `json:"id" yaml:"id"`
+	Title                string          `json:"title" yaml:"title"`
+	Type                 QuestionType    `json:"type" yaml:"type"`
+	Status               QuestionStatus  `json:"status" yaml:"status"`
+	ResolutionCriteria   string          `json:"resolution_criteria" yaml:"resolution_criteria"`
+	CreatedAt            Timestamp       `json:"created_at" yaml:"created_at"`
+	ForecastWindow       *ForecastWindow `json:"forecast_window,omitempty" yaml:"forecast_window,omitempty"`
+	ExpectedResolutionAt Timestamp       `json:"expected_resolution_at" yaml:"expected_resolution_at"`
+	Options              *[]Option       `json:"options,omitempty" yaml:"options,omitempty"`
+	Unit                 *Unit           `json:"unit,omitempty" yaml:"unit,omitempty"`
+	PlatformRefs         *[]PlatformRef  `json:"platform_refs,omitempty" yaml:"platform_refs,omitempty"`
+	Tags                 *[]Slug         `json:"tags,omitempty" yaml:"tags,omitempty"`
+	Notes                *string         `json:"notes,omitempty" yaml:"notes,omitempty"`
+	Forecasts            []Forecast      `json:"forecasts" yaml:"forecasts"`
+	Resolution           *Resolution     `json:"resolution,omitempty" yaml:"resolution,omitempty"`
 }
 
 type ForecastWindow struct {
-	OpensAt  *Timestamp `json:"opens_at,omitempty" yaml:"opens_at,omitempty"`
-	ClosesAt Timestamp  `json:"closes_at" yaml:"closes_at"`
+	OpensAt Timestamp `json:"opens_at" yaml:"opens_at"`
 }
 
 type Option struct {

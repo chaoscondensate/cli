@@ -2,6 +2,11 @@
 > historical v0.4.0 facts. `add-default-tsa-failover` owns the next release's
 > provider and transport requirements.
 
+> Supersession note (2026-08-30): tasks mentioning generic public `--input`,
+> MCP `input`/public `input_file`, v1.2.0 identity, or the old target envelope
+> record completed historical work. `make-authoring-direct-readable` owns the
+> current v1.3.0 direct-authoring behavior and takes precedence.
+
 ## 1. Shared operation contracts and change ownership
 
 - [x] 1.1 Add `internal/service` request, result, warning, side-effect, recovery, root/mode/network-profile, and operation interfaces without creating a storage-to-service import cycle.

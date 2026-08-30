@@ -14,7 +14,7 @@ source: go generate ./internal/service
 > Generated; do not edit by hand. Run `go generate ./internal/service`.
 
 - [Operation contracts](operation-contracts.md)
-- [Structured input schemas](input-schemas/index.md)
+- [Direct request schemas](request-schemas/index.md)
 - [Common result schema](result.schema.json)
 - [MCP tool schema catalog](mcp-tool-schemas.json)
 

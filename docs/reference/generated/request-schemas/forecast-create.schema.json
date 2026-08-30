@@ -286,7 +286,6 @@
         }
       },
       "required": [
-        "forecasted_at",
         "value"
       ],
       "type": "object"

@@ -14,7 +14,7 @@ Platform records describe external or local places associated with questions.
 They do not publish data or contact a service. Every command names the ledger
 with `--file`.
 
-Add a platform under a stable ID. The v1.2.0 contract requires both its name and
+Add a platform under a stable ID. The v1.3.0 contract requires both its name and
 kind, so an ID alone reports those missing flags instead of inventing defaults:
 
 ```sh
@@ -44,8 +44,7 @@ forecast-ledger platform update \
 
 Omitted fields stay unchanged. `--clear-url`, `--clear-account`, and the
 account-field clear flags remove optional values. They cannot remove the
-required name or kind. `--input` remains an optional closed-document batch mode
-and cannot be combined with these authoring flags.
+required name or kind. Public platform data is supplied only by these flags.
 
 List and inspect records without mutation:
 

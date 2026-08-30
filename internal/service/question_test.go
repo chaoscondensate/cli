@@ -21,7 +21,7 @@ func TestQuestionAddUpdateListAndShow(t *testing.T) {
 	add := NormalizedQuestionCreate{ID: "q-new", Type: ledger.QuestionBinary, Input: QuestionAddInput{
 		Title: "Will the new event happen?", ResolutionCriteria: "Resolve from the named source.",
 		CreatedAt:      timestampPointer("2026-08-20T00:00:00Z"),
-		ForecastWindow: ledger.ForecastWindow{ClosesAt: "2026-12-01T00:00:00Z"}, ExpectedResolutionAt: "2026-12-02T00:00:00Z",
+		ForecastWindow: ledger.ForecastWindow{}, ExpectedResolutionAt: "2026-12-02T00:00:00Z",
 		InitialForecast: &InitialForecastInput{ID: "f-new-001", Visibility: ledger.VisibilityPublic, ForecastedAt: "2026-08-20T00:00:00Z", Value: ledger.ForecastValue{Binary: &ledger.BinaryValue{Kind: ledger.ValueBinary, ProbabilityBP: 5500}}},
 	}}
 	mutation, err := BuildQuestionAddPublic(model, add, "2026-08-20T00:01:00Z")
@@ -41,9 +41,9 @@ func TestQuestionAddUpdateListAndShow(t *testing.T) {
 	if updated.Ledger.Questions[1].Title != "Updated question title" || updated.Ledger.Questions[1].Tags == nil || len(updated.Patches) != 2 {
 		t.Fatalf("update mutation = %#v", updated)
 	}
-	closing := Optional[ledger.Timestamp]{Set: true, Value: "2026-08-06T12:00:00+01:00"}
-	if _, err := BuildQuestionUpdate(model, "q-election-coalition", QuestionPatchInput{ForecastWindow: Optional[ForecastWindowPatchInput]{Set: true, Value: ForecastWindowPatchInput{ClosesAt: closing}}}); app.ErrorCodeOf(err) != app.CodeConflict {
-		t.Fatalf("shortened window error = %v", err)
+	opening := Optional[ledger.Timestamp]{Set: true, Value: "2026-08-07T12:00:00+01:00"}
+	if _, err := BuildQuestionUpdate(model, "q-election-coalition", QuestionPatchInput{ForecastWindow: Optional[ForecastWindowPatchInput]{Set: true, Value: ForecastWindowPatchInput{OpensAt: opening}}}); app.ErrorCodeOf(err) != app.CodeConflict {
+		t.Fatalf("moved opening error = %v", err)
 	}
 	model.Questions[1].Forecasts[0].Integrity = ledger.Integrity{Failed: &ledger.FailedIntegrity{Status: ledger.IntegrityFailed, FailureReason: "imported", Target: &ledger.ForecastTarget{}}}
 	if _, err := BuildQuestionUpdate(model, "q-election-coalition", QuestionPatchInput{Title: newTitle}); app.ErrorCodeOf(err) != app.CodeConflict {
@@ -75,7 +75,7 @@ func TestQuestionAddSealedCommitsProtectedKeyBeforeValidLedger(t *testing.T) {
 	factors := []string{"PRIVATE-FACTOR-CANARY"}
 	input := NormalizedQuestionCreate{ID: "q-secret", Type: ledger.QuestionBinary, Input: QuestionAddInput{
 		Title: "Secret forecast question", ResolutionCriteria: "Resolve from the named source.", CreatedAt: timestampPointer("2026-08-20T00:00:00Z"),
-		ForecastWindow: ledger.ForecastWindow{ClosesAt: "2026-12-01T00:00:00Z"}, ExpectedResolutionAt: "2026-12-02T00:00:00Z",
+		ForecastWindow: ledger.ForecastWindow{}, ExpectedResolutionAt: "2026-12-02T00:00:00Z",
 		InitialForecast: &InitialForecastInput{ID: "f-secret", Visibility: ledger.VisibilitySealed, ForecastedAt: "2026-08-20T00:00:00Z", RecordedAt: timestampPointer("2026-08-20T00:01:00Z"), Value: ledger.ForecastValue{Binary: &ledger.BinaryValue{Kind: ledger.ValueBinary, ProbabilityBP: 5100}}, Rationale: &rationale, KeyFactors: &factors, Comment: &comment},
 	}}
 	plan, err := PlanQuestionAddSealedFile(context.Background(), ledgerPath, keyPath, input, "2026-08-20T00:01:00Z")
@@ -123,7 +123,7 @@ func TestQuestionPublicFileAddThenUpdate(t *testing.T) {
 	}
 	input := NormalizedQuestionCreate{ID: "q-new", Type: ledger.QuestionBinary, Input: QuestionAddInput{
 		Title: "New", ResolutionCriteria: "Official source", CreatedAt: timestampPointer("2026-08-20T00:00:00Z"),
-		ForecastWindow: ledger.ForecastWindow{ClosesAt: "2026-12-01T00:00:00Z"}, ExpectedResolutionAt: "2026-12-02T00:00:00Z",
+		ForecastWindow: ledger.ForecastWindow{}, ExpectedResolutionAt: "2026-12-02T00:00:00Z",
 		InitialForecast: &InitialForecastInput{ID: "f-new", Visibility: ledger.VisibilityPublic, ForecastedAt: "2026-08-20T00:00:00Z", RecordedAt: timestampPointer("2026-08-20T00:01:00Z"), Value: ledger.ForecastValue{Binary: &ledger.BinaryValue{Kind: ledger.ValueBinary, ProbabilityBP: 5000}}},
 	}}
 	if _, err := CommitQuestionAddPublicFile(context.Background(), path, input, "2026-08-20T00:01:00Z"); err != nil {

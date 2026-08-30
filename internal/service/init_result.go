@@ -3,15 +3,16 @@ package service
 import "github.com/chaoscondensate/cli/internal/ledger"
 
 type InitResult struct {
-	LedgerID      ledger.Slug               `json:"ledger_id"`
-	SchemaVersion ledger.SchemaVersion      `json:"schema_version"`
-	QuestionCount int                       `json:"question_count"`
-	ForecastCount int                       `json:"forecast_count"`
-	QuestionID    ledger.Slug               `json:"question_id,omitempty"`
-	ForecastID    ledger.Slug               `json:"forecast_id,omitempty"`
-	Visibility    ledger.ForecastVisibility `json:"visibility,omitempty"`
-	Effects       []SideEffect              `json:"effects"`
-	Recovery      Recovery                  `json:"recovery"`
+	LedgerID        ledger.Slug               `json:"ledger_id"`
+	SchemaVersion   ledger.SchemaVersion      `json:"schema_version"`
+	QuestionCount   int                       `json:"question_count"`
+	ForecastCount   int                       `json:"forecast_count"`
+	QuestionID      ledger.Slug               `json:"question_id,omitempty"`
+	ForecastID      ledger.Slug               `json:"forecast_id,omitempty"`
+	Visibility      ledger.ForecastVisibility `json:"visibility,omitempty"`
+	NormalizedTimes []TimeNormalization       `json:"normalized_times,omitempty"`
+	Effects         []SideEffect              `json:"effects"`
+	Recovery        Recovery                  `json:"recovery"`
 }
 
 func NewInitResult(model *ledger.Ledger, effects []SideEffect, recovery Recovery) InitResult {

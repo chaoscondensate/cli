@@ -305,6 +305,7 @@ func yamlStructuralEdit(document *Document, operation PatchOperation) (byteEdit,
 			return byteEdit{}, err
 		}
 		start := yamlOffset(document.Raw, document.lineIndex, node.Line, node.Column)
+		start = yamlCollectionReplacementStart(document.Raw, start)
 		end, err := yamlNodeEnd(document, node)
 		if err != nil {
 			return byteEdit{}, err
@@ -373,47 +374,41 @@ func yamlAdd(document *Document, parent *yaml.Node, token string, value any) (by
 }
 
 func yamlFlowAdd(document *Document, parent *yaml.Node, token string, value any) (byteEdit, error) {
-	end, err := yamlNodeEnd(document, parent)
+	updated := cloneYAMLNode(parent)
+	valueNode, err := encodeYAMLNode(value)
 	if err != nil {
 		return byteEdit{}, err
 	}
-	encoded, err := renderYAMLFlowValue(value)
-	if err != nil {
-		return byteEdit{}, err
-	}
-	var replacement []byte
-	switch parent.Kind {
+	switch updated.Kind {
 	case yaml.MappingNode:
-		for index := 0; index < len(parent.Content); index += 2 {
-			if parent.Content[index].Value == token {
+		for index := 0; index < len(updated.Content); index += 2 {
+			if updated.Content[index].Value == token {
 				return byteEdit{}, fmt.Errorf("%w: source pointer already exists", ErrUnsupportedPatch)
 			}
 		}
-		if len(parent.Content) > 0 {
-			replacement = append(replacement, ',', ' ')
-		}
-		key, _ := canonical.Marshal(token)
-		replacement = append(replacement, key...)
-		replacement = append(replacement, ':', ' ')
+		updated.Content = append(updated.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: token},
+			valueNode,
+		)
 	case yaml.SequenceNode:
 		if token != "-" {
 			return byteEdit{}, fmt.Errorf("%w: YAML sequence additions must use /-", ErrUnsupportedPatch)
 		}
-		if len(parent.Content) > 0 {
-			replacement = append(replacement, ',', ' ')
-		}
+		updated.Content = append(updated.Content, valueNode)
 	default:
 		return byteEdit{}, fmt.Errorf("%w: patch parent is not a collection", ErrUnsupportedPatch)
 	}
-	replacement = append(replacement, encoded...)
-	return byteEdit{start: end - 1, end: end - 1, replacement: replacement}, nil
-}
-
-func renderYAMLFlowValue(value any) ([]byte, error) {
-	if marshaler, ok := value.(json.Marshaler); ok {
-		return marshaler.MarshalJSON()
+	start := yamlOffset(document.Raw, document.lineIndex, parent.Line, parent.Column)
+	start = yamlCollectionReplacementStart(document.Raw, start)
+	end, err := yamlNodeEnd(document, parent)
+	if err != nil {
+		return byteEdit{}, err
 	}
-	return canonical.Marshal(value)
+	replacement, err := renderYAMLNodeReplacement(updated, document, start)
+	if err != nil {
+		return byteEdit{}, err
+	}
+	return byteEdit{start: start, end: end, replacement: replacement}, nil
 }
 
 func yamlRemove(document *Document, parent *yaml.Node, token string) (byteEdit, error) {
@@ -569,17 +564,11 @@ func flowCollectionEnd(raw []byte, start int64, open, close byte) (int64, error)
 }
 
 func renderYAMLValue(value any, existing *yaml.Node, document *Document, start int64) ([]byte, error) {
-	if existing.Style&yaml.FlowStyle != 0 {
-		return renderYAMLFlowValue(value)
-	}
-	encoded, err := yaml.Marshal(value)
+	node, err := encodeYAMLNode(value)
 	if err != nil {
-		return nil, fmt.Errorf("encode YAML replacement: %w", err)
+		return nil, err
 	}
-	encoded = bytes.TrimSuffix(encoded, []byte("\n"))
-	indent := string(document.Raw[sourceLineStart(document.Raw, start):start])
-	newline := string(preferredNewline(document.Newlines))
-	return []byte(strings.ReplaceAll(string(encoded), "\n", newline+indent)), nil
+	return renderYAMLNodeReplacement(node, document, start)
 }
 
 func renderYAMLAddedMapping(indent, key string, value any, newline []byte) ([]byte, error) {
@@ -600,11 +589,10 @@ func renderYAMLAddedSequence(indent string, value any, newline []byte) ([]byte, 
 
 func renderYAMLAdded(indent, prefix string, value any, newline []byte) ([]byte, error) {
 	if !isScalarReplacement(value) {
-		encoded, err := yaml.Marshal(value)
+		encoded, err := renderYAMLBlockValue(value)
 		if err != nil {
 			return nil, err
 		}
-		encoded = bytes.TrimSuffix(encoded, []byte("\n"))
 		lines := strings.Split(string(encoded), "\n")
 		var output strings.Builder
 		if prefix == "-" {
@@ -654,6 +642,94 @@ func renderYAMLAdded(indent, prefix string, value any, newline []byte) ([]byte, 
 		output.Write(newline)
 	}
 	return []byte(output.String()), nil
+}
+
+func renderYAMLBlockValue(value any) ([]byte, error) {
+	node, err := encodeYAMLNode(value)
+	if err != nil {
+		return nil, err
+	}
+	return renderYAMLBlockNode(node)
+}
+
+func encodeYAMLNode(value any) (*yaml.Node, error) {
+	var node yaml.Node
+	if err := node.Encode(value); err != nil {
+		return nil, fmt.Errorf("encode YAML value: %w", err)
+	}
+	normalizeYAMLCollectionStyle(&node)
+	return &node, nil
+}
+
+func renderYAMLBlockNode(node *yaml.Node) ([]byte, error) {
+	normalizeYAMLCollectionStyle(node)
+	var output bytes.Buffer
+	encoder := yaml.NewEncoder(&output)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(node); err != nil {
+		return nil, fmt.Errorf("encode YAML value: %w", err)
+	}
+	if err := encoder.Close(); err != nil {
+		return nil, fmt.Errorf("finish YAML value: %w", err)
+	}
+	return bytes.TrimSuffix(output.Bytes(), []byte("\n")), nil
+}
+
+func renderYAMLNodeReplacement(node *yaml.Node, document *Document, start int64) ([]byte, error) {
+	encoded, err := renderYAMLBlockNode(node)
+	if err != nil {
+		return nil, err
+	}
+	newline := string(preferredNewline(document.Newlines))
+	lineStart := sourceLineStart(document.Raw, start)
+	prefix := string(document.Raw[lineStart:start])
+	leading := prefix[:len(prefix)-len(strings.TrimLeft(prefix, " \t"))]
+	trimmed := strings.TrimSpace(prefix)
+	if (node.Kind == yaml.MappingNode || node.Kind == yaml.SequenceNode) && len(node.Content) > 0 && strings.HasSuffix(trimmed, ":") {
+		indent := leading + "  "
+		return []byte(newline + indent + strings.ReplaceAll(string(encoded), "\n", newline+indent)), nil
+	}
+	indent := strings.Repeat(" ", max(node.Column-1, 0))
+	return []byte(strings.ReplaceAll(string(encoded), "\n", newline+indent)), nil
+}
+
+func normalizeYAMLCollectionStyle(node *yaml.Node) {
+	if node == nil {
+		return
+	}
+	if node.Kind == yaml.MappingNode || node.Kind == yaml.SequenceNode {
+		if len(node.Content) == 0 {
+			node.Style |= yaml.FlowStyle
+		} else {
+			node.Style &^= yaml.FlowStyle
+		}
+	}
+	for _, child := range node.Content {
+		normalizeYAMLCollectionStyle(child)
+	}
+}
+
+func cloneYAMLNode(node *yaml.Node) *yaml.Node {
+	if node == nil {
+		return nil
+	}
+	clone := *node
+	clone.Content = make([]*yaml.Node, len(node.Content))
+	for index, child := range node.Content {
+		clone.Content[index] = cloneYAMLNode(child)
+	}
+	return &clone
+}
+
+func yamlCollectionReplacementStart(raw []byte, start int64) int64 {
+	lineStart := sourceLineStart(raw, start)
+	if onlyHorizontalSpace(raw[lineStart:start]) {
+		return start
+	}
+	for start > lineStart && (raw[start-1] == ' ' || raw[start-1] == '\t') {
+		start--
+	}
+	return start
 }
 
 func yamlCollectionIndent(parent *yaml.Node) int {

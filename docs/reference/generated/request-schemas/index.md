@@ -1,4 +1,4 @@
-# Generated structured input schemas
+# Generated request schemas
 
 <!-- doc-metadata
 coverage: operation-contracts-v1
@@ -13,7 +13,7 @@ source: go generate ./internal/service
 
 > Generated; do not edit by hand. Run `go generate ./internal/service`.
 
-These closed Draft 2020-12 schemas validate JSON or YAML operation input after bounded parsing.
+These closed Draft 2020-12 schemas define direct public request fields and purpose-named protected bundles.
 
 - [`annul`](annul.schema.json)
 - [`dispute`](dispute.schema.json)

@@ -20,19 +20,19 @@ only ledger bytes and cannot resolve sibling target or timestamp paths.
 
 | Command | Required selection or destination | Main effect |
 | --- | --- | --- |
-| `init` | new `--file`, identity flags; direct authoring flags; optional `--input`; conditional protected input and new `--key-file` | Create an empty ledger or include platforms, one question, and an optional first forecast. |
-| `ledger update` | `--file` plus one or more set/clear flags; optional `--input` | Patch allowed root/current-forecaster fields. |
+| `init` | new `--file`, identity and direct authoring flags; conditional protected `--initial-secret-input` and `--key-file` | Create an empty ledger or include platforms, one question, and an optional first forecast. |
+| `ledger update` | `--file` plus one or more set/clear flags | Patch allowed root/current-forecaster fields. |
 | `validate`, `status` | `--file` | Validate or summarize. |
-| `platform add|update` | `--file --platform` plus authoring flags; optional `--input` | Add or patch one platform. Add requires `--name` and `--kind`. |
+| `platform add|update` | `--file --platform` plus authoring flags | Add or patch one platform. Add requires `--name` and `--kind`. |
 | `platform list|show` | `--file`; show also `--platform` | Read sorted/redacted platform data. |
 | `platform remove` | `--file --platform --yes` | Remove only an unreferenced platform. |
-| `question add` | `--file --question --type` plus type-specific flags; optional `--input`; conditional protected initial input and new `--key-file` | Add one typed question with an optional first forecast. |
-| `question update` | `--file --question` plus set/clear flags; optional `--input` | Patch allowed unfrozen fields. |
+| `question add` | `--file --question --type` plus type-specific flags; conditional protected `--initial-secret-input` and `--key-file` | Add one typed question with an optional first forecast. |
+| `question update` | `--file --question` plus set/clear flags | Patch allowed unfrozen fields. |
 | `question list|show` | `--file`; show also `--question` | Read sorted/redacted question data. |
-| `question resolve|annul|dispute` | `--file --question`, lifecycle/source flags, and `--yes`; optional `--input` | Replace the v1 current resolution state while retaining forecasts. |
-| `forecast add` | `--file --question --forecast`, time and type-specific value flags; optional `--input` | Append a public forecast revision. |
+| `question resolve|annul|dispute` | `--file --question`, lifecycle/source flags, and `--yes` | Replace the v1 current resolution state while retaining forecasts. |
+| `forecast add` | `--file --question --forecast` and type-specific value flags; optional time defaults to now | Append a public forecast revision. |
 | `forecast list|show` | `--file --question`; show also `--forecast` | Read append-only/redacted history. |
-| `forecast seal` | `--file --question --forecast --forecasted-at --secret-input` and new `--key-file`; legacy protected `--input` | Append ciphertext after protected key creation while keeping private values out of argv. |
+| `forecast seal` | `--file --question --forecast --secret-input --key-file`; optional public time metadata | Append ciphertext after protected key creation while keeping private values out of argv. |
 | `forecast reveal` | `--file --question --forecast --key-file --yes` | Authenticate and disclose a sealed forecast. |
 | `forecast key-hint update` | `--file --question --forecast --key-hint` | Replace only the safe logical hint. |
 | `target build|check` | `--file` plus `--all` or question+forecast | Create or compare canonical target bytes. |
@@ -52,11 +52,19 @@ Approval uses an interactive prompt or `--yes`; `--no-input` never prompts.
 Ordinary authoring uses leaf-local flags. Repeated simple collections use
 repeated flags. Coupled public records use one CSV record per repeat, with the
 exact field order shown in leaf help; CSV quoting handles commas inside values.
-Patch leaves distinguish omission from explicit `--clear-*`. `--input` is an
-optional closed JSON/YAML batch mode and cannot be combined with flags that map
-to the same document. Sealed private values, keys, salts, and credentials are
-the exception: they use protected files or stdin, never argv or environment
-variables.
+Patch leaves distinguish omission from explicit `--clear-*`. There is no
+generic public document-input mode. Sealed private values, keys, salts, and
+credentials are the exception: they use purpose-named protected files or stdin,
+never argv or environment variables.
+
+Timestamp flags accept exact RFC 3339 or deterministic local forms such as
+`2030-08-10 14:05`, `10 Aug 2030 14:05`, and `August 10 2030`. Local forms use
+the ledger `default_timezone`; init uses `--timezone`. Date-only question
+boundaries normalize by field policy. A date-only `forecasted_at`,
+`recorded_at`, or evidence time is rejected. Skipped or repeated DST wall times
+also require an explicit numeric offset. If `--forecasted-at` is omitted for a
+new public, sealed, or initial forecast, it defaults to the single operation
+time in the ledger timezone; omitted `recorded_at` uses that same instant.
 
 Global result modes are normal human output, `--json`, `--plain`, or `--quiet`.
 The last three are mutually exclusive. `--no-color` and `TERM=dumb` disable
@@ -108,12 +116,12 @@ name returns the MCP unknown-tool protocol response.
 | 10 | `unavailable` |
 | 130 | `interrupted` |
 
-Schema compatibility is exact. A ledger other than v1.2.0 produces an explicit
+Schema compatibility is exact. A ledger other than v1.3.0 produces an explicit
 warning on stderr, returns `unsupported_schema_version`/exit 3, and stops before
 any file, key, artifact, or network side effect. No migration command is
 provided during this preview cutover.
 
-Exact closed input schemas and operation policies are generated under
+Exact direct request schemas and operation policies are generated under
 [generated interface reference](generated/index.md). Candidate-binary
 `--help` is authoritative for flags in an installed release.
 

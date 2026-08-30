@@ -181,7 +181,7 @@ func classifyInitialForecast(input *InitialForecastInput) (InitialCreationShape,
 }
 
 type ForecastWindowPatchInput struct {
-	ClosesAt Optional[ledger.Timestamp] `json:"closes_at"`
+	OpensAt Optional[ledger.Timestamp] `json:"opens_at"`
 }
 
 type QuestionPatchInput struct {

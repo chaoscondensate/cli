@@ -32,8 +32,8 @@ func TestAllPinnedInvalidCasesAreRejected(t *testing.T) {
 	if err := decoder.Decode(&cases); err != nil {
 		t.Fatal(err)
 	}
-	if len(cases) != 12 {
-		t.Fatalf("got %d invalid cases, want 12", len(cases))
+	if len(cases) != 13 {
+		t.Fatalf("got %d invalid cases, want 13", len(cases))
 	}
 
 	for _, testCase := range cases {
@@ -115,7 +115,7 @@ func validateGenericDocument(t *testing.T, value any) ([]SchemaIssue, []Semantic
 }
 
 func applyFixtureOperation(root any, operation, pointer string, value any) error {
-	if operation != "replace" {
+	if operation != "replace" && operation != "add" {
 		return fmt.Errorf("unsupported pinned fixture operation %q", operation)
 	}
 	tokens := strings.Split(strings.TrimPrefix(pointer, "/"), "/")

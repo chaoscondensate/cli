@@ -16,16 +16,17 @@ import (
 )
 
 type ForecastFileResult struct {
-	LedgerID        ledger.Slug      `json:"ledger_id"`
-	QuestionID      ledger.Slug      `json:"question_id"`
-	ForecastID      ledger.Slug      `json:"forecast_id"`
-	RecordedAt      ledger.Timestamp `json:"recorded_at"`
-	Changed         bool             `json:"changed"`
-	ChangedPointers []string         `json:"changed_pointers"`
-	BeforeSHA256    string           `json:"before_sha256"`
-	AfterSHA256     string           `json:"after_sha256"`
-	Effects         []SideEffect     `json:"effects,omitempty"`
-	Recovery        Recovery         `json:"recovery,omitempty"`
+	LedgerID        ledger.Slug         `json:"ledger_id"`
+	QuestionID      ledger.Slug         `json:"question_id"`
+	ForecastID      ledger.Slug         `json:"forecast_id"`
+	RecordedAt      ledger.Timestamp    `json:"recorded_at"`
+	NormalizedTimes []TimeNormalization `json:"normalized_times,omitempty"`
+	Changed         bool                `json:"changed"`
+	ChangedPointers []string            `json:"changed_pointers"`
+	BeforeSHA256    string              `json:"before_sha256"`
+	AfterSHA256     string              `json:"after_sha256"`
+	Effects         []SideEffect        `json:"effects,omitempty"`
+	Recovery        Recovery            `json:"recovery,omitempty"`
 }
 
 func PlanPublicForecastAddFile(ctx context.Context, path string, questionID, forecastID ledger.Slug, input ForecastCreateInput, observedAt ledger.Timestamp) (ForecastFileResult, error) {

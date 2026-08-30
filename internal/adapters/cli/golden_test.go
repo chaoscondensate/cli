@@ -42,16 +42,12 @@ func TestInitHelpGolden(t *testing.T) {
 }
 
 func TestInitPublicJSONGolden(t *testing.T) {
-	input, err := os.ReadFile("testdata/input/init-public.json")
-	if err != nil {
-		t.Fatal(err)
-	}
 	expected, err := os.ReadFile("testdata/result/init-public.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(t.TempDir(), "ledger.json")
-	code, stdout, stderr := runCLIWithStdin(string(input), "forecast-ledger", "--json", "init", "--file", path, "--ledger-id", "research", "--timezone", "UTC", "--forecaster-id", "andrey", "--forecaster-name", "Andrey", "--input", "-")
+	code, stdout, stderr := runCLI("forecast-ledger", "--json", "init", "--file", path, "--ledger-id", "research", "--timezone", "UTC", "--forecaster-id", "andrey", "--forecaster-name", "Andrey", "--created-at", "2026-01-01T00:00:00Z", "--question", "q-one", "--question-type", "binary", "--question-title", "Will it happen?", "--question-resolution-criteria", "Resolve from the named source.", "--question-created-at", "2026-01-01T00:00:00Z", "--question-expected-resolution-at", "2027-01-01T00:00:00Z", "--initial-forecast", "f-one", "--initial-forecasted-at", "2026-01-01T00:00:00Z", "--initial-recorded-at", "2026-01-01T00:00:00Z", "--initial-value-kind", "binary", "--initial-probability-bp", "5000")
 	if code != 0 || stderr != "" {
 		t.Fatalf("code=%d stderr=%q", code, stderr)
 	}
@@ -74,15 +70,11 @@ func TestLedgerUpdateHelpAndJSONGoldens(t *testing.T) {
 	if err := os.WriteFile(path, ledgerBytes, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	patch, err := os.ReadFile("testdata/input/root-metadata-patch.json")
-	if err != nil {
-		t.Fatal(err)
-	}
 	want, err := os.ReadFile("testdata/result/ledger-update.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	code, stdout, stderr = runCLIWithStdin(string(patch), "forecast-ledger", "--json", "ledger", "update", "--file", path, "--input", "-")
+	code, stdout, stderr = runCLI("forecast-ledger", "--json", "ledger", "update", "--file", path, "--title", "Updated ledger", "--clear-description")
 	if code != 0 || stderr != "" || stdout != string(want) {
 		t.Fatalf("JSON code=%d stderr=%q\nWANT:\n%s\nGOT:\n%s", code, stderr, want, stdout)
 	}
@@ -93,8 +85,8 @@ func TestPlatformHelpAndListJSONGolden(t *testing.T) {
 		name string
 		want []string
 	}{
-		{name: "add", want: []string{"--file", "--platform", "--input", "--dry-run"}},
-		{name: "update", want: []string{"--file", "--platform", "--input", "--dry-run"}},
+		{name: "add", want: []string{"--file", "--platform", "--name", "--kind", "--dry-run"}},
+		{name: "update", want: []string{"--file", "--platform", "--name", "--clear-url", "--dry-run"}},
 		{name: "list", want: []string{"--file"}},
 		{name: "show", want: []string{"--file", "--platform"}},
 		{name: "remove", want: []string{"--file", "--platform", "--dry-run", "--yes"}},
@@ -129,7 +121,7 @@ func TestForecastHelpAndListJSONGolden(t *testing.T) {
 		name string
 		want []string
 	}{
-		{name: "add", want: []string{"--file", "--question", "--forecast", "--input", "--dry-run"}},
+		{name: "add", want: []string{"--file", "--question", "--forecast", "--value-kind", "--dry-run"}},
 		{name: "list", want: []string{"--file", "--question"}},
 		{name: "show", want: []string{"--file", "--question", "--forecast"}},
 	} {
@@ -162,7 +154,7 @@ func TestForecastSealRevealHintHelpAndSealPlanGolden(t *testing.T) {
 		args []string
 		want []string
 	}{
-		{args: []string{"seal"}, want: []string{"--file", "--question", "--forecast", "--input", "--key-file", "--dry-run"}},
+		{args: []string{"seal"}, want: []string{"--file", "--question", "--forecast", "--secret-input", "--key-file", "--dry-run"}},
 		{args: []string{"reveal"}, want: []string{"--file", "--question", "--forecast", "--key-file", "--revealed-at", "--dry-run", "--yes"}},
 		{args: []string{"key-hint", "update"}, want: []string{"--file", "--question", "--forecast", "--key-hint", "--dry-run"}},
 	} {
@@ -188,8 +180,8 @@ func TestForecastSealRevealHintHelpAndSealPlanGolden(t *testing.T) {
 	if err := os.WriteFile(path, fixtureBytes(t, "individual-ledger.json"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	input := `{"forecasted_at":"2026-08-25T09:00:00+01:00","recorded_at":"2026-08-25T09:01:00+01:00","value":{"kind":"multiple_choice","probabilities":[{"option_id":"centre-left","probability_bp":5000},{"option_id":"centre-right","probability_bp":3500},{"option_id":"other","probability_bp":1500}]},"rationale":"private","key_factors":[],"comment":"private","supersedes_forecast_id":"f-election-coalition-001"}`
-	code, stdout, stderr := runCLIWithStdin(input, "forecast-ledger", "--json", "forecast", "seal", "--file", path, "--question", "q-election-coalition", "--forecast", "f-election-coalition-002", "--input", "-", "--key-file", keyPath, "--dry-run")
+	private := `{"value":{"kind":"multiple_choice","probabilities":[{"option_id":"centre-left","probability_bp":5000},{"option_id":"centre-right","probability_bp":3500},{"option_id":"other","probability_bp":1500}]},"rationale":"private","key_factors":[],"comment":"private"}`
+	code, stdout, stderr := runCLIWithStdin(private, "forecast-ledger", "--json", "forecast", "seal", "--file", path, "--question", "q-election-coalition", "--forecast", "f-election-coalition-002", "--forecasted-at", "2026-08-25T09:00:00+01:00", "--recorded-at", "2026-08-25T09:01:00+01:00", "--supersedes-forecast", "f-election-coalition-001", "--secret-input", "-", "--key-file", keyPath, "--dry-run")
 	if code != 0 || stderr != "" || stdout != string(want) {
 		t.Fatalf("forecast seal plan JSON code=%d stderr=%q\nWANT:\n%s\nGOT:\n%s", code, stderr, want, stdout)
 	}
@@ -200,13 +192,13 @@ func TestQuestionHelpAndListJSONGolden(t *testing.T) {
 		name string
 		want []string
 	}{
-		{name: "add", want: []string{"--file", "--question", "--type", "--input", "--key-file", "--dry-run"}},
-		{name: "update", want: []string{"--file", "--question", "--input", "--dry-run"}},
+		{name: "add", want: []string{"--file", "--question", "--type", "--title", "--key-file", "--dry-run"}},
+		{name: "update", want: []string{"--file", "--question", "--title", "--dry-run"}},
 		{name: "list", want: []string{"--file"}},
 		{name: "show", want: []string{"--file", "--question"}},
-		{name: "resolve", want: []string{"--file", "--question", "--input", "--dry-run", "--yes"}},
-		{name: "annul", want: []string{"--file", "--question", "--input", "--dry-run", "--yes"}},
-		{name: "dispute", want: []string{"--file", "--question", "--input", "--dry-run", "--yes"}},
+		{name: "resolve", want: []string{"--file", "--question", "--outcome-known-at", "--source", "--dry-run", "--yes"}},
+		{name: "annul", want: []string{"--file", "--question", "--reason", "--dry-run", "--yes"}},
+		{name: "dispute", want: []string{"--file", "--question", "--reason", "--dry-run", "--yes"}},
 	} {
 		code, stdout, stderr := runCLI("forecast-ledger", "question", test.name, "--help")
 		if code != 0 || stderr != "" {

@@ -27,18 +27,6 @@ type TargetArtifact struct {
 	Bytes        []byte              `json:"-"`
 }
 
-type targetQuestion struct {
-	ID                   ledger.Slug           `json:"id"`
-	Title                string                `json:"title"`
-	Type                 ledger.QuestionType   `json:"type"`
-	ResolutionCriteria   string                `json:"resolution_criteria"`
-	CreatedAt            ledger.Timestamp      `json:"created_at"`
-	ForecastWindow       ledger.ForecastWindow `json:"forecast_window"`
-	ExpectedResolutionAt ledger.Timestamp      `json:"expected_resolution_at"`
-	Options              *[]ledger.Option      `json:"options,omitempty"`
-	Unit                 *ledger.Unit          `json:"unit,omitempty"`
-}
-
 type targetCommitment struct {
 	Scheme         string            `json:"scheme"`
 	CommitmentHash ledger.Digest     `json:"commitment_hash"`
@@ -60,10 +48,9 @@ type targetForecast struct {
 }
 
 type forecastEnvelope struct {
-	Schema   string         `json:"schema"`
-	LedgerID ledger.Slug    `json:"ledger_id"`
-	Question targetQuestion `json:"question"`
-	Forecast targetForecast `json:"forecast"`
+	Schema     string         `json:"schema"`
+	QuestionID ledger.Slug    `json:"question_id"`
+	Forecast   targetForecast `json:"forecast"`
 }
 
 func BuildForecastTarget(model *ledger.Ledger, questionID, forecastID ledger.Slug) (TargetArtifact, error) {
@@ -84,7 +71,7 @@ func BuildForecastTarget(model *ledger.Ledger, questionID, forecastID ledger.Slu
 	if forecast == nil {
 		return TargetArtifact{}, app.WithDetails(app.NewError(app.CodeNotFound, "forecast was not found in the selected question", nil), map[string]any{"question_id": questionID, "forecast_id": forecastID})
 	}
-	envelope, err := buildForecastEnvelope(model.LedgerID, question, *forecast)
+	envelope, err := buildForecastEnvelope(question, *forecast)
 	if err != nil {
 		return TargetArtifact{}, err
 	}
@@ -129,17 +116,7 @@ func BuildAllForecastTargets(model *ledger.Ledger) ([]TargetArtifact, error) {
 	return result, nil
 }
 
-func buildForecastEnvelope(ledgerID ledger.Slug, question ledger.Question, forecast ledger.Forecast) (forecastEnvelope, error) {
-	targetQuestion := targetQuestion{
-		ID: question.ID, Title: question.Title, Type: question.Type, ResolutionCriteria: question.ResolutionCriteria,
-		CreatedAt: question.CreatedAt, ForecastWindow: question.ForecastWindow, ExpectedResolutionAt: question.ExpectedResolutionAt,
-	}
-	switch question.Type {
-	case ledger.QuestionMultipleChoice:
-		targetQuestion.Options = cloneOptions(question.Options)
-	case ledger.QuestionNumeric:
-		targetQuestion.Unit = cloneUnit(question.Unit)
-	}
+func buildForecastEnvelope(question ledger.Question, forecast ledger.Forecast) (forecastEnvelope, error) {
 	targetForecast := targetForecast{
 		ID: forecast.ID, ForecastedAt: forecast.ForecastedAt, RecordedAt: forecast.RecordedAt,
 		Visibility: forecast.Visibility, PublicNote: cloneString(forecast.PublicNote), SupersedesForecastID: cloneSlug(forecast.SupersedesForecastID),
@@ -166,7 +143,7 @@ func buildForecastEnvelope(ledgerID ledger.Slug, question ledger.Question, forec
 	default:
 		return forecastEnvelope{}, app.NewError(app.CodeInvalidData, "forecast visibility is not supported for targets", nil)
 	}
-	return forecastEnvelope{Schema: ForecastEnvelopeSchema, LedgerID: ledgerID, Question: targetQuestion, Forecast: targetForecast}, nil
+	return forecastEnvelope{Schema: ForecastEnvelopeSchema, QuestionID: question.ID, Forecast: targetForecast}, nil
 }
 
 func TargetMetadataFor(artifact TargetArtifact) ledger.ForecastTarget {

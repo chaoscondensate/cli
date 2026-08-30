@@ -13,34 +13,34 @@ source: go generate ./internal/service
 
 > Generated; do not edit by hand. Run `go generate ./internal/service`.
 
-These declarations are shared inputs for CLI reference and MCP discovery. A declaration does not make a hidden command available.
+These declarations are shared request contracts for CLI reference and MCP discovery. A declaration does not make a hidden command available.
 
-| Operation | CLI | MCP tool | Selection | Structured input | Dry-run | Confirmation | Network | Result notes |
+| Operation | CLI | MCP tool | Selection | Request contract | Dry-run | Confirmation | Network | Result notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `forecast.add` | `forecast-ledger forecast add` | `forecast_add` | `forecast` | [forecast-create](input-schemas/forecast-create.schema.json) (inline) | true | false | `none` |  |
-| `forecast.key_hint.update` | `forecast-ledger forecast key-hint update` | `forecast_key_hint_update` | `forecast` | [key-hint-update](input-schemas/key-hint-update.schema.json) (inline) | true | false | `none` |  |
+| `forecast.add` | `forecast-ledger forecast add` | `forecast_add` | `forecast` | [forecast-create](request-schemas/forecast-create.schema.json) (direct) | true | false | `none` |  |
+| `forecast.key_hint.update` | `forecast-ledger forecast key-hint update` | `forecast_key_hint_update` | `forecast` | [key-hint-update](request-schemas/key-hint-update.schema.json) (direct) | true | false | `none` |  |
 | `forecast.list` | `forecast-ledger forecast list` | `forecast_list` | `question` | — | false | false | `none` |  |
 | `forecast.reveal` | `forecast-ledger forecast reveal` | `forecast_reveal` | `forecast` | — | true | true | `none` |  |
-| `forecast.seal` | `forecast-ledger forecast seal` | `forecast_seal` | `forecast` | [forecast-seal](input-schemas/forecast-seal.schema.json) (protected_file) | true | false | `none` |  |
+| `forecast.seal` | `forecast-ledger forecast seal` | `forecast_seal` | `forecast` | [forecast-seal-private](request-schemas/forecast-seal-private.schema.json) (secret) | true | false | `none` |  |
 | `forecast.show` | `forecast-ledger forecast show` | `forecast_show` | `forecast` | — | false | false | `none` |  |
-| `ledger.init` | `forecast-ledger init` | `ledger_init` | `ledger` | [init](input-schemas/init.schema.json) (inline_or_protected_file) | true | false | `none` |  |
+| `ledger.init` | `forecast-ledger init` | `ledger_init` | `ledger` | [init](request-schemas/init.schema.json) (direct_with_initial_secret) | true | false | `none` |  |
 | `ledger.status` | `forecast-ledger status` | `ledger_status` | `ledger` | — | false | false | `none` |  |
-| `ledger.update` | `forecast-ledger ledger update` | `ledger_update` | `ledger` | [root-metadata-patch](input-schemas/root-metadata-patch.schema.json) (inline) | true | false | `none` |  |
+| `ledger.update` | `forecast-ledger ledger update` | `ledger_update` | `ledger` | [root-metadata-patch](request-schemas/root-metadata-patch.schema.json) (direct) | true | false | `none` |  |
 | `ledger.validate` | `forecast-ledger validate` | `ledger_validate` | `ledger` | — | false | false | `none` |  |
-| `platform.add` | `forecast-ledger platform add` | `platform_add` | `platform` | [platform-create](input-schemas/platform-create.schema.json) (inline) | true | false | `none` |  |
+| `platform.add` | `forecast-ledger platform add` | `platform_add` | `platform` | [platform-create](request-schemas/platform-create.schema.json) (direct) | true | false | `none` |  |
 | `platform.list` | `forecast-ledger platform list` | `platform_list` | `ledger` | — | false | false | `none` |  |
 | `platform.remove` | `forecast-ledger platform remove` | `platform_remove` | `platform` | — | true | true | `none` |  |
 | `platform.show` | `forecast-ledger platform show` | `platform_show` | `platform` | — | false | false | `none` |  |
-| `platform.update` | `forecast-ledger platform update` | `platform_update` | `platform` | [platform-patch](input-schemas/platform-patch.schema.json) (inline) | true | false | `none` |  |
+| `platform.update` | `forecast-ledger platform update` | `platform_update` | `platform` | [platform-patch](request-schemas/platform-patch.schema.json) (direct) | true | false | `none` |  |
 | `publication.build` | `forecast-ledger publish build` | `publication_build` | `ledger` | — | true | false | `none` |  |
 | `publication.verify` | `forecast-ledger publish verify` | `publication_verify` | `ledger` | — | false | false | `none` | Pass requires at least one applicable forecast-evidence layer; an empty or all-not-applicable selection returns no_evidence. |
-| `question.add` | `forecast-ledger question add` | `question_add` | `question` | [question-add](input-schemas/question-add.schema.json) (inline_or_protected_file) | true | false | `none` |  |
-| `question.annul` | `forecast-ledger question annul` | `question_annul` | `question` | [annul](input-schemas/annul.schema.json) (inline) | true | true | `none` |  |
-| `question.dispute` | `forecast-ledger question dispute` | `question_dispute` | `question` | [dispute](input-schemas/dispute.schema.json) (inline) | true | true | `none` |  |
+| `question.add` | `forecast-ledger question add` | `question_add` | `question` | [question-add](request-schemas/question-add.schema.json) (direct_with_initial_secret) | true | false | `none` |  |
+| `question.annul` | `forecast-ledger question annul` | `question_annul` | `question` | [annul](request-schemas/annul.schema.json) (direct) | true | true | `none` |  |
+| `question.dispute` | `forecast-ledger question dispute` | `question_dispute` | `question` | [dispute](request-schemas/dispute.schema.json) (direct) | true | true | `none` |  |
 | `question.list` | `forecast-ledger question list` | `question_list` | `ledger` | — | false | false | `none` |  |
-| `question.resolve` | `forecast-ledger question resolve` | `question_resolve` | `question` | [resolution](input-schemas/resolution.schema.json) (inline) | true | true | `none` |  |
+| `question.resolve` | `forecast-ledger question resolve` | `question_resolve` | `question` | [resolution](request-schemas/resolution.schema.json) (direct) | true | true | `none` |  |
 | `question.show` | `forecast-ledger question show` | `question_show` | `question` | — | false | false | `none` |  |
-| `question.update` | `forecast-ledger question update` | `question_update` | `question` | [question-patch](input-schemas/question-patch.schema.json) (inline) | true | false | `none` |  |
+| `question.update` | `forecast-ledger question update` | `question_update` | `question` | [question-patch](request-schemas/question-patch.schema.json) (direct) | true | false | `none` |  |
 | `target.build` | `forecast-ledger target build` | `target_build` | `target` | — | true | false | `none` |  |
 | `target.check` | `forecast-ledger target check` | `target_check` | `target` | — | false | false | `none` |  |
 | `timestamp.stamp` | `forecast-ledger timestamp stamp` | `timestamp_stamp` | `forecast` | — | true | false | `required` |  |

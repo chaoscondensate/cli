@@ -37,6 +37,20 @@
       ],
       "type": "object"
     },
+    "contact": {
+      "additionalProperties": false,
+      "properties": {
+        "email": {
+          "format": "email",
+          "type": "string"
+        },
+        "website": {
+          "format": "uri",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "date": {
       "format": "date",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
@@ -148,21 +162,80 @@
     "forecastWindow": {
       "additionalProperties": false,
       "properties": {
-        "closes_at": {
-          "$ref": "#/$defs/timestamp"
-        },
         "opens_at": {
           "$ref": "#/$defs/timestamp"
         }
       },
       "required": [
-        "closes_at"
+        "opens_at"
       ],
+      "type": "object"
+    },
+    "init": {
+      "additionalProperties": false,
+      "properties": {
+        "contact": {
+          "$ref": "#/$defs/contact"
+        },
+        "created_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "description": {
+          "minLength": 0,
+          "type": "string"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/member"
+          },
+          "minItems": 2,
+          "type": "array"
+        },
+        "platforms": {
+          "additionalProperties": {
+            "$ref": "#/$defs/platform"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/slug"
+          },
+          "type": "object"
+        },
+        "profiles": {
+          "items": {
+            "$ref": "#/$defs/profile"
+          },
+          "type": "array"
+        },
+        "question": {
+          "$ref": "#/$defs/initialQuestionInput"
+        },
+        "title": {
+          "minLength": 0,
+          "type": "string"
+        }
+      },
       "type": "object"
     },
     "initialForecastInput": {
       "additionalProperties": false,
       "allOf": [
+        {
+          "if": {
+            "properties": {
+              "visibility": {
+                "const": "public"
+              }
+            },
+            "required": [
+              "visibility"
+            ]
+          },
+          "then": {
+            "required": [
+              "value"
+            ]
+          }
+        },
         {
           "if": {
             "properties": {
@@ -175,11 +248,30 @@
             ]
           },
           "then": {
-            "required": [
-              "rationale",
-              "key_factors",
-              "comment"
-            ]
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "value"
+                  ]
+                },
+                {
+                  "required": [
+                    "rationale"
+                  ]
+                },
+                {
+                  "required": [
+                    "key_factors"
+                  ]
+                },
+                {
+                  "required": [
+                    "comment"
+                  ]
+                }
+              ]
+            }
           }
         }
       ],
@@ -227,9 +319,181 @@
       },
       "required": [
         "id",
-        "visibility",
-        "forecasted_at",
-        "value"
+        "visibility"
+      ],
+      "type": "object"
+    },
+    "initialQuestionInput": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "multiple_choice"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "unit"
+              ]
+            },
+            "required": [
+              "options"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "numeric"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "options"
+              ]
+            },
+            "required": [
+              "unit"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "binary",
+                  "date"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "options"
+                  ]
+                },
+                {
+                  "required": [
+                    "unit"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "properties": {
+        "created_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "expected_resolution_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "forecast_window": {
+          "$ref": "#/$defs/forecastWindow"
+        },
+        "id": {
+          "$ref": "#/$defs/slug"
+        },
+        "initial_forecast": {
+          "$ref": "#/$defs/initialForecastInput"
+        },
+        "notes": {
+          "minLength": 0,
+          "type": "string"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/option"
+          },
+          "minItems": 2,
+          "type": "array"
+        },
+        "platform_refs": {
+          "items": {
+            "$ref": "#/$defs/platformRef"
+          },
+          "type": "array"
+        },
+        "resolution_criteria": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "$ref": "#/$defs/slug"
+          },
+          "type": "array"
+        },
+        "title": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "binary",
+            "multiple_choice",
+            "numeric",
+            "date"
+          ]
+        },
+        "unit": {
+          "$ref": "#/$defs/unit"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "type",
+        "resolution_criteria",
+        "expected_resolution_at"
+      ],
+      "type": "object"
+    },
+    "member": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/slug"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "profiles": {
+          "items": {
+            "$ref": "#/$defs/profile"
+          },
+          "type": "array"
+        },
+        "role": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
       ],
       "type": "object"
     },
@@ -352,6 +616,52 @@
       ],
       "type": "object"
     },
+    "platform": {
+      "additionalProperties": false,
+      "properties": {
+        "account": {
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "profile_url": {
+              "format": "uri",
+              "type": "string"
+            },
+            "user_id": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "username": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "kind": {
+          "enum": [
+            "scoring_platform",
+            "prediction_market",
+            "self_hosted",
+            "internal",
+            "informal"
+          ]
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "url": {
+          "format": "uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "kind"
+      ],
+      "type": "object"
+    },
     "platformRef": {
       "additionalProperties": false,
       "properties": {
@@ -372,64 +682,25 @@
       ],
       "type": "object"
     },
-    "question-add": {
-      "$ref": "#/$defs/questionAddInput"
-    },
-    "questionAddInput": {
+    "profile": {
       "additionalProperties": false,
       "properties": {
-        "created_at": {
-          "$ref": "#/$defs/timestamp"
-        },
-        "expected_resolution_at": {
-          "$ref": "#/$defs/timestamp"
-        },
-        "forecast_window": {
-          "$ref": "#/$defs/forecastWindow"
-        },
-        "initial_forecast": {
-          "$ref": "#/$defs/initialForecastInput"
-        },
-        "notes": {
-          "minLength": 0,
-          "type": "string"
-        },
-        "options": {
-          "items": {
-            "$ref": "#/$defs/option"
-          },
-          "minItems": 2,
-          "type": "array"
-        },
-        "platform_refs": {
-          "items": {
-            "$ref": "#/$defs/platformRef"
-          },
-          "type": "array"
-        },
-        "resolution_criteria": {
+        "service": {
           "minLength": 1,
           "type": "string"
         },
-        "tags": {
-          "items": {
-            "$ref": "#/$defs/slug"
-          },
-          "type": "array"
-        },
-        "title": {
-          "minLength": 1,
+        "url": {
+          "format": "uri",
           "type": "string"
         },
-        "unit": {
-          "$ref": "#/$defs/unit"
+        "username": {
+          "minLength": 1,
+          "type": "string"
         }
       },
       "required": [
-        "title",
-        "resolution_criteria",
-        "forecast_window",
-        "expected_resolution_at"
+        "service",
+        "url"
       ],
       "type": "object"
     },
@@ -467,7 +738,7 @@
       "type": "object"
     }
   },
-  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/question-add/v1",
-  "$ref": "#/$defs/question-add",
+  "$id": "https://chaoscondensate.com/schemas/forecast-ledger-cli/input/init/v1",
+  "$ref": "#/$defs/init",
   "$schema": "https://json-schema.org/draft/2020-12/schema"
 }

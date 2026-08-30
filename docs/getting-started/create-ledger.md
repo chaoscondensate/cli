@@ -11,8 +11,8 @@ next: ../how-to/index.md
 -->
 
 `forecast-ledger init` creates one new JSON or YAML ledger. It never overwrites
-an existing file and makes no network request. Forecast Ledger schema v1.2.0
-allows an empty question list, so no input document is required.
+an existing file and makes no network request. Forecast Ledger schema v1.3.0
+allows an empty question list. Ordinary authoring uses flags only.
 
 Create an empty ledger first:
 
@@ -34,33 +34,34 @@ forecast-ledger question add \
   --type binary \
   --title "Will the named event happen by the deadline?" \
   --resolution-criteria "Resolve from the named public source." \
-  --created-at 2026-08-26T12:00:00+01:00 \
-  --closes-at 2026-12-31T23:59:59Z \
-  --expected-resolution-at 2027-01-15T12:00:00Z
+  --created-at "26 Aug 2026 12:00" \
+  --expected-resolution-at "15 Jan 2027"
 forecast-ledger forecast add \
   --file ledger.yaml \
   --question q-example \
   --forecast f-example-001 \
-  --forecasted-at 2026-09-01T09:00:00+01:00 \
   --value-kind binary \
   --probability-bp 6500
 ```
 
-The forecast input format is shown in [Manage public forecasts](../how-to/manage-public-forecasts.md).
+The forecast flags are shown in [Manage public forecasts](../how-to/manage-public-forecasts.md).
 The first forecast has no implicit `supersedes_forecast_id`. If that field is
 supplied, it must name an existing forecast in the same question.
 
 Use `--dry-run` to validate all supplied flags and destinations without
-writing. `--input` remains an optional batch mode for a closed JSON or YAML
-document and is mutually exclusive with document-mapped authoring flags;
-`--input -` reads it from stdin. The ledger destination itself never accepts
-`-`.
+writing. Generic public JSON/YAML request documents are not accepted. The
+ledger destination itself never accepts `-`.
+
+Application-written YAML keeps every populated mapping and sequence in expanded
+block style for review. Explicit empty collections remain compact as `[]` or
+`{}`. Mutations preserve unrelated comments, ordering, scalar style, and the
+source newline convention.
 
 Init observes the local operation clock once. An omitted ledger, supplied
 question, or supplied initial-forecast time uses that observation where the
 schema allows a default.
 An explicit ledger `created_at` is never copied into an omitted question
-`created_at` or initial `recorded_at`; those remain independent facts. If you
+`created_at`, initial `forecasted_at`, or initial `recorded_at`; those remain independent facts. If you
 need reproducible historical import times, provide each timestamp explicitly.
 Equality at inclusive forecast-window and recorded-time boundaries is valid.
 
@@ -90,7 +91,6 @@ forecast-ledger init \
   --question-type binary \
   --question-title "Will the named event happen?" \
   --question-resolution-criteria "Resolve from the named public source." \
-  --question-closes-at 2026-12-31T23:59:59Z \
   --question-expected-resolution-at 2027-01-15T12:00:00Z \
   --initial-forecast f-example-001 \
   --initial-visibility sealed \
@@ -108,8 +108,9 @@ packages and source repositories.
 
 Initialization supports `binary`, `multiple_choice`, `numeric`, and `date`
 questions. IDs are global stable slugs, probabilities use integer basis points,
-numeric values use exact decimal strings, and timestamps require RFC 3339 with
-seconds and an explicit offset.
+numeric values use exact decimal strings. CLI timestamp flags accept RFC 3339,
+ISO local date/time, or an English month date such as `10 Aug 2030`. Local
+forms use `--timezone`; ambiguous DST wall times require an explicit offset.
 
 ## Update current metadata
 

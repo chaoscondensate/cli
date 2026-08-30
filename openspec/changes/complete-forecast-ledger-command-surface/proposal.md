@@ -4,6 +4,10 @@
 
 ## Why
 
+> Authoring transport update: `make-authoring-direct-readable` supersedes every
+> generic public `--input`, MCP `input`, and public `input_file` clause in this
+> active change. Purpose-named protected secret channels are retained.
+
 The repository currently exposes only validation, status, version, and completion while the command surface that creates, maintains, seals, timestamps, verifies, packages, and serves forecast ledgers remains unavailable. The complete product needs one reviewable contract that defines every command's inputs, business rules, side effects, outputs, failure modes, and CLI/MCP parity before implementation resumes.
 
 ## What Changes
@@ -40,7 +44,7 @@ None. The repository has no archived main capability specs yet. This change supe
 - Connects the registered urfave command tree to shared application services and removes the `unavailable` preview behavior command by command.
 - Changes hidden preview flags/help and their goldens before those actions are advertised; no available implemented command loses supported behavior.
 - Extends application/domain, storage transaction, canonicalization, cryptography, RFC 3161, verification, publication, presentation, and MCP adapter packages.
-- Adds protected secret-file handling, deterministic artifact naming/manifests, typed CLI input documents, explicit TSA and retained trust inputs, bounded request/response budgets, conditional MCP reveal discovery, and native platform behavior.
+- Adds purpose-named protected secret-file handling, deterministic artifact naming/manifests, direct CLI/MCP request fields, explicit TSA and retained trust inputs, bounded request/response budgets, conditional MCP reveal discovery, and native platform behavior.
 - Adds upstream Python/Go validator parity, byte-level seal/target/key fixtures, official RFC 3161 differential tests, CLI/MCP parity tests, crash/rollback tests, fuzzing, and release gates.
 - Adds executable regressions for the v0.2.2 dogfooding findings and requires the affected help, README, command reference, MCP descriptions, and packaged-platform evidence to remain current.
 - Updates README, command reference, tutorials, security guidance, MCP setup, evidence limitations, and implementation status as each command becomes available.

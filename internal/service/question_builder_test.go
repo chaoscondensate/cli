@@ -88,7 +88,8 @@ func TestInitialQuestionRejectsTypeWindowDistributionAndGlobalIDErrors(t *testin
 		}(),
 		func() InitialQuestionInput {
 			value := binaryInitialQuestion()
-			value.ForecastWindow.ClosesAt = "2025-01-01T00:00:00Z"
+			opening := ledger.Timestamp("2026-01-02T00:00:00Z")
+			value.ForecastWindow.OpensAt = opening
 			return value
 		}(),
 		func() InitialQuestionInput {
@@ -154,7 +155,7 @@ func binaryInitialQuestion() InitialQuestionInput {
 	return InitialQuestionInput{
 		ID: "q-one", Title: "Will it happen?", Type: ledger.QuestionBinary,
 		ResolutionCriteria:   "Resolve from the named public source.",
-		ForecastWindow:       ledger.ForecastWindow{ClosesAt: "2026-12-31T00:00:00Z"},
+		ForecastWindow:       ledger.ForecastWindow{},
 		ExpectedResolutionAt: "2027-01-01T00:00:00Z",
 		InitialForecast: &InitialForecastInput{
 			ID: "f-one", Visibility: ledger.VisibilityPublic,

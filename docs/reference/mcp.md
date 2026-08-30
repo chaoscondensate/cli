@@ -35,11 +35,18 @@ request, response, and CA-bundle bytes; they open no network connection.
 Layered and package verification use overall `no_evidence` with `incomplete`
 when no forecast-evidence layer applies.
 
-`ledger_init` may omit both `input` and `input_file` to create an empty ledger.
-Init input may contain a question without `initial_forecast`. `question_add`
-still requires exactly one of inline `input` or protected `input_file`, but its
-question may also omit `initial_forecast`. A sealed initial forecast remains
-file-only and requires `key_file`; inline secret forecast material is rejected.
+Authoring tools expose their non-secret request fields directly at the tool
+root. They do not accept a generic nested request object or a public side-loaded
+file. `ledger_init` and `question_add` may omit initial-forecast properties.
+A sealed initial forecast uses purpose-named `initial_secret_input_file` and
+requires `key_file`; `forecast_seal` similarly uses `secret_input_file`.
+Inline secret forecast material is rejected.
+
+MCP timestamps remain exact RFC 3339 strings. The service defaults an omitted
+`forecasted_at` for public, sealed, and initial forecasts to one captured
+operation time formatted in the ledger timezone; omitted `recorded_at` uses the
+same instant. This is the same default used by the CLI after deterministic
+human-date normalization.
 
 All startup roots use explicit `name=path` syntax. There is no inferred default
 root. The default resource limits are 16 concurrent tool calls and 8 MiB of
@@ -48,7 +55,7 @@ them within the documented bounded ranges.
 
 The generated [tool catalog](generated/mcp-tool-schemas.json),
 [operation contracts](generated/operation-contracts.md), and
-[input schemas](generated/input-schemas/index.md) are the machine-readable
+[request schemas](generated/request-schemas/index.md) are the machine-readable
 reference. Startup mode can remove `forecast_reveal` or package tools from
 discovery.
 

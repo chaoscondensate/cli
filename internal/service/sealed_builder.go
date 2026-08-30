@@ -168,10 +168,8 @@ func prepareQuestionAddSealed(model *ledger.Ledger, input NormalizedQuestionCrea
 	if err := ValidateForecastValue(input.Type, input.Input.Options, &private.Value); err != nil {
 		return ledger.Question{}, InitialForecastInput{}, "", err
 	}
-	recordedAt := observedAt
-	if private.RecordedAt != nil {
-		recordedAt = *private.RecordedAt
-	}
+	forecastedAt, recordedAt := DefaultForecastTimes(private.ForecastedAt, private.RecordedAt, observedAt)
+	private.ForecastedAt = forecastedAt
 	if err := validateForecastChronology(question.ForecastWindow, private.ForecastedAt, recordedAt); err != nil {
 		return ledger.Question{}, InitialForecastInput{}, "", err
 	}
@@ -214,10 +212,8 @@ func prepareInitialSealedLedger(root *ledger.Ledger, input InitialQuestionInput,
 	if err := ValidateForecastValue(input.Type, input.Options, &private.Value); err != nil {
 		return ledger.Question{}, InitialForecastInput{}, "", err
 	}
-	recordedAt := observedAt
-	if private.RecordedAt != nil {
-		recordedAt = *private.RecordedAt
-	}
+	forecastedAt, recordedAt := DefaultForecastTimes(private.ForecastedAt, private.RecordedAt, observedAt)
+	private.ForecastedAt = forecastedAt
 	if err := validateForecastChronology(question.ForecastWindow, private.ForecastedAt, recordedAt); err != nil {
 		return ledger.Question{}, InitialForecastInput{}, "", err
 	}
@@ -233,15 +229,14 @@ func sealedForecastRecord(private InitialForecastInput, recordedAt ledger.Timest
 	}
 }
 
-func validateForecastChronology(window ledger.ForecastWindow, forecastedAt, recordedAt ledger.Timestamp) error {
-	if window.OpensAt == nil {
-		return invalidField("forecast_window.opens_at", "forecast window opening is required after normalization")
-	}
+func validateForecastChronology(window *ledger.ForecastWindow, forecastedAt, recordedAt ledger.Timestamp) error {
 	if err := ValidateChronology(forecastedAt, "forecasted_at", recordedAt, "recorded_at", true); err != nil {
 		return err
 	}
-	if err := ValidateChronology(*window.OpensAt, "forecast_window.opens_at", forecastedAt, "forecasted_at", true); err != nil {
-		return err
+	if window != nil {
+		if err := ValidateChronology(window.OpensAt, "forecast_window.opens_at", forecastedAt, "forecasted_at", true); err != nil {
+			return err
+		}
 	}
-	return ValidateChronology(forecastedAt, "forecasted_at", window.ClosesAt, "forecast_window.closes_at", true)
+	return nil
 }

@@ -2,6 +2,11 @@
 > completed v0.4.0 behavior and is superseded for the next release by
 > `add-default-tsa-failover`.
 
+> Supersession note (2026-08-30): generic authoring documents, public
+> `--input`, MCP `input`/public `input_file`, v1.2.0 identity, and the old target
+> shape below are historical implementation facts. `make-authoring-direct-readable`
+> owns their v1.3.0 replacements and takes precedence.
+
 ## Purpose
 
 Defines the complete RFC 3161 command lifecycle and portable evidence behavior shared by CLI and MCP for exact Forecast Ledger v1.2.0 forecast targets.

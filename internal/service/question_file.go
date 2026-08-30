@@ -23,6 +23,7 @@ type QuestionFileResult struct {
 	Status          ledger.QuestionStatus `json:"status"`
 	PriorStatus     ledger.QuestionStatus `json:"prior_status,omitempty"`
 	RecordedAt      *ledger.Timestamp     `json:"recorded_at,omitempty"`
+	NormalizedTimes []TimeNormalization   `json:"normalized_times,omitempty"`
 	Changed         bool                  `json:"changed"`
 	ChangedPointers []string              `json:"changed_pointers"`
 	BeforeSHA256    string                `json:"before_sha256"`

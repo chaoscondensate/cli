@@ -2,10 +2,10 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
+	"sort"
 	"time"
 
 	"github.com/chaoscondensate/cli/internal/app"
@@ -108,28 +108,28 @@ type toolContract struct {
 func contracts() map[service.OperationName]toolContract {
 	file := []string{"file"}
 	return map[service.OperationName]toolContract{
-		service.OperationLedgerInit:            {Allowed: []string{"file", "ledger_id", "timezone", "forecaster_id", "forecaster_name", "forecaster_kind", "input", "input_file", "key_file", "dry_run"}, Required: []string{"file", "ledger_id", "timezone", "forecaster_id", "forecaster_name"}},
-		service.OperationLedgerUpdate:          {Allowed: append(file, "input", "dry_run"), Required: []string{"file", "input"}},
+		service.OperationLedgerInit:            {Allowed: []string{"file", "ledger_id", "timezone", "forecaster_id", "forecaster_name", "forecaster_kind", "initial_secret_input_file", "key_file", "dry_run"}, Required: []string{"file", "ledger_id", "timezone", "forecaster_id", "forecaster_name"}},
+		service.OperationLedgerUpdate:          {Allowed: append(file, "dry_run"), Required: file},
 		service.OperationLedgerValidate:        {Allowed: file, Required: file},
 		service.OperationLedgerStatus:          {Allowed: file, Required: file},
-		service.OperationPlatformAdd:           {Allowed: append(file, "platform", "input", "dry_run"), Required: []string{"file", "platform", "input"}},
-		service.OperationPlatformUpdate:        {Allowed: append(file, "platform", "input", "dry_run"), Required: []string{"file", "platform", "input"}},
+		service.OperationPlatformAdd:           {Allowed: append(file, "platform", "dry_run"), Required: []string{"file", "platform"}},
+		service.OperationPlatformUpdate:        {Allowed: append(file, "platform", "dry_run"), Required: []string{"file", "platform"}},
 		service.OperationPlatformList:          {Allowed: file, Required: file},
 		service.OperationPlatformShow:          {Allowed: append(file, "platform"), Required: []string{"file", "platform"}},
 		service.OperationPlatformRemove:        {Allowed: append(file, "platform", "confirm", "dry_run"), Required: []string{"file", "platform"}},
-		service.OperationQuestionAdd:           {Allowed: append(file, "question", "type", "input", "input_file", "key_file", "dry_run"), Required: []string{"file", "question", "type"}},
-		service.OperationQuestionUpdate:        {Allowed: append(file, "question", "input", "dry_run"), Required: []string{"file", "question", "input"}},
+		service.OperationQuestionAdd:           {Allowed: append(file, "question", "type", "initial_secret_input_file", "key_file", "dry_run"), Required: []string{"file", "question", "type"}},
+		service.OperationQuestionUpdate:        {Allowed: append(file, "question", "dry_run"), Required: []string{"file", "question"}},
 		service.OperationQuestionList:          {Allowed: file, Required: file},
 		service.OperationQuestionShow:          {Allowed: append(file, "question"), Required: []string{"file", "question"}},
-		service.OperationQuestionResolve:       {Allowed: append(file, "question", "input", "confirm", "dry_run"), Required: []string{"file", "question", "input"}},
-		service.OperationQuestionAnnul:         {Allowed: append(file, "question", "input", "confirm", "dry_run"), Required: []string{"file", "question", "input"}},
-		service.OperationQuestionDispute:       {Allowed: append(file, "question", "input", "confirm", "dry_run"), Required: []string{"file", "question", "input"}},
-		service.OperationForecastAdd:           {Allowed: append(file, "question", "forecast", "input", "dry_run"), Required: []string{"file", "question", "forecast", "input"}},
+		service.OperationQuestionResolve:       {Allowed: append(file, "question", "confirm", "dry_run"), Required: []string{"file", "question"}},
+		service.OperationQuestionAnnul:         {Allowed: append(file, "question", "confirm", "dry_run"), Required: []string{"file", "question"}},
+		service.OperationQuestionDispute:       {Allowed: append(file, "question", "confirm", "dry_run"), Required: []string{"file", "question"}},
+		service.OperationForecastAdd:           {Allowed: append(file, "question", "forecast", "dry_run"), Required: []string{"file", "question", "forecast"}},
 		service.OperationForecastList:          {Allowed: append(file, "question"), Required: []string{"file", "question"}},
 		service.OperationForecastShow:          {Allowed: append(file, "question", "forecast"), Required: []string{"file", "question", "forecast"}},
-		service.OperationForecastSeal:          {Allowed: append(file, "question", "forecast", "input_file", "key_file", "dry_run"), Required: []string{"file", "question", "forecast", "input_file", "key_file"}},
+		service.OperationForecastSeal:          {Allowed: append(file, "question", "forecast", "secret_input_file", "forecasted_at", "recorded_at", "public_note", "supersedes_forecast_id", "key_file", "dry_run"), Required: []string{"file", "question", "forecast", "secret_input_file", "key_file"}},
 		service.OperationForecastReveal:        {Allowed: append(file, "question", "forecast", "key_file", "revealed_at", "confirm", "dry_run"), Required: []string{"file", "question", "forecast", "key_file", "confirm"}},
-		service.OperationForecastKeyHintUpdate: {Allowed: append(file, "question", "forecast", "key_hint", "dry_run"), Required: []string{"file", "question", "forecast", "key_hint"}},
+		service.OperationForecastKeyHintUpdate: {Allowed: append(file, "question", "forecast", "dry_run"), Required: []string{"file", "question", "forecast"}},
 		service.OperationTargetBuild:           {Allowed: append(file, "question", "forecast", "all", "dry_run"), Required: file},
 		service.OperationTargetCheck:           {Allowed: append(file, "question", "forecast", "all"), Required: file},
 		service.OperationTimestampStamp:        {Allowed: append(file, "question", "forecast", "tsa_provider", "tsa_url", "ca_bundle", "dry_run"), Required: []string{"file", "question", "forecast"}},
@@ -147,6 +147,10 @@ func (s *Server) registerTools() error {
 		contract, ok := contracts[definition.Name]
 		if !ok {
 			return app.NewError(app.CodeInternal, "MCP operation has no closed tool contract", fmt.Errorf("%s", definition.Name))
+		}
+		contract, err := expandDirectContract(definition, contract)
+		if err != nil {
+			return err
 		}
 		if definition.Name == service.OperationForecastReveal && !s.config.Mode.AllowReveal {
 			continue
@@ -185,33 +189,65 @@ func toolSchema(definition service.OperationDefinition, contract toolContract) (
 	for _, name := range contract.Allowed {
 		properties[name] = scalarProperty(name)
 	}
-	if definition.InputSchema != "" {
-		var inputSchema map[string]any
-		data, err := service.InputSchema(definition.InputSchema)
+	result := map[string]any{"type": "object", "properties": properties, "required": contract.Required, "additionalProperties": false}
+	if definition.RequestSchema != "" && definition.RequestMode != service.RequestSecret {
+		requestSchema, err := service.DirectRequestSchema(definition.RequestSchema)
 		if err != nil {
 			return nil, err
 		}
-		if err := json.Unmarshal(data, &inputSchema); err != nil {
-			return nil, err
+		if nested, ok := requestSchema["properties"].(map[string]any); ok {
+			for name, property := range nested {
+				properties[name] = property
+			}
 		}
-		if _, present := properties["input"]; present {
-			properties["input"] = publicInlineSchema(definition.Name, inputSchema)
+		if definitions, ok := requestSchema["$defs"].(map[string]any); ok {
+			result["$defs"] = definitions
+		}
+		for _, keyword := range []string{"allOf", "anyOf", "oneOf", "dependentRequired"} {
+			if value, ok := requestSchema[keyword]; ok {
+				result[keyword] = value
+			}
 		}
 	}
-	return map[string]any{"type": "object", "properties": properties, "required": contract.Required, "additionalProperties": false}, nil
+	return result, nil
 }
 
-func publicInlineSchema(operation service.OperationName, schema map[string]any) any {
-	var restriction map[string]any
-	switch operation {
-	case service.OperationLedgerInit:
-		restriction = map[string]any{"properties": map[string]any{"question": map[string]any{"properties": map[string]any{"initial_forecast": map[string]any{"properties": map[string]any{"visibility": map[string]any{"const": "public"}}}}}}}
-	case service.OperationQuestionAdd:
-		restriction = map[string]any{"properties": map[string]any{"initial_forecast": map[string]any{"properties": map[string]any{"visibility": map[string]any{"const": "public"}}}}}
-	default:
-		return schema
+func expandDirectContract(definition service.OperationDefinition, contract toolContract) (toolContract, error) {
+	if definition.RequestSchema == "" || definition.RequestMode == service.RequestSecret {
+		return contract, nil
 	}
-	return map[string]any{"allOf": []any{schema, restriction}}
+	schema, err := service.DirectRequestSchema(definition.RequestSchema)
+	if err != nil {
+		return contract, err
+	}
+	properties, _ := schema["properties"].(map[string]any)
+	required := stringSlice(schema["required"])
+	seen := map[string]bool{}
+	for _, name := range contract.Allowed {
+		seen[name] = true
+	}
+	for name := range properties {
+		if seen[name] {
+			return contract, app.NewError(app.CodeInternal, "direct MCP field collides with a selector or control: "+name, nil)
+		}
+		contract.Allowed = append(contract.Allowed, name)
+		seen[name] = true
+	}
+	contract.Required = append(contract.Required, required...)
+	sort.Strings(contract.Allowed)
+	sort.Strings(contract.Required)
+	return contract, nil
+}
+
+func stringSlice(value any) []string {
+	values, _ := value.([]any)
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if text, ok := value.(string); ok {
+			result = append(result, text)
+		}
+	}
+	return result
 }
 
 func scalarProperty(name string) map[string]any {
@@ -222,8 +258,6 @@ func scalarProperty(name string) map[string]any {
 		return map[string]any{"type": "string", "enum": []string{"binary", "multiple_choice", "numeric", "date"}}
 	case "forecaster_kind":
 		return map[string]any{"type": "string", "enum": []string{"individual", "team"}, "default": "individual"}
-	case "input":
-		return map[string]any{"type": "object"}
 	default:
 		return map[string]any{"type": "string", "minLength": 1}
 	}

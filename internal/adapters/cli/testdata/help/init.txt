@@ -8,7 +8,7 @@ DESCRIPTION:
    Example:
      forecast-ledger init --file ledger.yaml --ledger-id my-forecasts --timezone Europe/London --forecaster-id me --forecaster-name 'My Name'
 
-   All non-secret ledger, platform, question, and public initial-forecast data can be supplied through flags. --input is an optional, mutually exclusive batch mode. Omitted initial times use one operation-clock observation; an explicit ledger created_at is not copied into recorded_at.
+   All non-secret ledger, platform, question, and public initial-forecast data are supplied through flags. Omitted initial times use one operation-clock observation.
 
 OPTIONS:
    --file string, -f string                                                     Ledger file path
@@ -17,7 +17,6 @@ OPTIONS:
    --forecaster-id string                                                       Stable forecaster ID
    --forecaster-name string                                                     Forecaster display name
    --forecaster-kind string                                                     Forecaster kind: individual or team (default: "individual")
-   --input string, -i string                                                    Closed JSON or YAML input file; use - for stdin
    --key-file string                                                            New protected key file; required only for a sealed first forecast
    --title string                                                               Ledger title
    --description string                                                         Ledger description
@@ -34,7 +33,6 @@ OPTIONS:
    --question-resolution-criteria string                                        Initial question resolution criteria
    --question-created-at string                                                 Initial question RFC 3339 creation time
    --question-opens-at string                                                   Initial question forecast-window opening
-   --question-closes-at string                                                  Initial question forecast-window close
    --question-expected-resolution-at string                                     Initial question expected resolution time
    --question-option string [ --question-option string ]                        Initial multiple-choice option as id,label; repeat
    --question-unit-name string                                                  Initial numeric unit name
@@ -44,9 +42,9 @@ OPTIONS:
    --question-tag string [ --question-tag string ]                              Initial question tag; repeat
    --question-notes string                                                      Initial question notes
    --initial-forecast string                                                    Initial forecast ID; omit to create a backlog question
-   --initial-visibility string                                                  Initial visibility: public (sealed uses protected document mode) (default: "public")
-   --initial-forecasted-at string                                               Initial RFC 3339 forecast time
-   --initial-recorded-at string                                                 Explicit initial record time
+   --initial-visibility string                                                  Initial visibility: public or sealed (sealed uses --initial-secret-input) (default: "public")
+   --initial-forecasted-at string                                               Initial forecast time; defaults to the current time in the ledger timezone
+   --initial-recorded-at string                                                 Explicit initial record time; defaults to the same operation time
    --initial-rationale string                                                   Initial public rationale
    --initial-key-factor string [ --initial-key-factor string ]                  Initial public key factor; repeat
    --initial-comment string                                                     Initial public comment

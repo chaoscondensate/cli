@@ -72,8 +72,43 @@ func TestApplyPatchCanAddRemoveOptionalFieldsAndReplaceSubtrees(t *testing.T) {
 		t.Fatal(err)
 	}
 	output := string(got)
-	if !strings.Contains(output, "  keep: yes\n") || strings.Contains(output, "remove:") || !strings.Contains(output, "added: new") || !strings.Contains(output, `"new":"value"`) {
+	if !strings.Contains(output, "  keep: yes\n") || strings.Contains(output, "remove:") || !strings.Contains(output, "added: new") || !strings.Contains(output, "replace:\n    new: value") {
 		t.Fatalf("unexpected patched YAML:\n%s", output)
+	}
+}
+
+func TestApplyPatchExpandsPopulatedYAMLCollectionsButKeepsEmptyCollectionsCompact(t *testing.T) {
+	input := "# review\nquestions: []\nplatforms: {}\nuntouched: {keep: flow}\n"
+	doc, err := ParseYAML(strings.NewReader(input), DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	question, err := ParseJSON(strings.NewReader(`{"id":"q-one","forecast_window":{"opens_at":"2030-08-10T00:00:00+01:00"},"forecasts":[]}`), DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := ApplyPatch(doc, []PatchOperation{
+		{Kind: PatchAdd, Pointer: "/questions/-", Value: Ordered(question.Root)},
+		{Kind: PatchAdd, Pointer: "/platforms/internal", Value: map[string]any{"kind": "internal", "name": "Team"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(got)
+	for _, want := range []string{
+		"# review\n",
+		"questions:\n  - id: q-one\n",
+		"    forecast_window:\n      opens_at:",
+		"    forecasts: []\n",
+		"platforms:\n  internal:\n    kind: internal\n    name: Team\n",
+		"untouched: {keep: flow}\n",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("missing %q in expanded YAML:\n%s", want, output)
+		}
+	}
+	if strings.Contains(output, "questions: [") || strings.Contains(output, "internal: {") {
+		t.Fatalf("populated collection used flow style:\n%s", output)
 	}
 }
 

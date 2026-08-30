@@ -38,7 +38,7 @@ their linked how-to guides. RFC 3161 acquisition uses an explicitly selected
 authority; later verification is local against retained evidence and trust.
 
 The [generated interface reference](generated/index.md) records shared service
-declarations and closed input schemas. Runtime discovery remains authoritative
+declarations and closed direct request schemas. Runtime discovery remains authoritative
 when a root or startup mode conditionally removes a tool.
 
 [Documentation index](../index.md)

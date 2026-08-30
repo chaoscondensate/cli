@@ -35,7 +35,7 @@ func TestLoadRejectsMissingUnknownAndFutureSchemaVersionsFirst(t *testing.T) {
 				t.Fatalf("error = %#v, code=%q exit=%d", err, app.ErrorCodeOf(err), app.ExitCodeOf(err))
 			}
 			applicationErr, ok := err.(*app.Error)
-			if !ok || applicationErr.Details["supported_schema_version"] != "1.2.0" {
+			if !ok || applicationErr.Details["supported_schema_version"] != "1.3.0" {
 				t.Fatalf("details = %#v", applicationErr)
 			}
 		})
@@ -47,9 +47,9 @@ func TestMutatingOperationRejectsV110BeforeWriting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	v110 := bytes.Replace(raw, []byte(`"schema_version": "1.2.0"`), []byte(`"schema_version": "1.1.0"`), 1)
+	v110 := bytes.Replace(raw, []byte(`"schema_version": "1.3.0"`), []byte(`"schema_version": "1.2.0"`), 1)
 	if bytes.Equal(v110, raw) {
-		t.Fatal("v1.1.0 negative fixture was not created")
+		t.Fatal("v1.2.0 negative fixture was not created")
 	}
 	path := filepath.Join(t.TempDir(), "ledger.json")
 	if err := os.WriteFile(path, v110, 0o600); err != nil {

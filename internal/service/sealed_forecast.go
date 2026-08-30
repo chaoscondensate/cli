@@ -34,6 +34,8 @@ func BuildSealedForecastAppend(ctx context.Context, model *ledger.Ledger, questi
 	if err := effects.Validate(); err != nil {
 		return result, app.NewError(app.CodeInternal, "sealing effects are not configured", err)
 	}
+	input.ForecastedAt, observedAt = DefaultForecastTimes(input.ForecastedAt, input.RecordedAt, observedAt)
+	input.RecordedAt = &observedAt
 	questionPosition, question, recordedAt, err := prepareSealedForecastAppend(model, questionID, forecastID, input, observedAt)
 	if err != nil {
 		return result, err
@@ -55,6 +57,8 @@ func BuildSealedForecastAppend(ctx context.Context, model *ledger.Ledger, questi
 }
 
 func PlanSealedForecastAppend(model *ledger.Ledger, questionID, forecastID ledger.Slug, input SealedForecastInput, observedAt ledger.Timestamp) (ForecastMutation, error) {
+	input.ForecastedAt, observedAt = DefaultForecastTimes(input.ForecastedAt, input.RecordedAt, observedAt)
+	input.RecordedAt = &observedAt
 	questionPosition, question, recordedAt, err := prepareSealedForecastAppend(model, questionID, forecastID, input, observedAt)
 	if err != nil {
 		return ForecastMutation{}, err
@@ -68,7 +72,9 @@ func PlanSealedForecastAppend(model *ledger.Ledger, questionID, forecastID ledge
 }
 
 func prepareSealedForecastAppend(model *ledger.Ledger, questionID, forecastID ledger.Slug, input SealedForecastInput, observedAt ledger.Timestamp) (int, ledger.Question, ledger.Timestamp, error) {
-	questionPosition, question, recordedAt, err := prepareForecastAppend(model, questionID, forecastID, input.ForecastedAt, input.RecordedAt, input.SupersedesForecastID, observedAt)
+	forecastedAt, recordedAt := DefaultForecastTimes(input.ForecastedAt, input.RecordedAt, observedAt)
+	input.ForecastedAt = forecastedAt
+	questionPosition, question, err := prepareForecastAppend(model, questionID, forecastID, forecastedAt, recordedAt, input.SupersedesForecastID)
 	if err != nil {
 		return 0, ledger.Question{}, "", err
 	}
@@ -257,12 +263,7 @@ func validateRevealedBundle(question ledger.Question, forecast ledger.Forecast, 
 	if err := validateOptionalKeyFactors(&factors); err != nil {
 		return err
 	}
-	window := question.ForecastWindow
-	if window.OpensAt == nil {
-		opening := question.CreatedAt
-		window.OpensAt = &opening
-	}
-	return validateForecastChronology(window, bundle.ForecastedAt, bundle.RecordedAt)
+	return validateForecastChronology(question.ForecastWindow, bundle.ForecastedAt, bundle.RecordedAt)
 }
 
 func revealedMirrorMatches(forecast ledger.Forecast, bundle forecastcrypto.PrivateBundle) bool {

@@ -22,11 +22,50 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+type fixedMCPClock struct{ value time.Time }
+
+func (clock fixedMCPClock) Now() time.Time { return clock.value }
+
+func TestMCPForecastDefaultsUseOneLedgerTimezoneObservation(t *testing.T) {
+	ledgerRoot := t.TempDir()
+	effects := service.ProductionEffects()
+	effects.Clock = fixedMCPClock{value: time.Date(2026, 8, 30, 17, 0, 0, 0, time.UTC)}
+	server, err := New(Config{LedgerRoots: []string{"main=" + ledgerRoot}, Timeout: time.Second, Effects: effects})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := connectClient(t, t.Context(), server)
+	defer client.Close()
+
+	calls := []struct {
+		name string
+		args map[string]any
+	}{
+		{"ledger_init", map[string]any{"file": "main:ledger.yaml", "ledger_id": "clock", "timezone": "Europe/London", "forecaster_id": "owner", "forecaster_name": "Owner"}},
+		{"question_add", map[string]any{"file": "main:ledger.yaml", "question": "q-clock", "type": "binary", "title": "Question", "resolution_criteria": "Public result", "expected_resolution_at": "2030-08-10T23:59:59+01:00"}},
+		{"forecast_add", map[string]any{"file": "main:ledger.yaml", "question": "q-clock", "forecast": "f-clock", "value": map[string]any{"kind": "binary", "probability_bp": 5000}}},
+	}
+	for _, call := range calls {
+		result, callErr := callToolForTest(t, client, &sdk.CallToolParams{Name: call.name, Arguments: call.args})
+		if callErr != nil || result.IsError {
+			t.Fatalf("%s failed: %v %s", call.name, callErr, toolText(result))
+		}
+	}
+
+	raw, err := os.ReadFile(filepath.Join(ledgerRoot, "ledger.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count := strings.Count(string(raw), `"2026-08-30T18:00:00+01:00"`); count < 2 {
+		t.Fatalf("forecast defaults did not share the fixed ledger-timezone observation:\n%s", raw)
+	}
+}
+
 func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	ledgerRoot := t.TempDir()
 	outputRoot := t.TempDir()
 	secretRoot := t.TempDir()
-	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.2.0", "individual-ledger.json"), filepath.Join(ledgerRoot, "ledger.json"))
+	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.3.0", "individual-ledger.json"), filepath.Join(ledgerRoot, "ledger.json"))
 	server, err := New(Config{
 		LedgerRoots: []string{"main=" + ledgerRoot}, OutputRoots: []string{"packages=" + outputRoot}, SecretRoots: []string{"keys=" + secretRoot},
 		Timeout: time.Second,
@@ -48,6 +87,11 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 		encoded, _ := json.Marshal(tool.InputSchema)
 		if !strings.Contains(string(encoded), `"additionalProperties":false`) {
 			t.Errorf("tool %s schema is not closed: %s", tool.Name, encoded)
+		}
+		for _, removed := range []string{`"input":`, `"input_file":`} {
+			if strings.Contains(string(encoded), removed) {
+				t.Errorf("tool %s still exposes removed generic wrapper %s", tool.Name, removed)
+			}
 		}
 		for _, forbidden := range []string{"calendar", "bitcoin_core", "proxy", "explorer"} {
 			if strings.Contains(string(encoded), `"`+forbidden+`"`) {
@@ -139,7 +183,7 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	if err != nil || sessionStillAlive.IsError {
 		t.Fatalf("MCP session did not survive TSA failure: result=%s err=%v", toolText(sessionStillAlive), err)
 	}
-	semanticFailure, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{"file": "main:ledger.json", "platform": "invalid-semantic", "input": map[string]any{"name": "   ", "kind": "informal"}}})
+	semanticFailure, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{"file": "main:ledger.json", "platform": "invalid-semantic", "name": "   ", "kind": "informal"}})
 	if err != nil || !semanticFailure.IsError || strings.Contains(toolText(semanticFailure), `"line":0`) || strings.Contains(toolText(semanticFailure), `"column":0`) {
 		t.Fatalf("MCP semantic diagnostic fabricated a span: %s, %v", toolText(semanticFailure), err)
 	}
@@ -150,7 +194,7 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	}
 	started := time.Now()
 	conflict, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{
-		"file": "main:ledger.json", "platform": "locked-platform", "input": map[string]any{"name": "Locked", "kind": "internal"},
+		"file": "main:ledger.json", "platform": "locked-platform", "name": "Locked", "kind": "internal",
 	}})
 	if releaseErr := lock.Release(); releaseErr != nil {
 		t.Fatal(releaseErr)
@@ -159,9 +203,9 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 		t.Fatalf("same-ledger writer conflict result=%s err=%v", toolText(conflict), err)
 	}
 
-	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.2.0", "individual-ledger.json"), filepath.Join(ledgerRoot, "second.json"))
+	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.3.0", "individual-ledger.json"), filepath.Join(ledgerRoot, "second.json"))
 	independent, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{
-		"file": "main:second.json", "platform": "independent-platform", "input": map[string]any{"name": "Independent", "kind": "internal"},
+		"file": "main:second.json", "platform": "independent-platform", "name": "Independent", "kind": "internal",
 	}})
 	if err != nil || independent.IsError {
 		t.Fatalf("cross-ledger mutation was blocked: result=%s err=%v", toolText(independent), err)
@@ -202,13 +246,13 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	}
 }
 
-func TestEveryMCPExistingLedgerToolRejectsV110AtAdmission(t *testing.T) {
+func TestEveryMCPExistingLedgerToolRejectsV120AtAdmission(t *testing.T) {
 	ledgerRoot, outputRoot, secretRoot := t.TempDir(), t.TempDir(), t.TempDir()
-	raw, err := os.ReadFile(filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.2.0", "individual-ledger.json"))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.3.0", "individual-ledger.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	oldLedger := bytes.Replace(raw, []byte(`"schema_version": "1.2.0"`), []byte(`"schema_version": "1.1.0"`), 1)
+	oldLedger := bytes.Replace(raw, []byte(`"schema_version": "1.3.0"`), []byte(`"schema_version": "1.2.0"`), 1)
 	if err := os.WriteFile(filepath.Join(ledgerRoot, "ledger.json"), oldLedger, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +291,7 @@ func TestEveryMCPExistingLedgerToolRejectsV110AtAdmission(t *testing.T) {
 func TestMCPPublicationVerifyUsesOnePackageOutputRoot(t *testing.T) {
 	ledgerRoot, outputRoot := t.TempDir(), t.TempDir()
 	ledgerPath := filepath.Join(ledgerRoot, "ledger.json")
-	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.2.0", "individual-ledger.json"), ledgerPath)
+	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.3.0", "individual-ledger.json"), ledgerPath)
 	copyFixture(t, filepath.Join("..", "..", "timestamp", "rfc3161", "testdata", "root.pem"), filepath.Join(ledgerRoot, "tsa.pem"))
 	requestPath, _, err := service.TimestampEvidencePaths("f-election-coalition-001", "https://tsa.example.test")
 	if err != nil {
@@ -318,10 +362,15 @@ func TestMCPEmptyInitAndBacklogQuestion(t *testing.T) {
 
 	questionInput := map[string]any{
 		"title": "Will it happen?", "resolution_criteria": "Resolve from the named source.",
-		"forecast_window": map[string]any{"closes_at": "2026-12-31T00:00:00Z"}, "expected_resolution_at": "2027-01-01T00:00:00Z",
+		"expected_resolution_at": "2027-01-01T00:00:00Z",
+	}
+	questionArguments := map[string]any{"file": "main:empty.json", "question": "q-one", "type": "binary"}
+	for name, value := range questionInput {
+		questionArguments[name] = value
 	}
 	added, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "question_add", Arguments: map[string]any{
-		"file": "main:empty.json", "question": "q-one", "type": "binary", "input": questionInput,
+		"file": questionArguments["file"], "question": questionArguments["question"], "type": questionArguments["type"],
+		"title": questionArguments["title"], "resolution_criteria": questionArguments["resolution_criteria"], "expected_resolution_at": questionArguments["expected_resolution_at"],
 	}})
 	if err != nil || added.IsError || !strings.Contains(toolText(added), `"message":"Question was added"`) {
 		t.Fatalf("question add result=%s err=%v", toolText(added), err)
@@ -333,16 +382,17 @@ func TestMCPEmptyInitAndBacklogQuestion(t *testing.T) {
 
 	sealedInput := map[string]any{
 		"title": "Secret", "resolution_criteria": "Resolve from the named source.",
-		"forecast_window": map[string]any{"closes_at": "2026-12-31T00:00:00Z"}, "expected_resolution_at": "2027-01-01T00:00:00Z",
-		"initial_forecast": map[string]any{"id": "f-secret", "visibility": "sealed", "forecasted_at": "2026-08-30T00:00:00Z", "value": map[string]any{"kind": "binary", "probability_bp": 5000}, "rationale": "private", "key_factors": []any{}, "comment": "private"},
+		"expected_resolution_at": "2027-01-01T00:00:00Z",
+		"initial_forecast":       map[string]any{"id": "f-secret", "visibility": "sealed", "forecasted_at": "2026-08-30T00:00:00Z", "value": map[string]any{"kind": "binary", "probability_bp": 5000}, "rationale": "private", "key_factors": []any{}, "comment": "private"},
 	}
 	sealed, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "question_add", Arguments: map[string]any{
-		"file": "main:empty.json", "question": "q-secret", "type": "binary", "input": sealedInput,
+		"file": "main:empty.json", "question": "q-secret", "type": "binary", "title": sealedInput["title"],
+		"resolution_criteria": sealedInput["resolution_criteria"], "expected_resolution_at": sealedInput["expected_resolution_at"], "initial_forecast": sealedInput["initial_forecast"],
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !sealed.IsError || !strings.Contains(toolText(sealed), "protected input_file") {
+	if !sealed.IsError || !strings.Contains(toolText(sealed), "initial_secret_input_file") {
 		t.Fatalf("inline sealed input was not rejected safely: %s", toolText(sealed))
 	}
 }
@@ -409,7 +459,7 @@ func TestMCPRevealDiscoveryReadOnlyOfflineAndRootValidation(t *testing.T) {
 			t.Fatalf("read-only tool description is ambiguous: %q", tool.Description)
 		}
 	}
-	if _, err := client2.CallTool(ctx, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{"file": "main:missing.json", "platform": "x", "input": map[string]any{"name": "X", "kind": "informal"}}}); err == nil {
+	if _, err := client2.CallTool(ctx, &sdk.CallToolParams{Name: "platform_add", Arguments: map[string]any{"file": "main:missing.json", "platform": "x", "name": "X", "kind": "informal"}}); err == nil {
 		t.Fatal("read-only mutation direct call did not return unknown-tool protocol error")
 	}
 
@@ -474,12 +524,13 @@ func TestMCPHelperProcess(t *testing.T) {
 func FuzzMCPToolArguments(f *testing.F) {
 	f.Add([]byte(`{"file":"main:ledger.json"}`))
 	f.Add([]byte(`{"file":null,"unknown":true}`))
-	allowed := map[string]bool{"file": true, "question": true, "forecast": true, "dry_run": true, "input": true}
+	allowed := map[string]bool{"file": true, "question": true, "forecast": true, "dry_run": true}
+	definition := service.OperationDefinition{Name: service.OperationLedgerValidate}
 	f.Fuzz(func(t *testing.T, data []byte) {
 		if len(data) > 64<<10 {
 			return
 		}
-		_, _ = decodeToolArguments(data, 64<<10, allowed, []string{"file"})
+		_, _ = decodeToolArguments(data, 64<<10, definition, allowed, []string{"file"})
 	})
 }
 
@@ -559,11 +610,19 @@ func minimumToolArguments(name string) map[string]any {
 	switch name {
 	case "ledger_init":
 		arguments["file"], arguments["ledger_id"], arguments["timezone"] = "main:new.json", "ledger-one", "UTC"
-		arguments["forecaster_id"], arguments["forecaster_name"], arguments["input"] = "me", "Me", map[string]any{}
-	case "ledger_update", "platform_add", "platform_update", "question_add", "question_update", "question_resolve", "question_annul", "question_dispute", "forecast_add":
-		arguments["input"] = map[string]any{}
+		arguments["forecaster_id"], arguments["forecaster_name"] = "me", "Me"
+	case "platform_add":
+		arguments["name"], arguments["kind"] = "Platform", "internal"
+	case "question_add":
+		arguments["title"], arguments["resolution_criteria"], arguments["expected_resolution_at"] = "Question", "Criteria", "2030-01-01T00:00:00Z"
+	case "question_resolve":
+		arguments["outcome"], arguments["outcome_known_at"], arguments["sources"] = true, "2030-01-01T00:00:00Z", []any{}
+	case "question_annul", "question_dispute":
+		arguments["reason"] = "Reason"
+	case "forecast_add":
+		arguments["value"] = map[string]any{"kind": "binary", "probability_bp": 5000}
 	case "forecast_seal":
-		arguments["input_file"], arguments["key_file"] = "keys:missing.json", "keys:new.key"
+		arguments["secret_input_file"], arguments["key_file"] = "keys:missing.json", "keys:new.key"
 	case "forecast_reveal":
 		arguments["key_file"], arguments["confirm"] = "keys:missing.key", true
 	case "forecast_key_hint_update":

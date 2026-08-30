@@ -24,12 +24,12 @@ import (
 )
 
 func TestProtectedArgumentErrorLabelsSelectedRole(t *testing.T) {
-	inputErr := protectedArgumentError(app.NewError(app.CodeConflict, "protected key file must have mode 0600", nil), "--input")
-	if !strings.Contains(inputErr.Error(), "--input") || strings.Contains(inputErr.Error(), "key file") {
+	inputErr := protectedArgumentError(app.NewError(app.CodeConflict, "protected key file must have mode 0600", nil), "--secret-input")
+	if !strings.Contains(inputErr.Error(), "--secret-input") || strings.Contains(inputErr.Error(), "key file") {
 		t.Fatalf("input error = %q", inputErr)
 	}
 	keyErr := app.NewError(app.CodeConflict, "protected key file must have mode 0600", nil)
-	if !strings.Contains(keyErr.Error(), "key file") || strings.Contains(keyErr.Error(), "--input") {
+	if !strings.Contains(keyErr.Error(), "key file") || strings.Contains(keyErr.Error(), "--secret-input") {
 		t.Fatalf("key error = %q", keyErr)
 	}
 }
@@ -117,7 +117,7 @@ func TestEveryExistingLedgerLeafRunsSchemaAdmissionBeforeItsAction(t *testing.T)
 	}
 
 	directory := t.TempDir()
-	oldLedger := bytes.Replace(fixtureBytes(t, "individual-ledger.json"), []byte(`"schema_version": "1.2.0"`), []byte(`"schema_version": "1.1.0"`), 1)
+	oldLedger := bytes.Replace(fixtureBytes(t, "individual-ledger.json"), []byte(`"schema_version": "1.3.0"`), []byte(`"schema_version": "1.2.0"`), 1)
 	ledgerPath := filepath.Join(directory, "ledger.json")
 	if err := os.WriteFile(ledgerPath, oldLedger, 0o600); err != nil {
 		t.Fatal(err)
@@ -270,7 +270,7 @@ func TestValidateJSONOutputAndStableInvalidData(t *testing.T) {
 		t.Fatalf("unexpected success envelope: %#v", success)
 	}
 
-	code, stdout, stderr = runCLIWithStdin(`{"schema_version":"1.2.0","secret":"do-not-print"}`, "forecast-ledger", "--json", "validate", "--file", "-")
+	code, stdout, stderr = runCLIWithStdin(`{"schema_version":"1.3.0","secret":"do-not-print"}`, "forecast-ledger", "--json", "validate", "--file", "-")
 	if code != 3 || stdout != "" {
 		t.Fatalf("invalid JSON mode code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -290,7 +290,7 @@ func TestValidateJSONOutputAndStableInvalidData(t *testing.T) {
 	}
 
 	code, stdout, stderr = runCLIWithStdin(`{}`, "forecast-ledger", "validate", "--file", "-")
-	if code != 3 || stdout != "" || !strings.Contains(stderr, "warning:") || !strings.Contains(stderr, "only 1.2.0") {
+	if code != 3 || stdout != "" || !strings.Contains(stderr, "warning:") || !strings.Contains(stderr, "only 1.3.0") {
 		t.Fatalf("unsupported schema message missing: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 }
@@ -308,7 +308,7 @@ func TestEmptyInitAndQuestionBacklogCLI(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &created); err != nil {
 		t.Fatal(err)
 	}
-	if created.Data["schema_version"] != "1.2.0" || created.Data["question_count"] != float64(0) || created.Data["forecast_count"] != float64(0) || created.Data["question_id"] != nil || created.Data["forecast_id"] != nil {
+	if created.Data["schema_version"] != "1.3.0" || created.Data["question_count"] != float64(0) || created.Data["forecast_count"] != float64(0) || created.Data["question_id"] != nil || created.Data["forecast_id"] != nil {
 		t.Fatalf("empty init result = %#v", created.Data)
 	}
 	contents, err := os.ReadFile(emptyPath)
@@ -316,8 +316,7 @@ func TestEmptyInitAndQuestionBacklogCLI(t *testing.T) {
 		t.Fatalf("empty ledger contents=%s err=%v", contents, err)
 	}
 
-	questionInput := `{"title":"Will it happen?","resolution_criteria":"Resolve from the named source.","forecast_window":{"closes_at":"2026-12-31T00:00:00Z"},"expected_resolution_at":"2027-01-01T00:00:00Z"}`
-	code, stdout, stderr = runCLIWithStdin(questionInput, "forecast-ledger", "--json", "question", "add", "--file", emptyPath, "--question", "q-one", "--type", "binary", "--input", "-")
+	code, stdout, stderr = runCLI("forecast-ledger", "--json", "question", "add", "--file", emptyPath, "--question", "q-one", "--type", "binary", "--title", "Will it happen?", "--resolution-criteria", "Resolve from the named source.", "--expected-resolution-at", "2027-01-01T00:00:00Z")
 	if code != 0 || stderr != "" || !strings.Contains(stdout, `"message":"Question was added"`) {
 		t.Fatalf("question add code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -325,8 +324,7 @@ func TestEmptyInitAndQuestionBacklogCLI(t *testing.T) {
 	if code != 0 || stderr != "" || !strings.Contains(stdout, "No forecasts") {
 		t.Fatalf("forecast list code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	forecastInput := `{"forecasted_at":"2026-09-01T09:00:00Z","recorded_at":"2026-09-01T09:01:00Z","value":{"kind":"binary","probability_bp":6500}}`
-	code, stdout, stderr = runCLIWithStdin(forecastInput, "forecast-ledger", "--json", "forecast", "add", "--file", emptyPath, "--question", "q-one", "--forecast", "f-one", "--input", "-")
+	code, stdout, stderr = runCLI("forecast-ledger", "--json", "forecast", "add", "--file", emptyPath, "--question", "q-one", "--forecast", "f-one", "--forecasted-at", "2026-09-01T09:00:00Z", "--recorded-at", "2026-09-01T09:01:00Z", "--value-kind", "binary", "--probability-bp", "6500")
 	if code != 0 || stderr != "" || !strings.Contains(stdout, `"forecast_id":"f-one"`) {
 		t.Fatalf("first forecast add code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -345,8 +343,7 @@ func TestEmptyInitAndQuestionBacklogCLI(t *testing.T) {
 	}
 
 	metadataPath := filepath.Join(directory, "metadata.json")
-	metadataInput := `{"title":"Research backlog","description":"Questions can be added later."}`
-	code, stdout, stderr = runCLIWithStdin(metadataInput, "forecast-ledger", "--json", "init", "--file", metadataPath, "--ledger-id", "metadata", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner", "--input", "-")
+	code, stdout, stderr = runCLI("forecast-ledger", "--json", "init", "--file", metadataPath, "--ledger-id", "metadata", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner", "--title", "Research backlog", "--description", "Questions can be added later.")
 	if code != 0 || stderr != "" || !strings.Contains(stdout, `"question_count":0`) {
 		t.Fatalf("metadata-only init code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -356,8 +353,7 @@ func TestEmptyInitAndQuestionBacklogCLI(t *testing.T) {
 	}
 
 	yamlPath := filepath.Join(directory, "backlog.yaml")
-	initInput := `{"question":{"id":"q-yaml","title":"Will it happen?","type":"binary","resolution_criteria":"Resolve from the named source.","forecast_window":{"closes_at":"2026-12-31T00:00:00Z"},"expected_resolution_at":"2027-01-01T00:00:00Z"}}`
-	code, stdout, stderr = runCLIWithStdin(initInput, "forecast-ledger", "--json", "init", "--file", yamlPath, "--ledger-id", "yaml", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner", "--input", "-")
+	code, stdout, stderr = runCLI("forecast-ledger", "--json", "init", "--file", yamlPath, "--ledger-id", "yaml", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner", "--question", "q-yaml", "--question-type", "binary", "--question-title", "Will it happen?", "--question-resolution-criteria", "Resolve from the named source.", "--question-expected-resolution-at", "2027-01-01T00:00:00Z")
 	if code != 0 || stderr != "" || !strings.Contains(stdout, `"question_count":1`) || !strings.Contains(stdout, `"forecast_count":0`) {
 		t.Fatalf("question-only init code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -381,8 +377,9 @@ func TestForecastAddListShowAndDryRun(t *testing.T) {
 	if err := os.WriteFile(path, fixtureBytes(t, "individual-ledger.json"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	input := `{"forecasted_at":"2026-09-01T09:00:00+01:00","recorded_at":"2026-09-01T09:01:00+01:00","value":{"kind":"multiple_choice","probabilities":[{"option_id":"centre-left","probability_bp":5000},{"option_id":"centre-right","probability_bp":3500},{"option_id":"other","probability_bp":1500}]},"supersedes_forecast_id":"f-election-coalition-001"}`
-	code, stdout, stderr := runCLIWithStdin(input, "forecast-ledger", "--json", "forecast", "add", "--file", path, "--question", "q-election-coalition", "--forecast", "f-election-coalition-002", "--input", "-")
+	forecastFlags := []string{"--forecasted-at", "2026-09-01T09:00:00+01:00", "--recorded-at", "2026-09-01T09:01:00+01:00", "--value-kind", "multiple_choice", "--choice-probability", "centre-left,5000", "--choice-probability", "centre-right,3500", "--choice-probability", "other,1500", "--supersedes-forecast", "f-election-coalition-001"}
+	addArgs := append([]string{"forecast-ledger", "--json", "forecast", "add", "--file", path, "--question", "q-election-coalition", "--forecast", "f-election-coalition-002"}, forecastFlags...)
+	code, stdout, stderr := runCLI(addArgs...)
 	if code != 0 || stderr != "" {
 		t.Fatalf("add code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -407,9 +404,11 @@ func TestForecastAddListShowAndDryRun(t *testing.T) {
 	if code != 0 || stderr != "" || !strings.Contains(stdout, `"visibility":"public"`) || !strings.Contains(stdout, `"probability_bp":5000`) {
 		t.Fatalf("show code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	dryInput := strings.Replace(input, "f-election-coalition-001", "f-election-coalition-002", 1)
 	before := append([]byte(nil), updated...)
-	code, stdout, stderr = runCLIWithStdin(dryInput, "forecast-ledger", "forecast", "add", "--file", path, "--question", "q-election-coalition", "--forecast", "f-election-coalition-003", "--input", "-", "--dry-run")
+	dryFlags := append([]string(nil), forecastFlags...)
+	dryFlags[len(dryFlags)-1] = "f-election-coalition-002"
+	dryArgs := append([]string{"forecast-ledger", "forecast", "add", "--file", path, "--question", "q-election-coalition", "--forecast", "f-election-coalition-003", "--dry-run"}, dryFlags...)
+	code, stdout, stderr = runCLI(dryArgs...)
 	if code != 0 || stderr != "" || !strings.Contains(stdout, "no file was changed") {
 		t.Fatalf("dry-run code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -424,8 +423,7 @@ func TestQuestionAuthoringAndLifecycleCommands(t *testing.T) {
 	if err := os.WriteFile(path, fixtureBytes(t, "individual-ledger.json"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	addInput := `{"title":"Will the new event happen?","resolution_criteria":"Resolve from the official notice.","created_at":"2026-08-20T00:00:00Z","forecast_window":{"closes_at":"2026-12-01T00:00:00Z"},"expected_resolution_at":"2026-12-02T00:00:00Z","initial_forecast":{"id":"f-new-001","visibility":"public","forecasted_at":"2026-08-20T00:00:00Z","recorded_at":"2026-08-20T00:01:00Z","value":{"kind":"binary","probability_bp":5500}}}`
-	code, stdout, stderr := runCLIWithStdin(addInput, "forecast-ledger", "--json", "question", "add", "--file", path, "--question", "q-new", "--type", "binary", "--input", "-")
+	code, stdout, stderr := runCLI("forecast-ledger", "--json", "question", "add", "--file", path, "--question", "q-new", "--type", "binary", "--title", "Will the new event happen?", "--resolution-criteria", "Resolve from the official notice.", "--created-at", "2026-08-20T00:00:00Z", "--expected-resolution-at", "2026-12-02T00:00:00Z", "--initial-forecast", "f-new-001", "--initial-forecasted-at", "2026-08-20T00:00:00Z", "--initial-recorded-at", "2026-08-20T00:01:00Z", "--initial-value-kind", "binary", "--initial-probability-bp", "5500")
 	if code != 0 || stderr != "" || !strings.Contains(stdout, `"code":"question.added"`) {
 		t.Fatalf("question add code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -441,17 +439,15 @@ func TestQuestionAuthoringAndLifecycleCommands(t *testing.T) {
 	if code != 0 || stderr != "" || !strings.Contains(stdout, `"forecast_count"`) && !strings.Contains(stdout, `"f-new-001"`) {
 		t.Fatalf("question show code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	code, stdout, stderr = runCLIWithStdin(`{"status":"closed"}`, "forecast-ledger", "question", "update", "--file", path, "--question", "q-new", "--input", "-")
+	code, stdout, stderr = runCLI("forecast-ledger", "question", "update", "--file", path, "--question", "q-new", "--status", "closed")
 	if code != 0 || stderr != "" || !strings.Contains(stdout, "updated") {
 		t.Fatalf("question close code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	resolution := `{"outcome":true,"outcome_known_at":"2026-12-02T00:00:00Z","recorded_at":"2026-12-02T00:01:00Z","sources":[{"title":"Official notice","url":"https://example.org/notice","retrieved_at":"2026-12-02T00:00:30Z"}]}`
-	code, stdout, stderr = runCLIWithStdin(resolution, "forecast-ledger", "--json", "question", "resolve", "--file", path, "--question", "q-new", "--input", "-", "--yes")
+	code, stdout, stderr = runCLI("forecast-ledger", "--json", "question", "resolve", "--file", path, "--question", "q-new", "--outcome-boolean=true", "--outcome-known-at", "2026-12-02T00:00:00Z", "--recorded-at", "2026-12-02T00:01:00Z", "--source", "Official notice,https://example.org/notice,2026-12-02T00:00:30Z", "--yes")
 	if code != 0 || stderr != "" || !strings.Contains(stdout, `"code":"question.resolved"`) || !strings.Contains(stdout, `"status":"resolved"`) {
 		t.Fatalf("question resolve code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	dispute := `{"reason":"The notice is being reviewed.","recorded_at":"2026-12-03T00:00:00Z"}`
-	code, stdout, stderr = runCLIWithStdin(dispute, "forecast-ledger", "--json", "question", "dispute", "--file", path, "--question", "q-new", "--input", "-", "--yes")
+	code, stdout, stderr = runCLI("forecast-ledger", "--json", "question", "dispute", "--file", path, "--question", "q-new", "--reason", "The notice is being reviewed.", "--recorded-at", "2026-12-03T00:00:00Z", "--yes")
 	if code != 0 || stderr != "" || !strings.Contains(stdout, `"prior_status":"resolved"`) || !strings.Contains(stdout, `"resolution_history_external"`) {
 		t.Fatalf("question dispute code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -465,8 +461,11 @@ func TestQuestionAddSealedDoesNotLeakInput(t *testing.T) {
 	if err := os.WriteFile(path, fixtureBytes(t, "individual-ledger.json"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	input := `{"title":"Secret forecast question","resolution_criteria":"Resolve from the official notice.","created_at":"2026-08-20T00:00:00Z","forecast_window":{"closes_at":"2026-12-01T00:00:00Z"},"expected_resolution_at":"2026-12-02T00:00:00Z","initial_forecast":{"id":"f-secret","visibility":"sealed","forecasted_at":"2026-08-20T00:00:00Z","recorded_at":"2026-08-20T00:01:00Z","value":{"kind":"binary","probability_bp":5500},"rationale":"` + canary + `","key_factors":[],"comment":"private"}}`
-	code, stdout, stderr := runCLIWithStdin(input, "forecast-ledger", "--json", "question", "add", "--file", path, "--question", "q-secret", "--type", "binary", "--input", "-", "--key-file", keyPath)
+	privatePath := filepath.Join(directory, "q-secret.private.json")
+	if err := storage.CreateProtectedFile(privatePath, []byte(`{"value":{"kind":"binary","probability_bp":5500},"rationale":"`+canary+`","key_factors":[],"comment":"private"}`)); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := runCLI("forecast-ledger", "--json", "question", "add", "--file", path, "--question", "q-secret", "--type", "binary", "--title", "Secret forecast question", "--resolution-criteria", "Resolve from the official notice.", "--created-at", "2026-08-20T00:00:00Z", "--expected-resolution-at", "2026-12-02T00:00:00Z", "--initial-forecast", "f-secret", "--initial-visibility", "sealed", "--initial-forecasted-at", "2026-08-20T00:00:00Z", "--initial-recorded-at", "2026-08-20T00:01:00Z", "--initial-secret-input", privatePath, "--key-file", keyPath)
 	if code != 0 || stderr != "" || strings.Contains(stdout+stderr, canary) {
 		t.Fatalf("sealed add code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -535,8 +534,11 @@ func TestForecastSealRevealAndKeyHintCommands(t *testing.T) {
 	if err := os.WriteFile(path, fixtureBytes(t, "individual-ledger.json"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	input := `{"forecasted_at":"2026-08-25T09:00:00+01:00","recorded_at":"2026-08-25T09:01:00+01:00","value":{"kind":"multiple_choice","probabilities":[{"option_id":"centre-left","probability_bp":5000},{"option_id":"centre-right","probability_bp":3500},{"option_id":"other","probability_bp":1500}]},"rationale":"` + canary + `","key_factors":[],"comment":"private","supersedes_forecast_id":"f-election-coalition-001"}`
-	code, stdout, stderr := runCLIWithStdin(input, "forecast-ledger", "--json", "forecast", "seal", "--file", path, "--question", "q-election-coalition", "--forecast", "f-election-coalition-002", "--input", "-", "--key-file", keyPath)
+	privatePath := filepath.Join(directory, "f-election-coalition-002.private.json")
+	if err := storage.CreateProtectedFile(privatePath, []byte(`{"value":{"kind":"multiple_choice","probabilities":[{"option_id":"centre-left","probability_bp":5000},{"option_id":"centre-right","probability_bp":3500},{"option_id":"other","probability_bp":1500}]},"rationale":"`+canary+`","key_factors":[],"comment":"private"}`)); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := runCLI("forecast-ledger", "--json", "forecast", "seal", "--file", path, "--question", "q-election-coalition", "--forecast", "f-election-coalition-002", "--forecasted-at", "2026-08-25T09:00:00+01:00", "--recorded-at", "2026-08-25T09:01:00+01:00", "--supersedes-forecast", "f-election-coalition-001", "--secret-input", privatePath, "--key-file", keyPath)
 	if code != 0 || stderr != "" || strings.Contains(stdout+stderr, canary) || !strings.Contains(stdout, `"code":"forecast.sealed"`) {
 		t.Fatalf("forecast seal code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -609,7 +611,7 @@ func TestHelpSuggestionsCompletionAndVersionJSON(t *testing.T) {
 		if err := json.Unmarshal([]byte(stdout), &got); err != nil {
 			t.Fatal(err)
 		}
-		if got.Binary != "forecast-ledger" || got.Schema.Version != "1.2.0" {
+		if got.Binary != "forecast-ledger" || got.Schema.Version != "1.3.0" {
 			t.Fatalf("unexpected version metadata: %#v", got)
 		}
 	}
@@ -757,11 +759,10 @@ func (fn cliRoundTripper) RoundTrip(request *http.Request) (*http.Response, erro
 }
 
 func TestInitCreatesValidPublicLedgerAndSupportsDryRun(t *testing.T) {
-	input := `{"created_at":"2026-01-01T00:00:00Z","question":{"id":"q-one","title":"Will it happen?","type":"binary","resolution_criteria":"Resolve from the named source.","created_at":"2026-01-01T00:00:00Z","forecast_window":{"closes_at":"2026-12-31T00:00:00Z"},"expected_resolution_at":"2027-01-01T00:00:00Z","initial_forecast":{"id":"f-one","visibility":"public","forecasted_at":"2026-01-01T00:00:00Z","recorded_at":"2026-01-01T00:00:00Z","value":{"kind":"binary","probability_bp":5000}}}}`
 	directory := t.TempDir()
 	path := filepath.Join(directory, "ledger.json")
-	args := []string{"forecast-ledger", "--json", "init", "--file", path, "--ledger-id", "research", "--timezone", "UTC", "--forecaster-id", "andrey", "--forecaster-name", "Andrey", "--input", "-"}
-	code, stdout, stderr := runCLIWithStdin(input, args...)
+	args := []string{"forecast-ledger", "--json", "init", "--file", path, "--ledger-id", "research", "--timezone", "UTC", "--forecaster-id", "andrey", "--forecaster-name", "Andrey", "--created-at", "2026-01-01T00:00:00Z", "--question", "q-one", "--question-type", "binary", "--question-title", "Will it happen?", "--question-resolution-criteria", "Resolve from the named source.", "--question-created-at", "2026-01-01T00:00:00Z", "--question-expected-resolution-at", "2027-01-01T00:00:00Z", "--initial-forecast", "f-one", "--initial-forecasted-at", "2026-01-01T00:00:00Z", "--initial-recorded-at", "2026-01-01T00:00:00Z", "--initial-value-kind", "binary", "--initial-probability-bp", "5000"}
+	code, stdout, stderr := runCLI(args...)
 	if code != 0 || stderr != "" {
 		t.Fatalf("init code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -783,8 +784,11 @@ func TestInitCreatesValidPublicLedgerAndSupportsDryRun(t *testing.T) {
 		t.Fatalf("created ledger validation code=%d stderr=%q", code, stderr)
 	}
 	dryPath := filepath.Join(directory, "dry.yaml")
-	dryArgs := []string{"forecast-ledger", "init", "--file", dryPath, "--ledger-id", "research-two", "--timezone", "UTC", "--forecaster-id", "andrey", "--forecaster-name", "Andrey", "--input", "-", "--dry-run"}
-	code, stdout, stderr = runCLIWithStdin(input, dryArgs...)
+	dryArgs := append([]string(nil), args...)
+	dryArgs[2] = "init"
+	dryArgs = append(dryArgs[:4], append([]string{dryPath}, dryArgs[5:]...)...)
+	dryArgs = append(dryArgs, "--dry-run")
+	code, stdout, stderr = runCLI(dryArgs...)
 	if code != 0 || stderr != "" || !strings.Contains(stdout, "no files were written") {
 		t.Fatalf("dry-run code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -795,11 +799,14 @@ func TestInitCreatesValidPublicLedgerAndSupportsDryRun(t *testing.T) {
 
 func TestInitSealedCreatesProtectedKeyWithoutLeakingPrivateInput(t *testing.T) {
 	const secret = "PRIVATE-CANARY-DO-NOT-PRINT"
-	input := `{"created_at":"2026-01-01T00:00:00Z","question":{"id":"q-one","title":"Will it happen?","type":"binary","resolution_criteria":"Resolve from the named source.","created_at":"2026-01-01T00:00:00Z","forecast_window":{"closes_at":"2026-12-31T00:00:00Z"},"expected_resolution_at":"2027-01-01T00:00:00Z","initial_forecast":{"id":"f-one","visibility":"sealed","forecasted_at":"2026-01-01T00:00:00Z","recorded_at":"2026-01-01T00:00:00Z","value":{"kind":"binary","probability_bp":5000},"rationale":"` + secret + `","key_factors":[],"comment":"private"}}}`
 	directory := t.TempDir()
 	ledgerPath := filepath.Join(directory, "ledger.yaml")
 	keyPath := filepath.Join(directory, "f-one.key")
-	code, stdout, stderr := runCLIWithStdin(input, "forecast-ledger", "--json", "init", "--file", ledgerPath, "--ledger-id", "research", "--timezone", "UTC", "--forecaster-id", "andrey", "--forecaster-name", "Andrey", "--input", "-", "--key-file", keyPath)
+	privatePath := filepath.Join(directory, "f-one.private.json")
+	if err := storage.CreateProtectedFile(privatePath, []byte(`{"value":{"kind":"binary","probability_bp":5000},"rationale":"`+secret+`","key_factors":[],"comment":"private"}`)); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := runCLI("forecast-ledger", "--json", "init", "--file", ledgerPath, "--ledger-id", "research", "--timezone", "UTC", "--forecaster-id", "andrey", "--forecaster-name", "Andrey", "--created-at", "2026-01-01T00:00:00Z", "--question", "q-one", "--question-type", "binary", "--question-title", "Will it happen?", "--question-resolution-criteria", "Resolve from the named source.", "--question-created-at", "2026-01-01T00:00:00Z", "--question-expected-resolution-at", "2027-01-01T00:00:00Z", "--initial-forecast", "f-one", "--initial-visibility", "sealed", "--initial-forecasted-at", "2026-01-01T00:00:00Z", "--initial-recorded-at", "2026-01-01T00:00:00Z", "--initial-secret-input", privatePath, "--key-file", keyPath)
 	if code != 0 || stderr != "" || strings.Contains(stdout+stderr, secret) {
 		t.Fatalf("sealed init code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -825,7 +832,7 @@ func TestLedgerUpdateCommitsClosedPatchAndDryRunDoesNotWrite(t *testing.T) {
 	if err := os.WriteFile(path, raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	code, stdout, stderr := runCLIWithStdin(`{"title":"Updated ledger","description":null}`, "forecast-ledger", "--json", "ledger", "update", "--file", path, "--input", "-")
+	code, stdout, stderr := runCLI("forecast-ledger", "--json", "ledger", "update", "--file", path, "--title", "Updated ledger", "--clear-description")
 	if code != 0 || stderr != "" {
 		t.Fatalf("update code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -852,7 +859,7 @@ func TestLedgerUpdateCommitsClosedPatchAndDryRunDoesNotWrite(t *testing.T) {
 	if !strings.Contains(string(afterUpdate), `"title": "Updated ledger"`) || strings.Contains(string(afterUpdate), `"description":`) {
 		t.Fatalf("patch not applied:\n%s", afterUpdate)
 	}
-	code, stdout, stderr = runCLIWithStdin(`{"default_timezone":"UTC"}`, "forecast-ledger", "ledger", "update", "--file", path, "--input", "-", "--dry-run")
+	code, stdout, stderr = runCLI("forecast-ledger", "ledger", "update", "--file", path, "--timezone", "UTC", "--dry-run")
 	if code != 0 || stderr != "" || !strings.Contains(stdout, "no file was changed") {
 		t.Fatalf("update dry-run code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -876,7 +883,7 @@ func TestLedgerUpdateReturnsConflictWhenLedgerIsLocked(t *testing.T) {
 	}
 	defer lock.Release()
 	started := time.Now()
-	code, stdout, stderr := runCLIWithStdin(`{"title":"Blocked"}`, "forecast-ledger", "--timeout", "1m", "ledger", "update", "--file", path, "--input", "-")
+	code, stdout, stderr := runCLI("forecast-ledger", "--timeout", "1m", "ledger", "update", "--file", path, "--title", "Blocked")
 	if code != 5 || stdout != "" || !strings.Contains(stderr, "locked by another operation") {
 		t.Fatalf("locked update code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -890,11 +897,11 @@ func TestPlatformCommandsCoverMutationReadsStdinAndApproval(t *testing.T) {
 	if err := os.WriteFile(path, fixtureBytes(t, "individual-ledger.json"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	code, stdout, stderr := runCLIWithStdin(`{"name":"New platform","kind":"internal"}`, "forecast-ledger", "platform", "add", "--file", path, "--platform", "new-platform", "--input", "-")
+	code, stdout, stderr := runCLI("forecast-ledger", "platform", "add", "--file", path, "--platform", "new-platform", "--name", "New platform", "--kind", "internal")
 	if code != 0 || stderr != "" || !strings.Contains(stdout, "Platform was added") {
 		t.Fatalf("platform add code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	code, stdout, stderr = runCLIWithStdin(`{"name":"Renamed platform","url":"https://example.net/platform"}`, "forecast-ledger", "--json", "platform", "update", "--file", path, "--platform", "new-platform", "--input", "-")
+	code, stdout, stderr = runCLI("forecast-ledger", "--json", "platform", "update", "--file", path, "--platform", "new-platform", "--name", "Renamed platform", "--url", "https://example.net/platform")
 	if code != 0 || stderr != "" || !strings.Contains(stdout, `"code":"platform.updated"`) || !strings.Contains(stdout, `"name":"Renamed platform"`) {
 		t.Fatalf("platform update code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}

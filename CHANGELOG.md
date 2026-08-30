@@ -3,6 +3,22 @@
 Notable user-visible changes to Forecast Ledger CLI are recorded here. Release
 tags and downloadable files are published on GitHub Releases.
 
+## Unreleased
+
+### Changed
+
+- **Breaking:** adopt the exact Forecast Ledger schema v1.3.0 contract and
+  reject v1.2.0 before side effects. Questions now have an optional opening-only
+  forecast window; the removed closing field is rejected.
+- **Breaking:** remove the generic public CLI request-document flag and MCP
+  request wrappers. Public authoring uses leaf-local CLI flags or flattened MCP
+  properties; sealed values retain only purpose-named protected channels.
+- Accept deterministic ISO and English-month CLI date forms in the ledger or
+  init timezone. Ambiguous DST wall times require an explicit numeric offset.
+  Omitted forecast times default to one current operation observation.
+- Write every populated application-authored YAML mapping and sequence in
+  expanded block style while keeping explicit empty collections compact.
+
 ## 0.5.2 - 2026-08-30
 
 ### Changed

@@ -19,7 +19,7 @@ func TestBuildLedgerRootCapturesOneClockAndBuildsValidIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if root.SchemaVersion != "1.2.0" || root.CreatedAt != "2026-08-26T15:04:05+01:00" || root.Platforms["local"].Name != "Local" {
+	if root.SchemaVersion != "1.3.0" || root.CreatedAt != "2026-08-26T15:04:05+01:00" || root.Platforms["local"].Name != "Local" {
 		t.Fatalf("root = %#v", root)
 	}
 	if root.Questions == nil || len(root.Questions) != 0 || root.Publication != nil {
@@ -71,7 +71,6 @@ func TestInitDefaultsRecordedAtFromOperationClockNotExplicitCreatedAt(t *testing
 	input := binaryInitialQuestion()
 	questionCreated := ledger.Timestamp("2020-01-01T00:00:00Z")
 	input.CreatedAt = &questionCreated
-	input.ForecastWindow.ClosesAt = "2027-01-01T00:00:00Z"
 	input.ExpectedResolutionAt = "2027-01-02T00:00:00Z"
 	input.InitialForecast.ForecastedAt = "2026-08-26T12:00:00Z"
 	input.InitialForecast.RecordedAt = nil

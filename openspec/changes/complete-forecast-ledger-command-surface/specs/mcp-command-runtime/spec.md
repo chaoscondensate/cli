@@ -2,6 +2,11 @@
 > below record completed v0.4.0 behavior and are superseded for the next release
 > by `add-default-tsa-failover`.
 
+> Supersession note (2026-08-30): generic authoring documents, public
+> `--input`, MCP `input`/public `input_file`, v1.2.0 identity, and the old target
+> shape below are historical implementation facts. `make-authoring-direct-readable`
+> owns their v1.3.0 replacements and takes precedence.
+
 ## Purpose
 
 Defines a production MCP stdio runtime that exposes the same Forecast Ledger business operations as the CLI through closed schemas, confined roots, simple server-wide safety modes, cancellation, and secret-safe results.

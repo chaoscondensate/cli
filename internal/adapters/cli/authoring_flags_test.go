@@ -18,7 +18,7 @@ import (
 	urfavecli "github.com/urfave/cli/v3"
 )
 
-func TestAuthoringInventoryIsClassifiedAndOrdinaryInputIsOptional(t *testing.T) {
+func TestAuthoringInventoryIsClassifiedAndHasNoGenericInputFlag(t *testing.T) {
 	root := NewCommand(strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{})
 	for _, entry := range authoringInventory {
 		if entry.Path == "" || entry.Schema == "" || len(entry.Fields) == 0 {
@@ -47,16 +47,8 @@ func TestAuthoringInventoryIsClassifiedAndOrdinaryInputIsOptional(t *testing.T) 
 			continue
 		}
 		for _, flag := range command.Flags {
-			if flag.Names()[0] != "input" {
-				continue
-			}
-			stringFlag, ok := flag.(*urfavecli.StringFlag)
-			if !ok {
-				t.Errorf("%s input flag has unexpected type %T", entry.Path, flag)
-				continue
-			}
-			if !entry.Protected && stringFlag.Required {
-				t.Errorf("ordinary authoring command %s requires --input", entry.Path)
+			if flag.Names()[0] == "input" {
+				t.Errorf("authoring command %s exposes removed generic --input", entry.Path)
 			}
 		}
 	}
@@ -80,7 +72,7 @@ func TestEveryAuthoringLeafReachesDirectModeWithoutRequiredInput(t *testing.T) {
 			return []string{"--yes", "platform", "remove", "--file", path, "--platform", "missing"}
 		}},
 		{name: "question add", args: func(path, _, _ string) []string {
-			return []string{"question", "add", "--file", path, "--question", "q-one", "--type", "binary", "--title", "Question", "--resolution-criteria", "Objective result", "--closes-at", "2026-12-31T00:00:00Z", "--expected-resolution-at", "2027-01-01T00:00:00Z"}
+			return []string{"question", "add", "--file", path, "--question", "q-one", "--type", "binary", "--title", "Question", "--resolution-criteria", "Objective result", "--expected-resolution-at", "2027-01-01T00:00:00Z"}
 		}},
 		{name: "question update", args: func(path, _, _ string) []string {
 			return []string{"question", "update", "--file", path, "--question", "missing", "--title", "Updated"}
@@ -110,7 +102,7 @@ func TestEveryAuthoringLeafReachesDirectModeWithoutRequiredInput(t *testing.T) {
 
 	initPath := filepath.Join(t.TempDir(), "direct-init.json")
 	code, _, stderr := runCLI("forecast-ledger", "init", "--file", initPath, "--ledger-id", "direct-init", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner")
-	if code != 0 || strings.Contains(stderr, `Required flag "input"`) {
+	if code != 0 {
 		t.Fatalf("init did not reach direct mode: code=%d stderr=%q", code, stderr)
 	}
 
@@ -130,7 +122,7 @@ func TestEveryAuthoringLeafReachesDirectModeWithoutRequiredInput(t *testing.T) {
 			args := append([]string{"forecast-ledger"}, test.args(path, privatePath, keyPath)...)
 			_, _, stderr = runCLI(args...)
 			if strings.Contains(stderr, `Required flag "input"`) {
-				t.Fatalf("authoring leaf still requires --input: %q", stderr)
+				t.Fatalf("authoring leaf refers to removed generic input: %q", stderr)
 			}
 		})
 	}
@@ -183,8 +175,8 @@ func TestDirectBuildersMatchRetainedDocumentSchemas(t *testing.T) {
 		},
 		{
 			name: "question add", flags: questionCreateFlags(true),
-			args:     []string{"--title", "Question", "--resolution-criteria", "Official result", "--created-at", "2026-08-30T00:00:00Z", "--opens-at", "2026-08-30T00:00:00Z", "--closes-at", "2026-12-31T00:00:00Z", "--expected-resolution-at", "2027-01-01T00:00:00Z", "--platform-ref", "local,q-1,https://example.com/q-1", "--tag", "topic", "--notes", "Note"},
-			document: `{"title":"Question","resolution_criteria":"Official result","created_at":"2026-08-30T00:00:00Z","forecast_window":{"opens_at":"2026-08-30T00:00:00Z","closes_at":"2026-12-31T00:00:00Z"},"expected_resolution_at":"2027-01-01T00:00:00Z","platform_refs":[{"platform":"local","question_id":"q-1","url":"https://example.com/q-1"}],"tags":["topic"],"notes":"Note"}`,
+			args:     []string{"--title", "Question", "--resolution-criteria", "Official result", "--created-at", "2026-08-30T00:00:00Z", "--opens-at", "2026-08-30T00:00:00Z", "--expected-resolution-at", "2027-01-01T00:00:00Z", "--platform-ref", "local,q-1,https://example.com/q-1", "--tag", "topic", "--notes", "Note"},
+			document: `{"title":"Question","resolution_criteria":"Official result","created_at":"2026-08-30T00:00:00Z","forecast_window":{"opens_at":"2026-08-30T00:00:00Z"},"expected_resolution_at":"2027-01-01T00:00:00Z","platform_refs":[{"platform":"local","question_id":"q-1","url":"https://example.com/q-1"}],"tags":["topic"],"notes":"Note"}`,
 			schema:   service.InputSchemaQuestionAdd, destination: &service.QuestionAddInput{},
 			build: func(command *urfavecli.Command) (any, error) {
 				return buildQuestionAddInput(context.Background(), command, strings.NewReader(""))
@@ -192,8 +184,8 @@ func TestDirectBuildersMatchRetainedDocumentSchemas(t *testing.T) {
 		},
 		{
 			name: "question update", flags: questionPatchFlags(),
-			args:     []string{"--title", "Updated", "--closes-at", "2026-11-30T00:00:00Z", "--clear-platform-refs", "--tag", "new", "--clear-notes", "--status", "closed"},
-			document: `{"title":"Updated","forecast_window":{"closes_at":"2026-11-30T00:00:00Z"},"platform_refs":null,"tags":["new"],"notes":null,"status":"closed"}`,
+			args:     []string{"--title", "Updated", "--clear-platform-refs", "--tag", "new", "--clear-notes", "--status", "closed"},
+			document: `{"title":"Updated","platform_refs":null,"tags":["new"],"notes":null,"status":"closed"}`,
 			schema:   service.InputSchemaQuestionPatch, destination: &service.QuestionPatchInput{},
 			build: func(command *urfavecli.Command) (any, error) { return buildQuestionPatchInput(command) },
 		},
@@ -261,7 +253,7 @@ func TestDirectBuildersMatchRetainedDocumentSchemas(t *testing.T) {
 			}
 			document := reflect.ValueOf(test.destination).Elem().Interface()
 			if !reflect.DeepEqual(direct, document) {
-				t.Fatalf("direct and document modes differ\ndirect:   %#v\ndocument: %#v", direct, document)
+				t.Fatalf("direct builder and typed request differ\ndirect:  %#v\nrequest: %#v", direct, document)
 			}
 		})
 	}
@@ -295,7 +287,7 @@ func TestFlagOnlyAuthoringWorkflowJSONAndYAML(t *testing.T) {
 			}
 			code, stdout, stderr = runCLI("forecast-ledger", "--json", "question", "add", "--file", path,
 				"--question", "q-launch", "--type", "binary", "--title", "Will it launch?", "--resolution-criteria", "Resolves yes on launch.",
-				"--closes-at", "2026-12-31T00:00:00Z", "--expected-resolution-at", "2027-01-01T00:00:00Z", "--platform-ref", "metaculus,q-123,https://www.metaculus.com/questions/123", "--tag", "launch")
+				"--expected-resolution-at", "2027-01-01T00:00:00Z", "--platform-ref", "metaculus,q-123,https://www.metaculus.com/questions/123", "--tag", "launch")
 			if code != 0 || stderr != "" || !strings.Contains(stdout, `"question_id":"q-launch"`) {
 				t.Fatalf("question add code=%d stdout=%q stderr=%q", code, stdout, stderr)
 			}
@@ -332,7 +324,7 @@ func TestFlagOnlyInitWithPublicInitialForecast(t *testing.T) {
 	code, stdout, stderr := runCLI("forecast-ledger", "--json", "init", "--file", path,
 		"--ledger-id", "public-init", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner",
 		"--question", "q-one", "--question-type", "binary", "--question-title", "Will it happen?", "--question-resolution-criteria", "Use the official result.",
-		"--question-closes-at", "2026-12-31T00:00:00Z", "--question-expected-resolution-at", "2027-01-01T00:00:00Z",
+		"--question-expected-resolution-at", "2027-01-01T00:00:00Z",
 		"--initial-forecast", "f-one", "--initial-forecasted-at", "2026-09-01T00:00:00Z", "--initial-recorded-at", "2026-09-01T00:01:00Z",
 		"--initial-value-kind", "binary", "--initial-probability-bp", "6000", "--initial-rationale", "Public rationale")
 	if code != 0 || stderr != "" || !strings.Contains(stdout, `"question_count":1`) {
@@ -369,7 +361,7 @@ func TestFlagOnlyQuestionAndForecastVariants(t *testing.T) {
 				t.Fatalf("init code=%d stderr=%q", code, stderr)
 			}
 			questionID := "q-" + test.questionType
-			args := []string{"forecast-ledger", "question", "add", "--file", path, "--question", questionID, "--type", test.questionType, "--title", "Variant question", "--resolution-criteria", "Objective criterion", "--closes-at", "2026-12-31T00:00:00Z", "--expected-resolution-at", "2027-01-01T00:00:00Z"}
+			args := []string{"forecast-ledger", "question", "add", "--file", path, "--question", questionID, "--type", test.questionType, "--title", "Variant question", "--resolution-criteria", "Objective criterion", "--expected-resolution-at", "2027-01-01T00:00:00Z"}
 			args = append(args, test.questionArgs...)
 			code, _, stderr = runCLI(args...)
 			if code != 0 {
@@ -385,7 +377,7 @@ func TestFlagOnlyQuestionAndForecastVariants(t *testing.T) {
 	}
 }
 
-func TestAuthoringModesAndMissingFlagsAreActionable(t *testing.T) {
+func TestRemovedInputAndMissingFlagsAreActionable(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "ledger.json")
 	code, _, stderr := runCLI("forecast-ledger", "init", "--file", path, "--ledger-id", "modes", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner")
 	if code != 0 {
@@ -396,8 +388,8 @@ func TestAuthoringModesAndMissingFlagsAreActionable(t *testing.T) {
 		t.Fatalf("missing flags code=%d stderr=%q", code, stderr)
 	}
 	code, _, stderr = runCLIWithStdin(`{"name":"Metaculus","kind":"scoring_platform"}`, "forecast-ledger", "platform", "add", "--file", path, "--platform", "metaculus", "--input", "-", "--name", "override")
-	if code != 2 || !strings.Contains(stderr, "--input cannot be combined") {
-		t.Fatalf("mixed mode code=%d stderr=%q", code, stderr)
+	if code != 2 || !strings.Contains(stderr, "flag provided but not defined") {
+		t.Fatalf("removed input flag code=%d stderr=%q", code, stderr)
 	}
 	code, _, stderr = runCLI("forecast-ledger", "init", "--file", filepath.Join(t.TempDir(), "dangling.json"), "--ledger-id", "dangling", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner", "--initial-value-kind", "binary")
 	if code != 2 || !strings.Contains(stderr, "--initial-value-kind requires --question") {
@@ -407,7 +399,7 @@ func TestAuthoringModesAndMissingFlagsAreActionable(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("platform setup code=%d stderr=%q", code, stderr)
 	}
-	code, _, stderr = runCLI("forecast-ledger", "question", "add", "--file", path, "--question", "q-dangling", "--type", "binary", "--title", "Question", "--resolution-criteria", "Result", "--closes-at", "2026-12-31T00:00:00Z", "--expected-resolution-at", "2027-01-01T00:00:00Z", "--initial-value-kind", "binary")
+	code, _, stderr = runCLI("forecast-ledger", "question", "add", "--file", path, "--question", "q-dangling", "--type", "binary", "--title", "Question", "--resolution-criteria", "Result", "--expected-resolution-at", "2027-01-01T00:00:00Z", "--initial-value-kind", "binary")
 	if code != 2 || !strings.Contains(stderr, "--initial-value-kind requires --initial-forecast") {
 		t.Fatalf("dangling question flag code=%d stderr=%q", code, stderr)
 	}
@@ -421,7 +413,7 @@ func TestFlagOnlyLifecycleAndProtectedSeal(t *testing.T) {
 		t.Fatalf("init code=%d stderr=%q", code, stderr)
 	}
 	code, _, stderr = runCLI("forecast-ledger", "question", "add", "--file", path, "--question", "q-one", "--type", "binary",
-		"--title", "Will it happen?", "--resolution-criteria", "Use the official result.", "--closes-at", "2026-12-31T00:00:00Z", "--expected-resolution-at", "2027-01-02T00:00:00Z")
+		"--title", "Will it happen?", "--resolution-criteria", "Use the official result.", "--expected-resolution-at", "2027-01-02T00:00:00Z")
 	if code != 0 {
 		t.Fatalf("question add code=%d stderr=%q", code, stderr)
 	}
@@ -450,7 +442,7 @@ func TestFlagOnlyLifecycleAndProtectedSeal(t *testing.T) {
 	lifecyclePath := filepath.Join(directory, "lifecycle.json")
 	code, _, stderr = runCLI("forecast-ledger", "init", "--file", lifecyclePath, "--ledger-id", "lifecycle", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner",
 		"--question", "q-resolve", "--question-type", "binary", "--question-title", "Did it happen?", "--question-resolution-criteria", "Use the official result.",
-		"--question-closes-at", "2026-09-01T00:00:00Z", "--question-expected-resolution-at", "2026-09-02T00:00:00Z")
+		"--question-expected-resolution-at", "2026-09-02T00:00:00Z")
 	if code != 0 {
 		t.Fatalf("rich init code=%d stderr=%q", code, stderr)
 	}
@@ -473,7 +465,7 @@ func TestFlagOnlyLifecycleAndProtectedSeal(t *testing.T) {
 
 	for _, questionID := range []string{"q-annul", "q-false"} {
 		code, _, stderr = runCLI("forecast-ledger", "question", "add", "--file", lifecyclePath, "--question", questionID, "--type", "binary",
-			"--title", "Lifecycle question", "--resolution-criteria", "Use the official result.", "--closes-at", "2026-09-01T00:00:00Z", "--expected-resolution-at", "2026-09-02T00:00:00Z")
+			"--title", "Lifecycle question", "--resolution-criteria", "Use the official result.", "--expected-resolution-at", "2026-09-02T00:00:00Z")
 		if code != 0 {
 			t.Fatalf("add %s code=%d stderr=%q", questionID, code, stderr)
 		}
@@ -506,7 +498,7 @@ func TestFlagOnlySealedInitialForecast(t *testing.T) {
 	keyPath := filepath.Join(directory, "initial.key")
 	code, stdout, stderr := runCLI("forecast-ledger", "--json", "init", "--file", path, "--ledger-id", "sealed-init", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner",
 		"--question", "q-one", "--question-type", "binary", "--question-title", "Will it happen?", "--question-resolution-criteria", "Use the official result.",
-		"--question-closes-at", "2026-12-31T00:00:00Z", "--question-expected-resolution-at", "2027-01-01T00:00:00Z",
+		"--question-expected-resolution-at", "2027-01-01T00:00:00Z",
 		"--initial-forecast", "f-one", "--initial-visibility", "sealed", "--initial-forecasted-at", "2026-09-01T00:00:00Z", "--initial-recorded-at", "2026-09-01T00:01:00Z",
 		"--initial-secret-input", privatePath, "--key-file", keyPath)
 	if code != 0 || stderr != "" || !strings.Contains(stdout, `"visibility":"sealed"`) {
@@ -523,7 +515,7 @@ func TestFlagOnlySealedInitialForecast(t *testing.T) {
 	}
 	addKeyPath := filepath.Join(directory, "added.key")
 	code, stdout, stderr = runCLI("forecast-ledger", "--json", "question", "add", "--file", backlogPath, "--question", "q-added", "--type", "binary",
-		"--title", "Will it happen?", "--resolution-criteria", "Use the official result.", "--closes-at", "2026-12-31T00:00:00Z", "--expected-resolution-at", "2027-01-01T00:00:00Z",
+		"--title", "Will it happen?", "--resolution-criteria", "Use the official result.", "--expected-resolution-at", "2027-01-01T00:00:00Z",
 		"--initial-forecast", "f-added", "--initial-visibility", "sealed", "--initial-forecasted-at", "2026-09-01T00:00:00Z", "--initial-recorded-at", "2026-09-01T00:01:00Z",
 		"--initial-secret-input", privatePath, "--key-file", addKeyPath)
 	if code != 0 || stderr != "" {
@@ -557,7 +549,7 @@ func TestFlagOnlySealedInitialForecast(t *testing.T) {
 	rejectedPath := filepath.Join(directory, "rejected.json")
 	code, _, stderr = runCLI("forecast-ledger", "init", "--file", rejectedPath, "--ledger-id", "sealed-rejected", "--timezone", "UTC", "--forecaster-id", "owner", "--forecaster-name", "Owner",
 		"--question", "q-rejected", "--question-type", "binary", "--question-title", "Will it happen?", "--question-resolution-criteria", "Use the official result.",
-		"--question-closes-at", "2026-12-31T00:00:00Z", "--question-expected-resolution-at", "2027-01-01T00:00:00Z",
+		"--question-expected-resolution-at", "2027-01-01T00:00:00Z",
 		"--initial-forecast", "f-rejected", "--initial-visibility", "sealed", "--initial-forecasted-at", "2026-09-01T00:00:00Z",
 		"--initial-secret-input", privatePath, "--initial-rationale", "must-not-enter-argv", "--key-file", filepath.Join(directory, "rejected.key"))
 	if code != 2 || !strings.Contains(stderr, "put private values in --initial-secret-input") {

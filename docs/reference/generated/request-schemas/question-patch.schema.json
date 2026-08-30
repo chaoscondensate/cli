@@ -3,12 +3,12 @@
     "forecastWindowPatchInput": {
       "additionalProperties": false,
       "properties": {
-        "closes_at": {
+        "opens_at": {
           "$ref": "#/$defs/timestamp"
         }
       },
       "required": [
-        "closes_at"
+        "opens_at"
       ],
       "type": "object"
     },
