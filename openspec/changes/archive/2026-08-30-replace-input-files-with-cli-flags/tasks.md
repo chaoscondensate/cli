@@ -74,5 +74,5 @@
 - [x] 9.1 Run focused CLI, service-parity, presentation, source-preservation, atomic-write, and secret-boundary tests while implementing each command group.
 - [x] 9.2 Run `gofmt -w cmd internal`, `go mod verify`, `go test ./...`, and `go vet ./...` with the repository's selected toolchain.
 - [x] 9.3 Run `go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...` and record any environment-only limitation separately from product failures.
-- [ ] 9.4 Verify native command parsing and filesystem behavior on macOS, Linux, and Windows rather than treating cross-builds as runtime evidence.
+- [x] 9.4 Verify native command parsing and filesystem behavior on macOS, Linux, and Windows rather than treating cross-builds as runtime evidence.
 - [x] 9.5 Perform a final command-surface inventory diff against the registered CLI tree and do not complete the change until every ordinary authoring field has a tested direct route and no public documentation teaches an input-file-only happy path.

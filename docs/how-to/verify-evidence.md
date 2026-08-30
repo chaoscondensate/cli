@@ -1,7 +1,7 @@
 # Verify ledger evidence
 
 <!-- doc-metadata
-coverage: v0.5.1
+coverage: v0.5.2
 reviewed: 2026-08-30
 owner: security
 generated: false

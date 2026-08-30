@@ -36,7 +36,7 @@ that the corresponding document or test has been implemented.
 
 ## Implementation inventory
 
-This inventory was checked against release `v0.5.1` source.
+This inventory was checked against release `v0.5.2` source.
 
 ### Working CLI surface
 
@@ -106,7 +106,7 @@ GoReleaser builds six `CGO_ENABLED=0` archives:
 - Linux arm64 and x86-64 as `.tar.gz`; and
 - Windows arm64 and x86-64 as `.zip`.
 
-Release `v0.5.1` contains those six archives and eight native Linux packages:
+Release `v0.5.2` contains those six archives and eight native Linux packages:
 `deb`, `rpm`, `apk`, and Arch Linux packages for arm64 and x86-64. Each package
 installs the binary in `/usr/bin` and the Apache-2.0 license in
 `/usr/share/licenses/forecast-ledger`. The main checksum manifest covers the
@@ -205,7 +205,7 @@ The maintained maturity labels have these meanings:
 | Deprecated | The behavior still works for a stated period but has a documented replacement and removal version. |
 | Unsupported | The behavior is outside the maintained contract and must not be presented as working. |
 
-Release `v0.5.1` is **Preview**. A stable SemVer tag identifies a
+Release `v0.5.2` is **Preview**. A stable SemVer tag identifies a
 reproducible release; it does not promote unfinished commands or unaudited
 components to the Stable product maturity label.
 
@@ -234,7 +234,7 @@ time, or substantive outcome-source correctness.
 ### Maturity, audit, and limitations
 
 - The approved public status currently visible in README is **Preview**. The
-  `v0.5.1` is published through the explicit release workflow; version
+  `v0.5.2` is published through the explicit release workflow; version
   stability does not imply feature completeness or audit.
 - No independent security or cryptographic audit is recorded. A pinned
   `govulncheck` run reported no reachable dependency vulnerability on

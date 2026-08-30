@@ -1,7 +1,7 @@
 # Build and check forecast targets
 
 <!-- doc-metadata
-coverage: v0.5.1
+coverage: v0.5.2
 reviewed: 2026-08-30
 owner: interface
 generated: false
