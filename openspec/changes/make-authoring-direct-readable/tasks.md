@@ -68,6 +68,6 @@
 - [x] 8.1 Regenerate checked-in help, completion, MCP schemas, request-schema references, and other derived artifacts; verify generation is clean and deterministic on a second run.
 - [x] 8.2 Run focused CLI/MCP parity, secret-redaction, source-preservation, YAML style, timestamp normalization/default, and contract-audit tests with negative cases and race-safe fixed clocks.
 - [x] 8.3 Run the exact v1.3.0 schema, format, semantic, upstream conformance, target, seal, and publication identity suites fully offline and verify no build/runtime path resolves a remote schema or floating tag.
-- [ ] 8.4 Exercise native YAML file creation and mutation behavior on macOS, Linux, and Windows, including LF/CRLF preservation, atomic replacement, locks, protected secret paths, and interrupt recovery where affected.
+- [x] 8.4 Exercise native YAML file creation and mutation behavior on macOS, Linux, and Windows, including LF/CRLF preservation, atomic replacement, locks, protected secret paths, and interrupt recovery where affected.
 - [x] 8.5 Run `gofmt -w cmd internal tools`, `go mod verify`, `go test ./...`, `go vet ./...`, and `go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...`; record any environment-limited native checks explicitly.
 - [x] 8.6 Perform a final documentation-impact and repository search review proving active code/current guidance identify only the exact v1.3.0 contract, contain no generic public input mode, expose every public authoring field directly, and render every generated populated YAML structure in readable block style.
