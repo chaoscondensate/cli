@@ -8,9 +8,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/buildinfo"
-	"github.com/chaoscondensate/cli/internal/service"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/buildinfo"
+	"github.com/chaoscondensate/forecast-ledger/internal/service"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

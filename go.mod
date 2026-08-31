@@ -1,4 +1,4 @@
-module github.com/chaoscondensate/cli
+module github.com/chaoscondensate/forecast-ledger
 
 go 1.27.0
 

@@ -3,7 +3,7 @@ package service
 import (
 	"testing"
 
-	"github.com/chaoscondensate/cli/internal/ledger"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
 )
 
 func TestDefaultForecastTimesUsesOneObservedValue(t *testing.T) {

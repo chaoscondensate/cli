@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	canonicalRepository = "https://github.com/chaoscondensate/cli"
+	canonicalRepository = "https://github.com/chaoscondensate/forecast-ledger"
 	approvedLicense     = "Apache-2.0"
 	approvedGivenName   = "Andrey"
 	approvedFamilyName  = "Korchak"

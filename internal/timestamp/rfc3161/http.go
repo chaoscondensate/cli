@@ -15,7 +15,7 @@ import (
 
 	tspclient "github.com/notaryproject/tspclient-go"
 
-	"github.com/chaoscondensate/cli/internal/netpolicy"
+	"github.com/chaoscondensate/forecast-ledger/internal/netpolicy"
 )
 
 const DefaultHTTPTimeout = 15 * time.Second

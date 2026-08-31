@@ -1,6 +1,6 @@
 package service
 
-import "github.com/chaoscondensate/cli/internal/ledger"
+import "github.com/chaoscondensate/forecast-ledger/internal/ledger"
 
 type InitResult struct {
 	LedgerID        ledger.Slug               `json:"ledger_id"`

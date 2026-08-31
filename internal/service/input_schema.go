@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	ledgerschema "github.com/chaoscondensate/cli/internal/schema"
+	ledgerschema "github.com/chaoscondensate/forecast-ledger/internal/schema"
 )
 
 // InputSchemaName identifies one closed operation request contract. Version 1

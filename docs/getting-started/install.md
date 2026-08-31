@@ -1,7 +1,7 @@
 # Install Forecast Ledger CLI
 
 <!-- doc-metadata
-coverage: v0.7.0
+coverage: v0.8.0
 reviewed: 2026-08-31
 owner: release
 generated: false
@@ -14,10 +14,10 @@ Forecast Ledger CLI ships portable archives for macOS, Linux, and Windows on
 x86-64 and ARM64. It also ships native Linux packages and a Windows x86-64
 Chocolatey package.
 
-Release `v0.7.0` provides Homebrew, platform archives, native Linux packages,
+Release `v0.8.0` provides Homebrew, platform archives, native Linux packages,
 and the Windows x86-64 Chocolatey package described here. Always check the asset
 list on the selected
-[GitHub Release](https://github.com/chaoscondensate/cli/releases).
+[GitHub Release](https://github.com/chaoscondensate/forecast-ledger/releases).
 
 ## Choose an asset
 
@@ -32,7 +32,7 @@ list on the selected
 | Windows | ARM64 | `windows_arm64.zip` |
 
 Use the package name shown on the release page. In commands below, replace
-`VERSION` with the release version without the leading `v`, such as `0.7.0`.
+`VERSION` with the release version without the leading `v`, such as `0.8.0`.
 
 ## Verify a download
 

@@ -6,11 +6,11 @@ and private matters remain private.
 
 | Need | Where to go | What to include |
 | --- | --- | --- |
-| Usage or installation question | [Forecast Ledger CLI GitHub Issues](https://github.com/chaoscondensate/cli/issues) | Version output, operating system, installation method, command, and a synthetic example |
-| Reproducible CLI or MCP bug | [Forecast Ledger CLI GitHub Issues](https://github.com/chaoscondensate/cli/issues) | Expected and actual behavior, redacted steps, diagnostics, version, platform, and architecture |
-| Documentation problem | [Forecast Ledger CLI GitHub Issues](https://github.com/chaoscondensate/cli/issues) | Page, incorrect or missing information, and suggested result |
-| Feature proposal | [Forecast Ledger CLI GitHub Issues](https://github.com/chaoscondensate/cli/issues) | User problem, proposed outcome, alternatives, and compatibility impact |
-| Suspected vulnerability | [Private vulnerability report](https://github.com/chaoscondensate/cli/security/advisories/new) | Follow [`SECURITY.md`](SECURITY.md); never use a public issue for details |
+| Usage or installation question | [Forecast Ledger CLI GitHub Issues](https://github.com/chaoscondensate/forecast-ledger/issues) | Version output, operating system, installation method, command, and a synthetic example |
+| Reproducible CLI or MCP bug | [Forecast Ledger CLI GitHub Issues](https://github.com/chaoscondensate/forecast-ledger/issues) | Expected and actual behavior, redacted steps, diagnostics, version, platform, and architecture |
+| Documentation problem | [Forecast Ledger CLI GitHub Issues](https://github.com/chaoscondensate/forecast-ledger/issues) | Page, incorrect or missing information, and suggested result |
+| Feature proposal | [Forecast Ledger CLI GitHub Issues](https://github.com/chaoscondensate/forecast-ledger/issues) | User problem, proposed outcome, alternatives, and compatibility impact |
+| Suspected vulnerability | [Private vulnerability report](https://github.com/chaoscondensate/forecast-ledger/security/advisories/new) | Follow [`SECURITY.md`](SECURITY.md); never use a public issue for details |
 | Conduct incident | [andrey@chaoscondensate.com](mailto:andrey@chaoscondensate.com) | Follow [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md); report privately |
 | Forecast Ledger schema or interoperability | [Schema repository issues](https://github.com/chaoscondensate/schema/issues) | Schema version, minimal valid or invalid data, implementation, and expected interpretation |
 | Broader Chaos Condensate question | [chaoscondensate.com](https://chaoscondensate.com/) | Use the current contact route published by the broader project |

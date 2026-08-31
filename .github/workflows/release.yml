@@ -120,7 +120,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $release = gh api "repos/chaoscondensate/cli/releases/tags/$env:GITHUB_REF_NAME" | ConvertFrom-Json
+          $release = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:GITHUB_REF_NAME" | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0) {
             throw "Could not inspect the published GitHub Release."
           }
@@ -159,7 +159,7 @@ jobs:
           if ($packages.Count -ne 1) {
             throw "Expected one Chocolatey package, found $($packages.Count)."
           }
-          gh release upload $env:GITHUB_REF_NAME $packages[0].FullName --repo chaoscondensate/cli
+          gh release upload $env:GITHUB_REF_NAME $packages[0].FullName --repo $env:GITHUB_REPOSITORY
           if ($LASTEXITCODE -ne 0) {
             throw "Could not attach the Chocolatey package to the GitHub Release."
           }
@@ -178,7 +178,7 @@ jobs:
           if ($packages.Count -ne 1) {
             throw "Expected one Chocolatey package, found $($packages.Count)."
           }
-          $release = gh api "repos/chaoscondensate/cli/releases/tags/$env:GITHUB_REF_NAME" | ConvertFrom-Json
+          $release = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:GITHUB_REF_NAME" | ConvertFrom-Json
           if ($release.assets.name -notcontains $packages[0].Name) {
             throw "The Chocolatey package was not attached to the GitHub Release."
           }

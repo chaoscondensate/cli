@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/chaoscondensate/cli/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
 )
 
 type DeterministicState string

@@ -3,6 +3,19 @@
 Notable user-visible changes to Forecast Ledger CLI are recorded here. Release
 tags and downloadable files are published on GitHub Releases.
 
+## 0.8.0 - 2026-08-31
+
+### Changed
+
+- Rename the canonical repository and Go module from
+  `github.com/chaoscondensate/cli` to
+  `github.com/chaoscondensate/forecast-ledger`. The executable, CLI and MCP
+  interfaces, ledger contract, release asset names, and package tokens are
+  unchanged.
+- Use the current GitHub repository identity in release and recovery jobs
+  instead of a hard-coded repository slug, and publish package metadata and
+  Homebrew download URLs under the canonical repository name.
+
 ## 0.7.0 - 2026-08-31
 
 ### Fixed

@@ -1,7 +1,7 @@
 # Forecast Ledger CLI documentation
 
 <!-- doc-metadata
-coverage: v0.7.0
+coverage: v0.8.0
 reviewed: 2026-08-31
 owner: documentation
 generated: false
@@ -10,7 +10,7 @@ prerequisites: none
 next: getting-started/index.md
 -->
 
-This documentation covers Forecast Ledger CLI release `v0.7.0`.
+This documentation covers Forecast Ledger CLI release `v0.8.0`.
 The product is Preview and implements authoring,
 cryptographic targets and sealed forecasts, RFC 3161 timestamps,
 layered verification, standalone publication packages, and the MCP stdio
@@ -51,4 +51,4 @@ Every ledger operation requires an explicit file. RFC 3161 verification trusts
 only the CA bundle retained with the ledger; protocol support is not a
 security-audit claim.
 
-[Repository README](../README.md) · [Project repository](https://github.com/chaoscondensate/cli)
+[Repository README](../README.md) · [Project repository](https://github.com/chaoscondensate/forecast-ledger)

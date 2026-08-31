@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/service"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/service"
 )
 
 type fixedCLIClock struct{ value time.Time }

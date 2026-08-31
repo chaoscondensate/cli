@@ -6,11 +6,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/canonical"
-	"github.com/chaoscondensate/cli/internal/document"
-	"github.com/chaoscondensate/cli/internal/ledger"
-	"github.com/chaoscondensate/cli/internal/storage"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/canonical"
+	"github.com/chaoscondensate/forecast-ledger/internal/document"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
+	"github.com/chaoscondensate/forecast-ledger/internal/storage"
 )
 
 const (

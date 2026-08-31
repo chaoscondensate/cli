@@ -11,7 +11,7 @@ body:
     attributes:
       label: Page or location
       description: Link the page or name the file, heading, command help, or release asset.
-      placeholder: https://github.com/chaoscondensate/cli/blob/main/README.md#install
+      placeholder: https://github.com/chaoscondensate/forecast-ledger/blob/main/README.md#install
     validations:
       required: true
   - type: dropdown

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chaoscondensate/cli/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
 	"github.com/gofrs/flock"
 )
 

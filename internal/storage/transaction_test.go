@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/document"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/document"
 )
 
 func TestUpdateLedgerValidatesTwiceAndPreservesPresentation(t *testing.T) {

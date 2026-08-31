@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/presentation"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/presentation"
 	urfavecli "github.com/urfave/cli/v3"
 )
 

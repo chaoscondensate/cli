@@ -5,7 +5,7 @@ import (
 	"context"
 	"os"
 
-	cliadapter "github.com/chaoscondensate/cli/internal/adapters/cli"
+	cliadapter "github.com/chaoscondensate/forecast-ledger/internal/adapters/cli"
 )
 
 func main() {

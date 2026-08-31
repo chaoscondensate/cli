@@ -8,11 +8,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/ledger"
-	"github.com/chaoscondensate/cli/internal/presentation"
-	"github.com/chaoscondensate/cli/internal/publication"
-	"github.com/chaoscondensate/cli/internal/service"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
+	"github.com/chaoscondensate/forecast-ledger/internal/presentation"
+	"github.com/chaoscondensate/forecast-ledger/internal/publication"
+	"github.com/chaoscondensate/forecast-ledger/internal/service"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

@@ -6,7 +6,7 @@ import (
 	"io/fs"
 	"os"
 
-	"github.com/chaoscondensate/cli/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
 )
 
 // CreateProtectedFile exclusively creates and durably writes a secret file.

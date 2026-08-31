@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/chaoscondensate/cli/internal/canonical"
+	"github.com/chaoscondensate/forecast-ledger/internal/canonical"
 	"go.yaml.in/yaml/v3"
 )
 

@@ -80,7 +80,7 @@ fields intentionally disclosed by an earlier reveal.
 
 Do not put keys, credentials, private ledgers, or unrevealed forecast material
 in public issues. Suspected vulnerabilities belong in
-[GitHub Private Vulnerability Reporting](https://github.com/chaoscondensate/cli/security/advisories/new).
+[GitHub Private Vulnerability Reporting](https://github.com/chaoscondensate/forecast-ledger/security/advisories/new).
 Conduct reports belong at `andrey@chaoscondensate.com`.
 
 [Documentation index](../index.md)

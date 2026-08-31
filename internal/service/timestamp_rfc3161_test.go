@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/ledger"
-	contractschema "github.com/chaoscondensate/cli/internal/schema"
-	"github.com/chaoscondensate/cli/internal/timestamp/rfc3161"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
+	contractschema "github.com/chaoscondensate/forecast-ledger/internal/schema"
+	"github.com/chaoscondensate/forecast-ledger/internal/timestamp/rfc3161"
 )
 
 func TestRFC3161StampStatusVerifyMultipleTSAAndPublication(t *testing.T) {

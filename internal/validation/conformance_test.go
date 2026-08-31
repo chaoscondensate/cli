@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chaoscondensate/cli/internal/document"
-	contractschema "github.com/chaoscondensate/cli/internal/schema"
+	"github.com/chaoscondensate/forecast-ledger/internal/document"
+	contractschema "github.com/chaoscondensate/forecast-ledger/internal/schema"
 )
 
 func TestAllPinnedInvalidCasesAreRejected(t *testing.T) {

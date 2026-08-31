@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/document"
-	"github.com/chaoscondensate/cli/internal/ledger"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/document"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
 )
 
 var exactDecimalPattern = regexp.MustCompile(`^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$`)

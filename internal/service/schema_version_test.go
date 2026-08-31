@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/ledger"
-	ledgerschema "github.com/chaoscondensate/cli/internal/schema"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
+	ledgerschema "github.com/chaoscondensate/forecast-ledger/internal/schema"
 )
 
 func TestLoadRejectsMissingUnknownAndFutureSchemaVersionsFirst(t *testing.T) {

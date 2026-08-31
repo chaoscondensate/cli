@@ -1,6 +1,6 @@
 # Forecast Ledger CLI
 
-[![CI](https://github.com/chaoscondensate/cli/actions/workflows/ci.yml/badge.svg)](https://github.com/chaoscondensate/cli/actions/workflows/ci.yml)
+[![CI](https://github.com/chaoscondensate/forecast-ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/chaoscondensate/forecast-ledger/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 Create and independently check portable forecast evidence without requiring
@@ -18,7 +18,7 @@ The interoperable data contract is maintained in the
 User-visible changes are tracked in the [changelog](CHANGELOG.md).
 
 > [!IMPORTANT]
-> **Status: Preview and unaudited.** Release `v0.7.0` implements the complete
+> **Status: Preview and unaudited.** Release `v0.8.0` implements the complete
 > CLI and MCP command surface: authoring, sealed forecasts, canonical
 > targets, experimental RFC 3161 timestamp evidence, layered verification, and
 > portable publication packages. RFC 3161 support remains experimental until
@@ -68,7 +68,7 @@ brew install chaoscondensate/tap/forecast-ledger
 ### Linux packages
 
 Download the package for your architecture from
-[GitHub Releases](https://github.com/chaoscondensate/cli/releases):
+[GitHub Releases](https://github.com/chaoscondensate/forecast-ledger/releases):
 
 - Debian and Ubuntu: `.deb`
 - Fedora, RHEL, and openSUSE: `.rpm`
@@ -88,7 +88,7 @@ to GitHub Releases rather than published to the public Chocolatey repository.
 ### Release archive
 
 Download the archive for your platform from
-[GitHub Releases](https://github.com/chaoscondensate/cli/releases), verify it
+[GitHub Releases](https://github.com/chaoscondensate/forecast-ledger/releases), verify it
 against `checksums.txt`, and place `forecast-ledger` or
 `forecast-ledger.exe` on your `PATH`.
 
@@ -99,7 +99,7 @@ Official release targets are macOS, Linux, and Windows on amd64 and arm64.
 Go 1.27 or newer is required:
 
 ```sh
-git clone https://github.com/chaoscondensate/cli.git
+git clone https://github.com/chaoscondensate/forecast-ledger.git
 cd cli
 make build
 ./dist/forecast-ledger version --json
@@ -395,7 +395,7 @@ AI coding agents should read [AGENTS.md](AGENTS.md) before changing behavior.
 
 Issues and focused pull requests are welcome. Read the
 [contribution guide](CONTRIBUTING.md) before changing behavior. Please use
-[GitHub Issues](https://github.com/chaoscondensate/cli/issues) for bugs, feature
+[GitHub Issues](https://github.com/chaoscondensate/forecast-ledger/issues) for bugs, feature
 proposals, documentation gaps, and release problems. For security-sensitive
 reports, do not publish secrets, private ledgers, or unrevealed forecast material
 in an issue. Use the [security policy](SECURITY.md) to report a suspected

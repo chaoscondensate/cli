@@ -15,13 +15,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/buildinfo"
-	"github.com/chaoscondensate/cli/internal/document"
-	contractschema "github.com/chaoscondensate/cli/internal/schema"
-	"github.com/chaoscondensate/cli/internal/service"
-	"github.com/chaoscondensate/cli/internal/storage"
-	"github.com/chaoscondensate/cli/internal/timestamp/rfc3161"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/buildinfo"
+	"github.com/chaoscondensate/forecast-ledger/internal/document"
+	contractschema "github.com/chaoscondensate/forecast-ledger/internal/schema"
+	"github.com/chaoscondensate/forecast-ledger/internal/service"
+	"github.com/chaoscondensate/forecast-ledger/internal/storage"
+	"github.com/chaoscondensate/forecast-ledger/internal/timestamp/rfc3161"
 	urfavecli "github.com/urfave/cli/v3"
 )
 

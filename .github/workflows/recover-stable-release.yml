@@ -43,7 +43,7 @@ jobs:
             echo "Recovery requires an annotated tag." >&2
             exit 1
           fi
-          latest_tag="$(gh api repos/chaoscondensate/cli/releases/latest --jq '.tag_name')"
+          latest_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')"
           if [[ "$RECOVERY_TAG" != "$latest_tag" ]]; then
             echo "$RECOVERY_TAG is not the current latest stable release ($latest_tag)." >&2
             exit 1
@@ -90,7 +90,7 @@ jobs:
         run: |
           mkdir -p dist/published
           gh release download "$RECOVERY_TAG" \
-            --repo chaoscondensate/cli \
+            --repo "$GITHUB_REPOSITORY" \
             --pattern checksums.txt \
             --dir dist/published
 
@@ -190,23 +190,23 @@ jobs:
             $_ -match "^[0-9a-fA-F]{64}\s+$escapedArchiveName$"
           })
           $publishedChecksum = ($checksumLine[0] -split '\s+')[0].ToLowerInvariant()
-          $release = gh api "repos/chaoscondensate/cli/releases/tags/$env:RECOVERY_TAG" | ConvertFrom-Json
+          $release = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:RECOVERY_TAG" | ConvertFrom-Json
           $asset = @($release.assets | Where-Object name -eq $package.Name)
           if ($asset.Count -eq 0) {
-            gh release upload $env:RECOVERY_TAG $package.FullName --repo chaoscondensate/cli
+            gh release upload $env:RECOVERY_TAG $package.FullName --repo $env:GITHUB_REPOSITORY
             if ($LASTEXITCODE -ne 0) {
               throw "Could not attach the Chocolatey package to the GitHub Release."
             }
           } elseif ($asset.Count -eq 1) {
             New-Item -ItemType Directory -Force dist/current-chocolatey | Out-Null
-            gh release download $env:RECOVERY_TAG --repo chaoscondensate/cli --pattern $package.Name --dir dist/current-chocolatey
+            gh release download $env:RECOVERY_TAG --repo $env:GITHUB_REPOSITORY --pattern $package.Name --dir dist/current-chocolatey
             if ($LASTEXITCODE -ne 0) {
               throw "Could not download the current Chocolatey package."
             }
             $currentPackage = @(Get-ChildItem -Path dist/current-chocolatey -Filter *.nupkg)[0]
             $currentChecksum = Get-PackageChecksum $currentPackage.FullName current-chocolatey-inspect
             if ($currentChecksum -ne $publishedChecksum -or -not (Test-PackageLayout $currentPackage.FullName)) {
-              gh release upload $env:RECOVERY_TAG $package.FullName --repo chaoscondensate/cli --clobber
+              gh release upload $env:RECOVERY_TAG $package.FullName --repo $env:GITHUB_REPOSITORY --clobber
               if ($LASTEXITCODE -ne 0) {
                 throw "Could not replace the invalid Chocolatey package."
               }
@@ -215,7 +215,7 @@ jobs:
             throw "The GitHub Release contains more than one matching Chocolatey package."
           }
           New-Item -ItemType Directory -Force dist/published-chocolatey | Out-Null
-          gh release download $env:RECOVERY_TAG --repo chaoscondensate/cli --pattern $package.Name --dir dist/published-chocolatey
+          gh release download $env:RECOVERY_TAG --repo $env:GITHUB_REPOSITORY --pattern $package.Name --dir dist/published-chocolatey
           if ($LASTEXITCODE -ne 0) {
             throw "Could not download the published Chocolatey package."
           }

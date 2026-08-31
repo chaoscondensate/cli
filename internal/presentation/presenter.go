@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/chaoscondensate/cli/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
 	"golang.org/x/term"
 )
 

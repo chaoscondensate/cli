@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/document"
-	ledgerschema "github.com/chaoscondensate/cli/internal/schema"
-	"github.com/chaoscondensate/cli/internal/storage"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/document"
+	ledgerschema "github.com/chaoscondensate/forecast-ledger/internal/schema"
+	"github.com/chaoscondensate/forecast-ledger/internal/storage"
 )
 
 func TestLedgerTransactionRunsCompleteProspectiveValidation(t *testing.T) {

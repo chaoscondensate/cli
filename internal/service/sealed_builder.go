@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/document"
-	"github.com/chaoscondensate/cli/internal/forecastcrypto"
-	"github.com/chaoscondensate/cli/internal/ledger"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/document"
+	"github.com/chaoscondensate/forecast-ledger/internal/forecastcrypto"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
 )
 
 type SealedInitialBuild struct {

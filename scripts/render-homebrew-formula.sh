@@ -50,20 +50,20 @@ class ForecastLedger < Formula
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/chaoscondensate/cli/releases/download/$tag/forecast-ledger_${version}_darwin_arm64.tar.gz"
+      url "https://github.com/chaoscondensate/forecast-ledger/releases/download/$tag/forecast-ledger_${version}_darwin_arm64.tar.gz"
       sha256 "$darwin_arm64_sha"
     else
-      url "https://github.com/chaoscondensate/cli/releases/download/$tag/forecast-ledger_${version}_darwin_x86_64.tar.gz"
+      url "https://github.com/chaoscondensate/forecast-ledger/releases/download/$tag/forecast-ledger_${version}_darwin_x86_64.tar.gz"
       sha256 "$darwin_amd64_sha"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
-      url "https://github.com/chaoscondensate/cli/releases/download/$tag/forecast-ledger_${version}_linux_arm64.tar.gz"
+      url "https://github.com/chaoscondensate/forecast-ledger/releases/download/$tag/forecast-ledger_${version}_linux_arm64.tar.gz"
       sha256 "$linux_arm64_sha"
     else
-      url "https://github.com/chaoscondensate/cli/releases/download/$tag/forecast-ledger_${version}_linux_x86_64.tar.gz"
+      url "https://github.com/chaoscondensate/forecast-ledger/releases/download/$tag/forecast-ledger_${version}_linux_x86_64.tar.gz"
       sha256 "$linux_amd64_sha"
     end
   end

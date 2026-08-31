@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chaoscondensate/cli/internal/buildinfo"
-	"github.com/chaoscondensate/cli/internal/presentation"
-	"github.com/chaoscondensate/cli/internal/service"
-	"github.com/chaoscondensate/cli/internal/storage"
+	"github.com/chaoscondensate/forecast-ledger/internal/buildinfo"
+	"github.com/chaoscondensate/forecast-ledger/internal/presentation"
+	"github.com/chaoscondensate/forecast-ledger/internal/service"
+	"github.com/chaoscondensate/forecast-ledger/internal/storage"
 	urfavecli "github.com/urfave/cli/v3"
 )
 

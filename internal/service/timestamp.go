@@ -14,12 +14,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/document"
-	"github.com/chaoscondensate/cli/internal/ledger"
-	"github.com/chaoscondensate/cli/internal/storage"
-	"github.com/chaoscondensate/cli/internal/timestamp/rfc3161"
-	"github.com/chaoscondensate/cli/internal/validation"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/document"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
+	"github.com/chaoscondensate/forecast-ledger/internal/storage"
+	"github.com/chaoscondensate/forecast-ledger/internal/timestamp/rfc3161"
+	"github.com/chaoscondensate/forecast-ledger/internal/validation"
 )
 
 const (

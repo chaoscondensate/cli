@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/chaoscondensate/cli/internal/document"
+	"github.com/chaoscondensate/forecast-ledger/internal/document"
 )
 
 func TestWindowsMoveFileExReplacement(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/chaoscondensate/cli/internal/ledger"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
 )
 
 // Optional distinguishes an omitted patch field from an explicit JSON null.

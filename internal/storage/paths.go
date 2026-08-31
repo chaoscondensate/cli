@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/chaoscondensate/cli/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
 )

@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chaoscondensate/cli/internal/document"
-	"github.com/chaoscondensate/cli/internal/service"
+	"github.com/chaoscondensate/forecast-ledger/internal/document"
+	"github.com/chaoscondensate/forecast-ledger/internal/service"
 )
 
 var markdownLinkPattern = regexp.MustCompile(`!?\[[^\]]*\]\(([^)[:space:]]+)(?:[[:space:]]+"[^"]*")?\)`)

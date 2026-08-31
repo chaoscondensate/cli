@@ -1,8 +1,8 @@
-# Executable name review
+# Executable and repository name review
 
 <!-- doc-metadata
 coverage: development
-reviewed: 2026-08-25
+reviewed: 2026-08-31
 owner: release
 generated: false
 security-critical: false
@@ -10,12 +10,19 @@ prerequisites: ../../AGENTS.md
 next: releasing.md
 -->
 
-Reviewed: 2026-08-25
+Reviewed: 2026-08-31
 
 ## Decision
 
-The executable name is `forecast-ledger`. The Go module remains
-`github.com/chaoscondensate/cli`.
+The executable name is `forecast-ledger`. The canonical repository is
+`https://github.com/chaoscondensate/forecast-ledger`, and the Go module is
+`github.com/chaoscondensate/forecast-ledger`.
+
+The repository and module previously used the provisional `cli` slug. They were
+renamed before the project had active users or public Go package consumers, so
+the project does not maintain a compatibility module at the old path. The old
+repository name must not be reused because doing so would break GitHub's rename
+redirects.
 
 The provisional name `chaos` was rejected because two active projects install
 that exact command. [Chaos Toolkit](https://chaostoolkit.org/reference/usage/install/)

@@ -4,7 +4,7 @@ $output = if ($env:OUTPUT) { $env:OUTPUT } else { "dist/forecast-ledger.exe" }
 $outputDirectory = Split-Path -Parent $output
 $version = if ($env:VERSION) { $env:VERSION } else { "dev" }
 $sourceRevision = if ($env:SOURCE_REVISION) { $env:SOURCE_REVISION } else { "unknown" }
-$ldflags = "-X github.com/chaoscondensate/cli/internal/buildinfo.version=$version -X github.com/chaoscondensate/cli/internal/buildinfo.sourceRevision=$sourceRevision"
+$ldflags = "-X github.com/chaoscondensate/forecast-ledger/internal/buildinfo.version=$version -X github.com/chaoscondensate/forecast-ledger/internal/buildinfo.sourceRevision=$sourceRevision"
 
 if ($outputDirectory) {
     New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null

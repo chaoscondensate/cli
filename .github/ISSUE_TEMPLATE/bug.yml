@@ -7,7 +7,7 @@ body:
       value: |
         Thanks for helping improve Forecast Ledger CLI.
 
-        Do not include protected keys, credentials, salts, private ledgers, unrevealed forecasts, personal data, or proprietary material. Use a minimal synthetic ledger and redact local paths. Report suspected vulnerabilities through [GitHub Private Vulnerability Reporting](https://github.com/chaoscondensate/cli/security/advisories/new), not this public form.
+        Do not include protected keys, credentials, salts, private ledgers, unrevealed forecasts, personal data, or proprietary material. Use a minimal synthetic ledger and redact local paths. Report suspected vulnerabilities through [GitHub Private Vulnerability Reporting](https://github.com/chaoscondensate/forecast-ledger/security/advisories/new), not this public form.
   - type: input
     id: version_output
     attributes:

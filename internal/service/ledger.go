@@ -12,12 +12,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/document"
-	"github.com/chaoscondensate/cli/internal/ledger"
-	ledgerschema "github.com/chaoscondensate/cli/internal/schema"
-	"github.com/chaoscondensate/cli/internal/storage"
-	"github.com/chaoscondensate/cli/internal/validation"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/document"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
+	ledgerschema "github.com/chaoscondensate/forecast-ledger/internal/schema"
+	"github.com/chaoscondensate/forecast-ledger/internal/storage"
+	"github.com/chaoscondensate/forecast-ledger/internal/validation"
 )
 
 type LoadedLedger struct {

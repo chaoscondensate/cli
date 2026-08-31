@@ -3,7 +3,7 @@ package service
 import (
 	"fmt"
 
-	"github.com/chaoscondensate/cli/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
 )
 
 // OutcomeState is the closed transport-neutral state of a completed operation.

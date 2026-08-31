@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/ledger"
-	"github.com/chaoscondensate/cli/internal/service"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
+	"github.com/chaoscondensate/forecast-ledger/internal/service"
 	urfavecli "github.com/urfave/cli/v3"
 )
 

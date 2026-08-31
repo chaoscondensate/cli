@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/chaoscondensate/cli/internal/canonical"
-	"github.com/chaoscondensate/cli/internal/document"
-	"github.com/chaoscondensate/cli/internal/ledger"
+	"github.com/chaoscondensate/forecast-ledger/internal/canonical"
+	"github.com/chaoscondensate/forecast-ledger/internal/document"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
 	"golang.org/x/crypto/chacha20poly1305"
 )
 

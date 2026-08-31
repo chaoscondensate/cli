@@ -11,8 +11,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/chaoscondensate/cli/internal/ledger"
-	contractschema "github.com/chaoscondensate/cli/internal/schema"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
+	contractschema "github.com/chaoscondensate/forecast-ledger/internal/schema"
 )
 
 type vectorEntropy struct{ reader io.Reader }

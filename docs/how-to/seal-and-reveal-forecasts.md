@@ -1,7 +1,7 @@
 # Seal and reveal forecasts
 
 <!-- doc-metadata
-coverage: v0.7.0
+coverage: v0.8.0
 reviewed: 2026-08-30
 owner: interface
 generated: false

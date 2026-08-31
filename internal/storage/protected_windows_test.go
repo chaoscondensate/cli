@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/chaoscondensate/cli/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
 )
 
 func TestCreateProtectedFileIsExclusiveAndOwnerOnlyWindows(t *testing.T) {

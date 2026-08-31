@@ -6,9 +6,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/service"
-	"github.com/chaoscondensate/cli/internal/storage"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/service"
+	"github.com/chaoscondensate/forecast-ledger/internal/storage"
 )
 
 // RootSpec uses explicit name=path syntax so tool calls never depend on root

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chaoscondensate/cli/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
 	urfavecli "github.com/urfave/cli/v3"
 	"golang.org/x/term"
 )

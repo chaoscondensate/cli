@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/ledger"
-	"github.com/chaoscondensate/cli/internal/storage"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
+	"github.com/chaoscondensate/forecast-ledger/internal/storage"
 )
 
 func TestCommitNewLedgerCreatesExclusiveJSONAndYAML(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/chaoscondensate/cli/internal/ledger"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
 )
 
 // OperationName is the stable public identifier of an application action.

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	contractschema "github.com/chaoscondensate/cli/internal/schema"
+	contractschema "github.com/chaoscondensate/forecast-ledger/internal/schema"
 	"github.com/dlclark/regexp2"
 	jsonschema "github.com/santhosh-tekuri/jsonschema/v6"
 )

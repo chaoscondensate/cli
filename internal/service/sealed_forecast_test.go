@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/forecastcrypto"
-	"github.com/chaoscondensate/cli/internal/ledger"
-	contractschema "github.com/chaoscondensate/cli/internal/schema"
-	"github.com/chaoscondensate/cli/internal/storage"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/forecastcrypto"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
+	contractschema "github.com/chaoscondensate/forecast-ledger/internal/schema"
+	"github.com/chaoscondensate/forecast-ledger/internal/storage"
 )
 
 func TestForecastSealRevealAndKeyHintLifecycle(t *testing.T) {

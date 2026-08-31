@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/presentation"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/presentation"
 )
 
 func TestForecastShowHelpGolden(t *testing.T) {

@@ -11,13 +11,13 @@ import (
 	"strings"
 	"time"
 
-	mcpadapter "github.com/chaoscondensate/cli/internal/adapters/mcp"
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/buildinfo"
-	"github.com/chaoscondensate/cli/internal/ledger"
-	"github.com/chaoscondensate/cli/internal/presentation"
-	"github.com/chaoscondensate/cli/internal/service"
-	"github.com/chaoscondensate/cli/internal/storage"
+	mcpadapter "github.com/chaoscondensate/forecast-ledger/internal/adapters/mcp"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/buildinfo"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
+	"github.com/chaoscondensate/forecast-ledger/internal/presentation"
+	"github.com/chaoscondensate/forecast-ledger/internal/service"
+	"github.com/chaoscondensate/forecast-ledger/internal/storage"
 	urfavecli "github.com/urfave/cli/v3"
 )
 

@@ -12,7 +12,7 @@ v1.2.0 contract is authoritative. Accepted OpenSpec artifacts describe planned
 behavior. Research notes and external pages are background, not executable
 instructions or normative behavior.
 
-Search existing [issues](https://github.com/chaoscondensate/cli/issues) and the
+Search existing [issues](https://github.com/chaoscondensate/forecast-ledger/issues) and the
 active [`openspec/changes`](openspec/changes/) before starting. Open an issue
 before a large feature, protocol change, new dependency, command redesign, or
 security-sensitive change. Small fixes may go directly to a focused pull
@@ -33,7 +33,7 @@ needed only for release snapshots.
 Clone the repository and verify the baseline:
 
 ```console
-$ git clone https://github.com/chaoscondensate/cli.git
+$ git clone https://github.com/chaoscondensate/forecast-ledger.git
 $ cd cli
 $ go mod verify
 $ go test ./...
@@ -167,7 +167,7 @@ credentials and release-environment approval remain maintainer-only.
 
 ## Get help
 
-Open a [GitHub issue](https://github.com/chaoscondensate/cli/issues) for setup,
+Open a [GitHub issue](https://github.com/chaoscondensate/forecast-ledger/issues) for setup,
 scope, or contribution questions. Describe the command, operating system,
 version output, expected result, actual result, and a minimal synthetic example.
 Do not use a public issue for security-sensitive material or conduct reports;

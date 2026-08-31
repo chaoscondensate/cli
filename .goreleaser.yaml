@@ -18,8 +18,8 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
-      - -X github.com/chaoscondensate/cli/internal/buildinfo.version={{ .Version }}
-      - -X github.com/chaoscondensate/cli/internal/buildinfo.sourceRevision={{ .Commit }}
+      - -X github.com/chaoscondensate/forecast-ledger/internal/buildinfo.version={{ .Version }}
+      - -X github.com/chaoscondensate/forecast-ledger/internal/buildinfo.sourceRevision={{ .Commit }}
     mod_timestamp: "{{ .CommitTimestamp }}"
     goos:
       - darwin
@@ -77,24 +77,24 @@ chocolateys:
   - name: forecast-ledger
     ids:
       - forecast-ledger
-    package_source_url: https://github.com/chaoscondensate/cli
+    package_source_url: https://github.com/chaoscondensate/forecast-ledger
     owners: Chaos Condensate contributors
     title: Forecast Ledger CLI
     authors: Andrey Korchak
-    project_url: https://github.com/chaoscondensate/cli
-    url_template: "https://github.com/chaoscondensate/cli/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    project_url: https://github.com/chaoscondensate/forecast-ledger
+    url_template: "https://github.com/chaoscondensate/forecast-ledger/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
     copyright: Copyright 2026 Chaos Condensate contributors
-    license_url: https://github.com/chaoscondensate/cli/blob/main/LICENSE
+    license_url: https://github.com/chaoscondensate/forecast-ledger/blob/main/LICENSE
     require_license_acceptance: false
-    project_source_url: https://github.com/chaoscondensate/cli
-    docs_url: https://github.com/chaoscondensate/cli#readme
-    bug_tracker_url: https://github.com/chaoscondensate/cli/issues
+    project_source_url: https://github.com/chaoscondensate/forecast-ledger
+    docs_url: https://github.com/chaoscondensate/forecast-ledger#readme
+    bug_tracker_url: https://github.com/chaoscondensate/forecast-ledger/issues
     tags: forecasting forecast-ledger cli mcp
     summary: Create and independently check portable forecast evidence.
     description: |
       Forecast Ledger CLI is a local-first command-line tool and MCP server
       for portable forecast records and evidence.
-    release_notes: "https://github.com/chaoscondensate/cli/releases/tag/{{ .Tag }}"
+    release_notes: "https://github.com/chaoscondensate/forecast-ledger/releases/tag/{{ .Tag }}"
     skip_publish: true
 
 checksum:
@@ -126,7 +126,7 @@ changelog:
 release:
   github:
     owner: chaoscondensate
-    name: cli
+    name: forecast-ledger
   preflight:
     fail_on_error: true
   draft: false

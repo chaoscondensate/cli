@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.com/chaoscondensate/cli/internal/presentation"
+	"github.com/chaoscondensate/forecast-ledger/internal/presentation"
 	urfavecli "github.com/urfave/cli/v3"
 )
 

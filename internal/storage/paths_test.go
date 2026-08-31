@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/chaoscondensate/cli/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
 )
 
 func TestValidateRelativePathPortableRules(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chaoscondensate/cli/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
 )
 
 func TestDryRunRecordsAndSkipsPersistentEffect(t *testing.T) {

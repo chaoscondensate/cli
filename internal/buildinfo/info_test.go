@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	ledgerschema "github.com/chaoscondensate/cli/internal/schema"
+	ledgerschema "github.com/chaoscondensate/forecast-ledger/internal/schema"
 )
 
 func TestCurrentIncludesCompatibilityPins(t *testing.T) {

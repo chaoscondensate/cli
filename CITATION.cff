@@ -6,11 +6,11 @@ authors:
   - family-names: "Korchak"
     given-names: "Andrey"
     alias: "57uff3r"
-version: "0.7.0"
+version: "0.8.0-rc.1"
 date-released: "2026-08-31"
 license: "Apache-2.0"
-repository-code: "https://github.com/chaoscondensate/cli"
-url: "https://github.com/chaoscondensate/cli"
+repository-code: "https://github.com/chaoscondensate/forecast-ledger"
+url: "https://github.com/chaoscondensate/forecast-ledger"
 abstract: >-
   Forecast Ledger CLI is an open-source, local-first command-line tool and MCP
   server for portable forecast records and evidence. The broader project is

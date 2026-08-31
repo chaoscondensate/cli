@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chaoscondensate/cli/internal/storage"
+	"github.com/chaoscondensate/forecast-ledger/internal/storage"
 )
 
 func TestYAMLReplacementDogfoodingMatrixMatchesJSONSuccess(t *testing.T) {

@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/chaoscondensate/cli/internal/app"
-	"github.com/chaoscondensate/cli/internal/document"
-	"github.com/chaoscondensate/cli/internal/forecastcrypto"
-	"github.com/chaoscondensate/cli/internal/ledger"
+	"github.com/chaoscondensate/forecast-ledger/internal/app"
+	"github.com/chaoscondensate/forecast-ledger/internal/document"
+	"github.com/chaoscondensate/forecast-ledger/internal/forecastcrypto"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
 )
 
 var keyHintPattern = regexp.MustCompile(`^([a-z][a-z0-9+.-]*):([A-Za-z0-9._~+-]+)$`)

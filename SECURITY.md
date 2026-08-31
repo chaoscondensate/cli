@@ -15,13 +15,13 @@ development branch and shipped in the newest release line.
 | Current `main` branch | Reports accepted; not a supported end-user release |
 | Earlier releases | Unsupported; upgrade to the latest release |
 
-The [release page](https://github.com/chaoscondensate/cli/releases/latest)
+The [release page](https://github.com/chaoscondensate/forecast-ledger/releases/latest)
 identifies the latest release. Preview support does not mean that the code,
 cryptography, or evidence model has received an independent audit.
 
 ## Report a vulnerability privately
 
-Use [GitHub Private Vulnerability Reporting](https://github.com/chaoscondensate/cli/security/advisories/new).
+Use [GitHub Private Vulnerability Reporting](https://github.com/chaoscondensate/forecast-ledger/security/advisories/new).
 It creates a private draft advisory visible to the reporter and repository
 security maintainers. Do not disclose an unpatched vulnerability in a public
 issue, pull request, discussion, social post, or conduct email.
@@ -77,7 +77,7 @@ before that point. The project will not ask for indefinite secrecy; if progress
 stalls, both sides should discuss a revised date explicitly.
 
 Published repository advisories appear at
-[GitHub Security Advisories](https://github.com/chaoscondensate/cli/security/advisories).
+[GitHub Security Advisories](https://github.com/chaoscondensate/forecast-ledger/security/advisories).
 They identify affected and fixed versions, impact, mitigations, and credit when
 the reporter wants it. A CVE may be requested when the issue and ecosystem
 support it.

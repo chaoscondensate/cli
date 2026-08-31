@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/chaoscondensate/cli/internal/service"
+	"github.com/chaoscondensate/forecast-ledger/internal/service"
 )
 
 const outputRoot = "../../docs/reference/generated"

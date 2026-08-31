@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chaoscondensate/cli/internal/ledger"
-	"github.com/chaoscondensate/cli/internal/storage"
+	"github.com/chaoscondensate/forecast-ledger/internal/ledger"
+	"github.com/chaoscondensate/forecast-ledger/internal/storage"
 )
 
 func TestQuestionReplacementLifecycleHasJSONAndYAMLParity(t *testing.T) {
