@@ -115,6 +115,36 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
+      - name: Verify published release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $release = gh api "repos/chaoscondensate/cli/releases/tags/$env:GITHUB_REF_NAME" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not inspect the published GitHub Release."
+          }
+          $assets = @{}
+          foreach ($asset in $release.assets) {
+            if ($assets.ContainsKey($asset.name)) {
+              throw "The GitHub Release contains duplicate asset name $($asset.name)."
+            }
+            $assets[$asset.name] = $asset
+          }
+          foreach ($line in Get-Content dist/checksums.txt) {
+            if ($line -notmatch '^(?<digest>[0-9a-fA-F]{64})\s+(?<name>.+)$') {
+              throw "Invalid checksum entry: $line"
+            }
+            $name = $Matches.name
+            $digest = $Matches.digest.ToLowerInvariant()
+            if (-not $assets.ContainsKey($name)) {
+              throw "Published GitHub Release is missing checksummed asset $name."
+            }
+            if ($assets[$name].digest -ne "sha256:$digest") {
+              throw "Published digest does not match checksums.txt for $name."
+            }
+          }
+
       - name: Attest release artifacts
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:

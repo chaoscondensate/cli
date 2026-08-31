@@ -189,6 +189,16 @@ jobs:
           jq -e '[.[] | select(.type == "Archive")] | length == 6' dist/artifacts.json
           jq -e '[.[] | select(.type == "Linux Package")] | length == 8' dist/artifacts.json
           jq -e '[.[] | select(.type == "SBOM")] | length == 14' dist/artifacts.json
+          if grep -F '~' dist/checksums.txt; then
+            echo "Release filenames must not contain characters GitHub normalizes." >&2
+            exit 1
+          fi
+          while read -r digest name; do
+            if [[ ! -f "dist/$name" ]]; then
+              echo "Checksum entry does not name a built artifact: $name" >&2
+              exit 1
+            fi
+          done < dist/checksums.txt
 
       - name: Smoke-test Debian package
         shell: bash

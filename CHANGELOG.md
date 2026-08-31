@@ -21,6 +21,9 @@ tags and downloadable files are published on GitHub Releases.
   including CGNAT.
 - Pin `govulncheck` as a project tool and require its completed analysis before
   CI snapshots and tag releases.
+- Keep prerelease Linux package and SBOM filenames aligned with the published
+  checksum manifest, and verify published asset names and digests before
+  attestation.
 
 ## 0.6.1 - 2026-08-30
 
