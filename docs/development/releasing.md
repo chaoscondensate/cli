@@ -2,7 +2,7 @@
 
 <!-- doc-metadata
 coverage: current-main
-reviewed: 2026-08-30
+reviewed: 2026-08-31
 owner: release
 generated: false
 security-critical: true
@@ -14,6 +14,11 @@ Forecast Ledger releases use GoReleaser 2.18.0. A pushed annotated SemVer tag
 creates a GitHub Release, six cross-platform archives, eight native Linux
 packages, one Windows Chocolatey package, SHA-256 checksums, SBOMs, GitHub
 artifact attestations, and a Homebrew formula update.
+
+Before attesting a release, the workflow compares every checksum entry's name
+and digest with the published GitHub asset. Prerelease Linux package filenames
+avoid characters that GitHub normalizes during upload, so the downloaded files
+remain directly verifiable with the published checksum manifest.
 
 The release targets are:
 

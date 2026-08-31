@@ -49,7 +49,9 @@ nfpms:
     ids:
       - forecast-ledger
     package_name: forecast-ledger
-    file_name_template: "{{ .ConventionalFileName }}"
+    # GitHub normalizes `~` in uploaded asset names. Replace it before checksums
+    # are generated so prerelease package and SBOM names remain verifiable.
+    file_name_template: '{{ replace .ConventionalFileName "~" "." }}'
     vendor: Chaos Condensate
     homepage: https://chaoscondensate.com/
     maintainer: Andrey Korchak <andrey@chaoscondensate.com>
