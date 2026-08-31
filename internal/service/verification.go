@@ -3,12 +3,12 @@ package service
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -17,6 +17,7 @@ import (
 	"github.com/chaoscondensate/cli/internal/app"
 	"github.com/chaoscondensate/cli/internal/forecastcrypto"
 	"github.com/chaoscondensate/cli/internal/ledger"
+	"github.com/chaoscondensate/cli/internal/netpolicy"
 )
 
 type LayerState string
@@ -349,17 +350,68 @@ func safeVerificationError(err error) string {
 }
 
 func boundedOutcomeClient() *http.Client {
-	return &http.Client{Timeout: 20 * time.Second, CheckRedirect: func(request *http.Request, via []*http.Request) error {
+	return boundedOutcomeClientWith(net.DefaultResolver, &net.Dialer{Timeout: 20 * time.Second, KeepAlive: 30 * time.Second})
+}
+
+type outcomeResolver interface {
+	LookupIPAddr(context.Context, string) ([]net.IPAddr, error)
+}
+
+type outcomeDialer interface {
+	DialContext(context.Context, string, string) (net.Conn, error)
+}
+
+func boundedOutcomeClientWith(resolver outcomeResolver, dialer outcomeDialer) *http.Client {
+	transport := &http.Transport{
+		Proxy:               nil,
+		ForceAttemptHTTP2:   true,
+		TLSHandshakeTimeout: 20 * time.Second,
+		TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12},
+	}
+	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(address)
+		if err != nil {
+			return nil, fmt.Errorf("outcome source address is invalid")
+		}
+		addresses, err := resolver.LookupIPAddr(ctx, host)
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if err != nil || len(addresses) == 0 {
+			return nil, fmt.Errorf("outcome source host could not be resolved")
+		}
+		for _, candidate := range addresses {
+			if !netpolicy.PublicIP(candidate.IP) {
+				return nil, fmt.Errorf("outcome source host is not public")
+			}
+		}
+		var lastErr error
+		for _, candidate := range addresses {
+			connection, dialErr := dialer.DialContext(ctx, network, net.JoinHostPort(candidate.IP.String(), port))
+			if dialErr == nil {
+				return connection, nil
+			}
+			lastErr = dialErr
+		}
+		return nil, lastErr
+	}
+	return &http.Client{Transport: transport, Timeout: 20 * time.Second, CheckRedirect: func(request *http.Request, via []*http.Request) error {
 		if len(via) >= 3 {
 			return fmt.Errorf("too many redirects")
 		}
-		return validatePublicSourceURL(request.Context(), request.URL)
+		if err := validatePublicSourceURL(request.URL); err != nil {
+			return err
+		}
+		if len(via) == 0 || normalizedSourceOrigin(request.URL) != normalizedSourceOrigin(via[0].URL) {
+			return fmt.Errorf("outcome source redirect is outside the original origin")
+		}
+		return nil
 	}}
 }
 
 func fetchOutcomeSource(ctx context.Context, client *http.Client, source string) ([]byte, string, error) {
 	parsed, err := url.Parse(source)
-	if err != nil || validatePublicSourceURL(ctx, parsed) != nil {
+	if err != nil || validatePublicSourceURL(parsed) != nil {
 		return nil, "", fmt.Errorf("outcome source URL is not a safe public HTTPS URL")
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
@@ -382,19 +434,23 @@ func fetchOutcomeSource(ctx context.Context, client *http.Client, source string)
 	return data, response.Request.URL.String(), nil
 }
 
-func validatePublicSourceURL(ctx context.Context, parsed *url.URL) error {
+func validatePublicSourceURL(parsed *url.URL) error {
 	if parsed == nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" {
 		return fmt.Errorf("source URL must be public HTTPS")
 	}
-	addresses, err := net.DefaultResolver.LookupIPAddr(ctx, parsed.Hostname())
-	if err != nil || len(addresses) == 0 {
-		return fmt.Errorf("source host cannot be resolved")
-	}
-	for _, address := range addresses {
-		ip, ok := netip.AddrFromSlice(address.IP)
-		if !ok || !ip.Unmap().IsGlobalUnicast() || ip.Unmap().IsPrivate() || ip.Unmap().IsLoopback() || ip.Unmap().IsLinkLocalUnicast() {
-			return fmt.Errorf("source host is not public")
-		}
+	if parsed.Hostname() == "" {
+		return fmt.Errorf("source URL must include a host")
 	}
 	return nil
+}
+
+func normalizedSourceOrigin(parsed *url.URL) string {
+	if parsed == nil {
+		return ""
+	}
+	port := parsed.Port()
+	if port == "" {
+		port = "443"
+	}
+	return "https://" + net.JoinHostPort(strings.ToLower(parsed.Hostname()), port)
 }

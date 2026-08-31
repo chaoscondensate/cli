@@ -31,15 +31,17 @@ type RequestField struct {
 }
 
 type OperationDefinition struct {
-	Name          OperationName   `json:"operation"`
-	CLI           string          `json:"cli"`
-	MCPTool       string          `json:"mcp_tool"`
-	Selection     SelectionKind   `json:"selection"`
-	RequestSchema InputSchemaName `json:"request_schema,omitempty"`
-	RequestMode   RequestMode     `json:"request_mode"`
-	Fields        []RequestField  `json:"fields,omitempty"`
-	Policy        OperationPolicy `json:"policy"`
-	ResultNotes   string          `json:"result_notes,omitempty"`
+	Name            OperationName   `json:"operation"`
+	CLI             string          `json:"cli"`
+	MCPTool         string          `json:"mcp_tool"`
+	Selection       SelectionKind   `json:"selection"`
+	RequestSchema   InputSchemaName `json:"request_schema,omitempty"`
+	RequestMode     RequestMode     `json:"request_mode"`
+	Fields          []RequestField  `json:"fields,omitempty"`
+	Policy          OperationPolicy `json:"policy"`
+	ResultNotes     string          `json:"result_notes,omitempty"`
+	OutcomeStates   []OutcomeState  `json:"outcome_states"`
+	classifyOutcome outcomeClassifier
 }
 
 func OperationDefinitions() []OperationDefinition {
@@ -113,9 +115,14 @@ func definition(name OperationName, cli, mcp string, selection SelectionKind, re
 	if !ok {
 		panic("operation definition has no policy: " + string(name))
 	}
+	outcomes := outcomeContractFor(name)
+	if err := validateOutcomeContract(name, outcomes); err != nil {
+		panic(err)
+	}
 	return OperationDefinition{
 		Name: name, CLI: cli, MCPTool: mcp, Selection: selection,
 		RequestSchema: request, RequestMode: mode, Fields: fields, Policy: policy, ResultNotes: operationResultNotes(name),
+		OutcomeStates: append([]OutcomeState(nil), outcomes.States...), classifyOutcome: outcomes.Classify,
 	}
 }
 

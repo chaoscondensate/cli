@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"io/fs"
 	"net"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/chaoscondensate/cli/internal/app"
 	"github.com/chaoscondensate/cli/internal/buildinfo"
+	"github.com/chaoscondensate/cli/internal/document"
 	contractschema "github.com/chaoscondensate/cli/internal/schema"
 	"github.com/chaoscondensate/cli/internal/service"
 	"github.com/chaoscondensate/cli/internal/storage"
@@ -31,6 +33,43 @@ func TestProtectedArgumentErrorLabelsSelectedRole(t *testing.T) {
 	keyErr := app.NewError(app.CodeConflict, "protected key file must have mode 0600", nil)
 	if !strings.Contains(keyErr.Error(), "key file") || strings.Contains(keyErr.Error(), "--secret-input") {
 		t.Fatalf("key error = %q", keyErr)
+	}
+}
+
+func TestCLIQuestionMutationRetriesAutomaticLedgerRecovery(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, "ledger.json")
+	if err := os.WriteFile(path, fixtureBytes(t, "individual-ledger.json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	interruptValidLedgerWrite(t, path, directory)
+	code, stdout, stderr := runCLI("forecast-ledger", "--json", "question", "update", "--file", path, "--question", "q-election-coalition", "--title", "Recovered question")
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"code":"question.updated"`) {
+		t.Fatalf("retry code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if _, err := os.Stat(storage.JournalPath(path)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("CLI retry retained journal: %v", err)
+	}
+}
+
+func interruptValidLedgerWrite(t *testing.T, path, directory string) {
+	t.Helper()
+	err := storage.UpdateLedger(t.Context(), path, storage.TransactionOptions{
+		Validate: func(parsed *document.Document) error {
+			return service.ValidateLedgerDocument(parsed, os.DirFS(directory))
+		},
+		Mutate: func(parsed *document.Document) ([]byte, error) {
+			return document.ReplaceScalars(parsed, []document.ScalarEdit{{Pointer: "/title", Value: "Interrupted title"}})
+		},
+		Fault: func(stage storage.TransactionStage) error {
+			if stage == storage.StageJournalSynced {
+				return errors.New("simulated stop")
+			}
+			return nil
+		},
+	})
+	if app.ErrorCodeOf(err) != app.CodeIO {
+		t.Fatalf("interrupted write error=%v", err)
 	}
 }
 
@@ -731,6 +770,10 @@ func TestTimestampStatusOfflineFailureAndPublicationCLI(t *testing.T) {
 	})}}
 	if _, err := service.CommitTimestampStamp(t.Context(), ledgerPath, "q-election-coalition", "f-election-coalition-001", service.TimestampStampOptions{TSAURL: "https://tsa.example.test", CABundlePath: "tsa.pem", Effects: service.ProductionEffects(), HTTPClient: httpClient}); err != nil {
 		t.Fatal(err)
+	}
+	code, stdout, stderr = runCLI("forecast-ledger", "--json", "timestamp", "verify", "--file", ledgerPath, "--question", "q-election-coalition", "--forecast", "f-election-coalition-001")
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"code":"timestamp.verified"`) || !strings.Contains(stdout, `"question_id":"q-election-coalition"`) || !strings.Contains(stdout, `"verification":{`) || !strings.Contains(stdout, `"name":"existence_timing"`) || !strings.Contains(stdout, `"state":"pass"`) || strings.Contains(stdout, "TimestampArtifactResult") {
+		t.Fatalf("flat timestamp verify code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 
 	output := filepath.Join(directory, "package")

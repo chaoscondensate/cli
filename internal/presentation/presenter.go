@@ -2,12 +2,12 @@
 package presentation
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"reflect"
 	"strings"
 
 	"github.com/chaoscondensate/cli/internal/app"
@@ -99,7 +99,10 @@ func (p *Presenter) Success(code, message string, data any) error {
 	if p.mode == ModeQuiet {
 		return nil
 	}
-	redacted := Redact(data)
+	redacted, err := Redact(data)
+	if err != nil {
+		return err
+	}
 	if p.mode == ModeJSON {
 		return writeJSON(p.stdout, ResultEnvelope{OK: true, Code: code, Message: message, Data: redacted})
 	}
@@ -107,7 +110,7 @@ func (p *Presenter) Success(code, message string, data any) error {
 		_, err := fmt.Fprintf(p.stdout, "\x1b[32m%s\x1b[0m\n", message)
 		return err
 	}
-	_, err := fmt.Fprintln(p.stdout, message)
+	_, err = fmt.Fprintln(p.stdout, message)
 	return err
 }
 
@@ -118,7 +121,11 @@ func (p *Presenter) Failure(err error) error {
 	var applicationErr *app.Error
 	if errors.As(err, &applicationErr) {
 		message = applicationErr.Message
-		details, _ = Redact(applicationErr.Details).(map[string]any)
+		redacted, redactErr := Redact(applicationErr.Details)
+		if redactErr != nil {
+			return redactErr
+		}
+		details, _ = redacted.(map[string]any)
 	}
 	if p.mode == ModeJSON {
 		return writeJSON(p.stderr, ErrorEnvelope{OK: false, Code: code, Message: message, Details: details})
@@ -154,8 +161,8 @@ func (p *Presenter) writeIssues(details map[string]any) error {
 			if source, ok := issue["location"].(map[string]any); ok {
 				location = firstString(source, "pointer")
 				if start, ok := source["start"].(map[string]any); ok {
-					line, lineOK := start["line"].(float64)
-					column, columnOK := start["column"].(float64)
+					line, lineOK := publicNumber(start["line"])
+					column, columnOK := publicNumber(start["column"])
 					if lineOK && columnOK && line >= 1 && column >= 1 {
 						location += fmt.Sprintf(" (line %.0f, column %.0f)", line, column)
 					}
@@ -170,6 +177,18 @@ func (p *Presenter) writeIssues(details map[string]any) error {
 		}
 	}
 	return nil
+}
+
+func publicNumber(value any) (float64, bool) {
+	switch typed := value.(type) {
+	case json.Number:
+		parsed, err := typed.Float64()
+		return parsed, err == nil
+	case float64:
+		return typed, true
+	default:
+		return 0, false
+	}
 }
 
 func firstString(values map[string]any, keys ...string) string {
@@ -189,86 +208,61 @@ func (p *Presenter) Verbose(message string) error {
 	return err
 }
 
-func Redact(value any) any {
-	return redact(reflect.ValueOf(value), "")
+func Redact(value any) (any, error) {
+	encoded, err := json.Marshal(redactByteValues(value))
+	if err != nil {
+		return nil, fmt.Errorf("public result cannot be encoded: %w", err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(encoded))
+	decoder.UseNumber()
+	var public any
+	if err := decoder.Decode(&public); err != nil {
+		return nil, fmt.Errorf("public result cannot be decoded for redaction: %w", err)
+	}
+	return redactJSONValue(public, ""), nil
 }
 
-func redact(value reflect.Value, key string) any {
+func redactJSONValue(value any, key string) any {
 	if isSecretKey(key) {
 		return "[redacted]"
 	}
-	if !value.IsValid() {
-		return nil
-	}
-	if value.CanInterface() {
-		if marshaler, ok := value.Interface().(json.Marshaler); ok {
-			encoded, err := marshaler.MarshalJSON()
-			if err == nil {
-				var public any
-				if json.Unmarshal(encoded, &public) == nil {
-					return redact(reflect.ValueOf(public), key)
-				}
-			}
-		}
-	}
-	if value.Kind() == reflect.Interface || value.Kind() == reflect.Pointer {
-		if value.IsNil() {
-			return nil
-		}
-		return redact(value.Elem(), key)
-	}
-	switch value.Kind() {
-	case reflect.Struct:
-		result := make(map[string]any)
-		typeInfo := value.Type()
-		for index := 0; index < value.NumField(); index++ {
-			field := typeInfo.Field(index)
-			if !field.IsExported() {
-				continue
-			}
-			tagParts := strings.Split(field.Tag.Get("json"), ",")
-			name := tagParts[0]
-			if name == "" {
-				name = field.Name
-			}
-			if name == "-" {
-				continue
-			}
-			if containsTagOption(tagParts[1:], "omitempty") && value.Field(index).IsZero() {
-				continue
-			}
-			result[name] = redact(value.Field(index), name)
+	switch typed := value.(type) {
+	case map[string]any:
+		result := make(map[string]any, len(typed))
+		for name, item := range typed {
+			result[name] = redactJSONValue(item, name)
 		}
 		return result
-	case reflect.Map:
-		result := make(map[string]any, value.Len())
-		iterator := value.MapRange()
-		for iterator.Next() {
-			mapKey := fmt.Sprint(iterator.Key().Interface())
-			result[mapKey] = redact(iterator.Value(), mapKey)
-		}
-		return result
-	case reflect.Slice, reflect.Array:
-		if value.Type().Elem().Kind() == reflect.Uint8 {
-			return "[redacted bytes]"
-		}
-		result := make([]any, value.Len())
-		for index := 0; index < value.Len(); index++ {
-			result[index] = redact(value.Index(index), key)
+	case []any:
+		result := make([]any, len(typed))
+		for index := range typed {
+			result[index] = redactJSONValue(typed[index], key)
 		}
 		return result
 	default:
-		return value.Interface()
+		return value
 	}
 }
 
-func containsTagOption(options []string, expected string) bool {
-	for _, option := range options {
-		if option == expected {
-			return true
+func redactByteValues(value any) any {
+	switch typed := value.(type) {
+	case []byte:
+		return "[redacted bytes]"
+	case map[string]any:
+		result := make(map[string]any, len(typed))
+		for key, item := range typed {
+			result[key] = redactByteValues(item)
 		}
+		return result
+	case []any:
+		result := make([]any, len(typed))
+		for index := range typed {
+			result[index] = redactByteValues(typed[index])
+		}
+		return result
+	default:
+		return value
 	}
-	return false
 }
 
 func isSecretKey(key string) bool {

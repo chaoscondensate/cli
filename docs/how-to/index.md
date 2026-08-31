@@ -24,6 +24,7 @@ services are implemented, the maintained task guidance is limited to:
 - [run layered evidence verification](verify-evidence.md);
 - [build and verify standalone publication packages](publish-evidence.md);
 - [run the root-confined MCP stdio server](run-mcp.md);
+- [recover after an interrupted ledger write](recover-ledger-writes.md);
 - [build the project](../development/build.md); and
 - [create and verify a release](../development/releasing.md).
 

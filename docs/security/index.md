@@ -53,6 +53,16 @@ nonce, and timing to network observers and remain vulnerable to observation,
 blocking, and response substitution; the CMS signature and retained chain
 prevent a substituted response from becoming verified timing.
 
+Optional outcome-source retrieval uses a separate GET-only transport. It
+ignores environment proxy settings, resolves each connection once, rejects the
+whole answer set if any address is private or reserved, and dials only an
+approved numeric address while keeping the original hostname for HTTP Host and
+TLS identity checks. The same rule is applied after every bounded redirect.
+Loopback, link-local, private, multicast, unspecified, documentation,
+benchmarking, CGNAT, and IPv4-mapped forms are rejected. These checks limit
+server-side request forgery; they do not make an outcome source authoritative
+or prove its content true.
+
 Later status, timestamp verification, layered verification, and package
 verification are local. They trust only the CA bundle retained with the ledger,
 not the operating-system root store. Built-in trust is copied beside the

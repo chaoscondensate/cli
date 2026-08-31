@@ -9,7 +9,14 @@ import (
 
 	"github.com/chaoscondensate/cli/internal/app"
 	"github.com/chaoscondensate/cli/internal/ledger"
+	"github.com/chaoscondensate/cli/internal/service"
 )
+
+type customRedactionShape struct{}
+
+func (customRedactionShape) MarshalJSON() ([]byte, error) {
+	return []byte(`{"public_name":"kept","nested":{"token":"CANARY-CUSTOM"}}`), nil
+}
 
 func TestStableJSONUsesCorrectStreamsAndRedactsSecrets(t *testing.T) {
 	var stdout, stderr bytes.Buffer
@@ -95,7 +102,10 @@ func TestRedactUsesPublicTaggedUnionJSONShape(t *testing.T) {
 			Target: ledger.ForecastTarget{Scope: "forecast-envelope/v1", Canonicalization: "RFC8785", ArtifactPath: "proofs/targets/f-one.json", Digest: ledger.Digest{Algorithm: "sha-256", Value: ledger.Hex32(strings.Repeat("a", 64))}},
 		}},
 	}
-	redacted := Redact(data)
+	redacted, err := Redact(data)
+	if err != nil {
+		t.Fatal(err)
+	}
 	encoded, err := json.Marshal(redacted)
 	if err != nil {
 		t.Fatal(err)
@@ -108,5 +118,54 @@ func TestRedactUsesPublicTaggedUnionJSONShape(t *testing.T) {
 	}
 	if !strings.Contains(text, `"kind":"binary"`) || !strings.Contains(text, `"status":"pending"`) {
 		t.Fatalf("public union shape missing from %s", text)
+	}
+}
+
+func TestRedactPreservesEncodingJSONShapeAndNumbers(t *testing.T) {
+	data := struct {
+		service.TimestampArtifactResult
+		Verification service.VerificationLayer `json:"verification"`
+		Empty        []string                  `json:"empty,omitempty"`
+		StringNumber int64                     `json:"string_number,string"`
+		Large        int64                     `json:"large"`
+		Ignored      string                    `json:"-"`
+		Custom       customRedactionShape      `json:"custom"`
+		Nested       map[string]any            `json:"nested"`
+	}{
+		TimestampArtifactResult: service.TimestampArtifactResult{QuestionID: "q-one", ForecastID: "f-one", State: service.TimestampVerified},
+		Verification:            service.VerificationLayer{Name: "existence_timing", State: service.LayerPass},
+		Empty:                   []string{},
+		StringNumber:            42,
+		Large:                   9_007_199_254_740_993,
+		Ignored:                 "CANARY-IGNORED",
+		Custom:                  customRedactionShape{},
+		Nested:                  map[string]any{"api_key": "CANARY-NESTED", "safe": "kept"},
+	}
+	redacted, err := Redact(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(redacted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(encoded)
+	for _, forbidden := range []string{"TimestampArtifactResult", `"empty"`, "CANARY", "Ignored"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("forbidden %q in %s", forbidden, text)
+		}
+	}
+	for _, expected := range []string{`"question_id":"q-one"`, `"forecast_id":"f-one"`, `"verification":{"name":"existence_timing","state":"pass"}`, `"string_number":"42"`, `"large":9007199254740993`, `"token":"[redacted]"`} {
+		if !strings.Contains(text, expected) {
+			t.Fatalf("missing %q in %s", expected, text)
+		}
+	}
+	byteMap, err := Redact(map[string]any{"bytes": []byte("CANARY-BYTES")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	byteJSON, err := json.Marshal(byteMap)
+	if err != nil || string(byteJSON) != `{"bytes":"[redacted bytes]"}` {
+		t.Fatalf("byte redaction = %s, %v", byteJSON, err)
 	}
 }

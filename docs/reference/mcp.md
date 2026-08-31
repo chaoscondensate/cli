@@ -27,13 +27,19 @@ work. Every ledger tool requires `file`; selectors match the CLI. Mutations use
 `dry_run`, and actions that need approval use `confirm: true`. Expected domain
 errors are successful MCP protocol responses with `isError: true` and a stable
 application envelope, so one failed call does not terminate the session.
-Timestamp acquisition outcomes retain their structured timing report and safe
-authority issue inside that envelope. Authority unavailability is `not_checked`
-and `network`, while malformed, untrusted, or mismatching retained evidence is
-`fail` and `verification`. Status and verification use only retained target,
+Report-bearing failures retain typed `data`: target mismatch uses
+`target.failed`, while an unavailable timestamp authority uses
+`timestamp.not_checked`; both set `isError: true`. Fatal failures before a safe
+report exists use the ordinary `error` envelope. Status and verification use only retained target,
 request, response, and CA-bundle bytes; they open no network connection.
 Layered and package verification use overall `no_evidence` with `incomplete`
 when no forecast-evidence layer applies.
+
+The outcome code and message come from the same service classifier as CLI
+JSON. Publication dry-run returns `publication.build.planned`, supported no-op
+mutations return a stable `*.unchanged` code, and successful timestamp
+verification returns `timestamp.verified`. Timestamp verification data is flat;
+there is no extra wrapper around its embedded artifact fields.
 
 Authoring tools expose their non-secret request fields directly at the tool
 root. They do not accept a generic nested request object or a public side-loaded

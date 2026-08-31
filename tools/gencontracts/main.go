@@ -32,9 +32,10 @@ func mcpCatalog() map[string]any {
 	tools := make(map[string]any)
 	for _, definition := range service.SortedOperationDefinitions() {
 		entry := map[string]any{
-			"operation":     definition.Name,
-			"tool_schema":   toolRequestSchema(definition),
-			"result_schema": operationResultSchema(definition),
+			"operation":      definition.Name,
+			"outcome_states": definition.OutcomeStates,
+			"tool_schema":    toolRequestSchema(definition),
+			"result_schema":  operationResultSchema(definition),
 		}
 		if definition.ResultNotes != "" {
 			entry["description"] = definition.ResultNotes
@@ -232,19 +233,23 @@ func stringArray() map[string]any {
 func markdownReference() string {
 	var builder strings.Builder
 	builder.WriteString("# Generated operation contracts\n\n")
-	builder.WriteString("<!-- doc-metadata\ncoverage: operation-contracts-v1\nreviewed: 2026-08-29\nowner: interface\ngenerated: true\nsecurity-critical: true\nprerequisites: index.md\nnext: ../index.md\nsource: go generate ./internal/service\n-->\n\n")
+	builder.WriteString("<!-- doc-metadata\ncoverage: operation-contracts-v1\nreviewed: 2026-08-31\nowner: interface\ngenerated: true\nsecurity-critical: true\nprerequisites: index.md\nnext: ../index.md\nsource: go generate ./internal/service\n-->\n\n")
 	builder.WriteString("> Generated; do not edit by hand. Run `go generate ./internal/service`.\n\n")
 	builder.WriteString("These declarations are shared request contracts for CLI reference and MCP discovery. A declaration does not make a hidden command available.\n\n")
-	builder.WriteString("| Operation | CLI | MCP tool | Selection | Request contract | Dry-run | Confirmation | Network | Result notes |\n")
-	builder.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
+	builder.WriteString("| Operation | CLI | MCP tool | Selection | Request contract | Outcomes | Dry-run | Confirmation | Network | Result notes |\n")
+	builder.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
 	for _, definition := range service.SortedOperationDefinitions() {
 		request := "—"
 		if definition.RequestSchema != "" {
 			request = fmt.Sprintf("[%s](request-schemas/%s.schema.json) (%s)", definition.RequestSchema, definition.RequestSchema, definition.RequestMode)
 		}
-		builder.WriteString(fmt.Sprintf("| `%s` | `forecast-ledger %s` | `%s` | `%s` | %s | %t | %t | `%s` | %s |\n",
+		outcomes := make([]string, len(definition.OutcomeStates))
+		for index, state := range definition.OutcomeStates {
+			outcomes[index] = "`" + string(state) + "`"
+		}
+		builder.WriteString(fmt.Sprintf("| `%s` | `forecast-ledger %s` | `%s` | `%s` | %s | %s | %t | %t | `%s` | %s |\n",
 			definition.Name, definition.CLI, definition.MCPTool, definition.Selection, request,
-			definition.Policy.PersistentEffect, definition.Policy.RequiresConfirmation, definition.Policy.Network, definition.ResultNotes))
+			strings.Join(outcomes, ", "), definition.Policy.PersistentEffect, definition.Policy.RequiresConfirmation, definition.Policy.Network, definition.ResultNotes))
 	}
 	builder.WriteString("\nThe common [operation result schema](result.schema.json) defines warning, side-effect, and recovery fields. The [MCP tool catalog](mcp-tool-schemas.json) contains closed request schemas.\n\n")
 	builder.WriteString("[Reference index](../index.md)\n")

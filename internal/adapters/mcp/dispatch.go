@@ -11,6 +11,7 @@ import (
 	"github.com/chaoscondensate/cli/internal/app"
 	"github.com/chaoscondensate/cli/internal/document"
 	"github.com/chaoscondensate/cli/internal/ledger"
+	"github.com/chaoscondensate/cli/internal/presentation"
 	"github.com/chaoscondensate/cli/internal/service"
 	"github.com/chaoscondensate/cli/internal/storage"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -68,16 +69,13 @@ func (s *Server) toolHandler(def service.OperationDefinition, allowed map[string
 		if err != nil {
 			return errorToolResult(def.Name, err), nil
 		}
-		data, code, message, err := s.dispatch(ctx, def, input)
-		if err != nil {
+		data, err := s.dispatch(ctx, def, input)
+		outcome := def.ClassifyOutcome(service.OutcomeInput{DryRun: input.DryRun, Data: data, Err: err})
+		if err != nil && !outcome.HasData {
 			return errorToolResult(def.Name, err), nil
 		}
-		envelope := toolEnvelope{Operation: def.Name, Code: code, Message: message, Data: data}
-		if failure := resultFailureCode(data); failure != "" {
-			envelope.Code = string(failure)
-			return marshalToolResult(envelope, true), nil
-		}
-		return marshalToolResult(envelope, false), nil
+		envelope := toolEnvelope{Operation: def.Name, Code: outcome.Code, Message: outcome.Message, Data: data}
+		return marshalToolResult(envelope, err != nil || outcome.FailureCode != ""), nil
 	}
 }
 
@@ -144,11 +142,11 @@ func requestSchemaFields(name service.InputSchemaName) (map[string]bool, error) 
 	return result, nil
 }
 
-func (s *Server) dispatch(parent context.Context, def service.OperationDefinition, input toolInput) (any, string, string, error) {
+func (s *Server) dispatch(parent context.Context, def service.OperationDefinition, input toolInput) (any, error) {
 	options := service.RequestOptions{DryRun: input.DryRun, Confirmed: input.Confirm || input.DryRun, Timeout: s.config.Timeout, Mode: s.config.Mode, Roots: s.roots.Public()}
 	execution, err := service.PrepareExecution(parent, def.Name, options)
 	if err != nil {
-		return nil, "", "", err
+		return nil, err
 	}
 	defer execution.Close()
 	ctx := execution.Context()
@@ -162,13 +160,13 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 		}
 		file, err = s.roots.Resolve(fileRoot, input.File, fileMustExist)
 		if err != nil {
-			return nil, "", "", err
+			return nil, err
 		}
 	}
 	if fileMustExist && file != "" && def.Name != service.OperationPublicationVerify {
 		loaded, loadErr := service.LoadAndValidateLedger(ctx, file, nil)
 		if loadErr != nil {
-			return nil, "", "", loadErr
+			return nil, loadErr
 		}
 		timezone = loaded.Model.DefaultTimezone
 	}
@@ -177,7 +175,7 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 	}
 	location, err := time.LoadLocation(timezone)
 	if err != nil {
-		return nil, "", "", app.NewError(app.CodeInvalidData, "default timezone is invalid", err)
+		return nil, app.NewError(app.CodeInvalidData, "default timezone is invalid", err)
 	}
 	now := ledger.Timestamp(s.effects.Clock.Now().In(location).Format(time.RFC3339))
 
@@ -187,83 +185,83 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 	case service.OperationLedgerUpdate:
 		var value service.RootMetadataPatchInput
 		if err := decodeDirectRequest(ctx, input.Request, service.InputSchemaRootMetadata, &value); err != nil {
-			return nil, "", "", err
+			return nil, err
 		}
 		if input.DryRun {
 			result, err := service.PlanRootMetadataFileUpdate(ctx, file, value)
-			return result, "ledger.update.planned", "Ledger metadata update is valid; no file was changed", err
+			return result, err
 		}
 		result, err := service.CommitRootMetadataFileUpdate(ctx, file, value)
-		return result, "ledger.updated", "Ledger metadata was updated", err
+		return result, err
 	case service.OperationLedgerValidate:
 		loaded, err := service.LoadAndValidateLedger(ctx, file, nil)
 		if err != nil {
-			return nil, "", "", err
+			return nil, err
 		}
-		return map[string]any{"ledger_id": loaded.Model.LedgerID, "schema_version": loaded.Model.SchemaVersion}, "ledger.valid", "Ledger is valid", nil
+		return map[string]any{"ledger_id": loaded.Model.LedgerID, "schema_version": loaded.Model.SchemaVersion}, nil
 	case service.OperationLedgerStatus:
 		loaded, err := service.LoadAndValidateLedger(ctx, file, nil)
 		if err != nil {
-			return nil, "", "", err
+			return nil, err
 		}
 		result, err := service.StatusForLedger(loaded)
-		return result, "ledger.status", "Ledger status was read", err
+		return result, err
 	case service.OperationPlatformAdd, service.OperationPlatformUpdate:
 		return dispatchPlatformMutation(ctx, def.Name, file, ledger.Slug(input.Platform), input.Request, input.DryRun)
 	case service.OperationPlatformList:
 		id, items, err := service.LoadPlatformList(ctx, file, nil)
-		return map[string]any{"ledger_id": id, "platforms": items}, "platform.list", "Platforms were read", err
+		return map[string]any{"ledger_id": id, "platforms": items}, err
 	case service.OperationPlatformShow:
 		id, result, err := service.LoadPlatformShow(ctx, file, nil, ledger.Slug(input.Platform))
-		return map[string]any{"ledger_id": id, "platform": result}, "platform.show", "Platform was read", err
+		return map[string]any{"ledger_id": id, "platform": result}, err
 	case service.OperationPlatformRemove:
 		if input.DryRun {
 			result, err := service.PlanPlatformRemoveFile(ctx, file, ledger.Slug(input.Platform))
-			return result, "platform.remove.planned", "Platform removal is valid; no file was changed", err
+			return result, err
 		}
 		result, err := service.CommitPlatformRemoveFile(ctx, file, ledger.Slug(input.Platform))
-		return result, "platform.removed", "Platform was removed", err
+		return result, err
 	case service.OperationQuestionAdd:
 		return s.dispatchQuestionAdd(ctx, file, input, now)
 	case service.OperationQuestionUpdate:
 		var value service.QuestionPatchInput
 		if err := decodeDirectRequest(ctx, input.Request, service.InputSchemaQuestionPatch, &value); err != nil {
-			return nil, "", "", err
+			return nil, err
 		}
 		if input.DryRun {
 			result, err := service.PlanQuestionUpdateFile(ctx, file, ledger.Slug(input.Question), value)
-			return result, "question.update.planned", "Question update is valid; no file was changed", err
+			return result, err
 		}
 		result, err := service.CommitQuestionUpdateFile(ctx, file, ledger.Slug(input.Question), value)
-		return result, "question.updated", "Question was updated", err
+		return result, err
 	case service.OperationQuestionList:
 		id, items, err := service.LoadQuestionList(ctx, file, nil)
-		return map[string]any{"ledger_id": id, "questions": items}, "question.list", "Questions were read", err
+		return map[string]any{"ledger_id": id, "questions": items}, err
 	case service.OperationQuestionShow:
 		id, result, err := service.LoadQuestionShow(ctx, file, nil, ledger.Slug(input.Question))
-		return map[string]any{"ledger_id": id, "question": result}, "question.show", "Question was read", err
+		return map[string]any{"ledger_id": id, "question": result}, err
 	case service.OperationQuestionResolve, service.OperationQuestionAnnul, service.OperationQuestionDispute:
 		return dispatchQuestionTerminal(ctx, def.Name, file, ledger.Slug(input.Question), input.Request, now, input.DryRun)
 	case service.OperationForecastAdd:
 		var value service.ForecastCreateInput
 		if err := decodeDirectRequest(ctx, input.Request, service.InputSchemaForecastCreate, &value); err != nil {
-			return nil, "", "", err
+			return nil, err
 		}
 		if value.ForecastedAt == "" {
 			value.ForecastedAt = now
 		}
 		if input.DryRun {
 			result, err := service.PlanPublicForecastAddFile(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), value, now)
-			return result, "forecast.add.planned", "Forecast addition is valid; no file was changed", err
+			return result, err
 		}
 		result, err := service.CommitPublicForecastAddFile(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), value, now)
-		return result, "forecast.added", "Forecast was added", err
+		return result, err
 	case service.OperationForecastList:
 		id, items, err := service.LoadForecastList(ctx, file, nil, ledger.Slug(input.Question))
-		return map[string]any{"ledger_id": id, "question_id": input.Question, "forecasts": items}, "forecast.list", "Forecasts were read", err
+		return map[string]any{"ledger_id": id, "question_id": input.Question, "forecasts": items}, err
 	case service.OperationForecastShow:
 		id, result, err := service.LoadForecastShow(ctx, file, nil, ledger.Slug(input.Question), ledger.Slug(input.Forecast))
-		return map[string]any{"ledger_id": id, "question_id": input.Question, "forecast": result}, "forecast.show", "Forecast was read", err
+		return map[string]any{"ledger_id": id, "question_id": input.Question, "forecast": result}, err
 	case service.OperationForecastSeal:
 		return s.dispatchForecastSeal(ctx, file, input, now)
 	case service.OperationForecastReveal:
@@ -271,104 +269,72 @@ func (s *Server) dispatch(parent context.Context, def service.OperationDefinitio
 	case service.OperationForecastKeyHintUpdate:
 		if input.DryRun {
 			result, err := service.PlanForecastKeyHintUpdateFile(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), input.KeyHint)
-			return result, "forecast.key_hint.update.planned", "Key hint update is valid; no file was changed", err
+			return result, err
 		}
 		result, err := service.CommitForecastKeyHintUpdateFile(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), input.KeyHint)
-		return result, "forecast.key_hint.updated", "Forecast key hint was updated", err
+		return result, err
 	case service.OperationTargetBuild:
 		if input.DryRun {
 			result, err := service.PlanTargetBuild(ctx, file, input.All, ledger.Slug(input.Question), ledger.Slug(input.Forecast))
-			return result, "target.build.planned", "Target build is valid; no files were written", err
+			return result, err
 		}
 		result, err := service.CommitTargetBuild(ctx, file, input.All, ledger.Slug(input.Question), ledger.Slug(input.Forecast))
-		return result, "target.built", "Target artifacts were built", err
+		return result, err
 	case service.OperationTargetCheck:
 		result, err := service.InspectTargets(ctx, file, input.All, ledger.Slug(input.Question), ledger.Slug(input.Forecast))
 		if err != nil {
-			return nil, "", "", err
+			return nil, err
 		}
-		if result.FailureCode != "" {
-			return nil, "", "", app.WithDetails(app.NewError(result.FailureCode, "one or more forecast targets could not be verified", nil), map[string]any{"ledger_id": result.LedgerID, "targets": result.Targets})
-		}
-		code, message := "target.valid", "Target artifacts match the ledger"
-		for _, target := range result.Targets {
-			if string(target.State) == string(service.LayerNotApplicable) {
-				code, message = "target.checked", "Target inspection completed; some forecasts have no retained target"
-				break
-			}
-		}
-		return result, code, message, nil
+		return result, nil
 	case service.OperationTimestampStamp:
 		result, err := service.CommitTimestampStamp(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), service.TimestampStampOptions{DryRun: input.DryRun, Offline: s.config.Mode.Offline, TSAProvider: input.TSAProvider, TSAURL: input.TSAURL, CABundlePath: input.CABundle, Effects: s.effects})
-		code, message := "timestamp.stamped", "RFC 3161 timestamp evidence was stored and verified locally"
-		if result.FailureCode == app.CodeNetwork {
-			code, message = "timestamp.not_checked", "The timestamp authority request did not complete"
-		}
-		if result.FailureCode == app.CodeVerification {
-			code, message = "timestamp.invalid_response", "No timestamp authority response passed local verification"
-		}
-		if result.State == service.TimestampPending {
-			if result.FailureCode != app.CodeNetwork {
-				code, message = "timestamp.pending", "RFC 3161 timestamp evidence was retained as pending"
-			}
-		}
-		if input.DryRun {
-			code, message = "timestamp.stamp.planned", "RFC 3161 timestamp request is valid; no entropy, network, or files were used"
-		}
 		if err != nil && result.FailureCode == "" {
-			return result, code, message, err
+			return result, err
 		}
-		return result, code, message, nil
+		return result, nil
 	case service.OperationTimestampStatus:
 		result, err := service.TimestampStatusFor(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast))
-		return result, "timestamp.status", "RFC 3161 local status was read", err
+		return result, err
 	case service.OperationTimestampVerify:
 		result, err := service.CommitTimestampVerify(ctx, file, ledger.Slug(input.Question), ledger.Slug(input.Forecast), service.TimestampVerifyOptions{DryRun: input.DryRun, Effects: s.effects})
-		code, message := "timestamp.verification."+string(result.Verification.State), "Timestamp verification completed with status "+string(result.Verification.State)
-		if result.Verification.State == service.LayerPass {
-			code, message = "timestamp.verified", "RFC 3161 evidence was verified locally"
-		}
-		if input.DryRun {
-			code, message = "timestamp.verify.planned", "Timestamp verification completed locally; ledger update was deferred"
-		}
-		return result, code, message, err
+		return result, err
 	case service.OperationVerificationRun:
 		result, err := service.VerifyLedgerEvidence(ctx, file, service.VerificationOptions{Offline: s.config.Mode.Offline, CheckSources: input.CheckSources, QuestionID: ledger.Slug(input.Question), ForecastID: ledger.Slug(input.Forecast)})
-		return result, "verification." + string(result.Overall), "Verification completed with status " + string(result.Overall), err
+		return result, err
 	case service.OperationPublicationBuild:
 		output, err := s.roots.Resolve(service.RootOutput, input.Output, false)
 		if err != nil {
-			return nil, "", "", err
+			return nil, err
 		}
 		result, err := service.CommitPublicationBuild(ctx, file, output, input.DryRun)
-		return result, "publication.built", "Evidence package was built", err
+		return result, err
 	case service.OperationPublicationVerify:
 		manifest, err := s.roots.Resolve(service.RootOutput, input.Manifest, true)
 		if err != nil {
-			return nil, "", "", err
+			return nil, err
 		}
 		result, err := service.VerifyPublicationPackage(ctx, file, manifest)
-		return result, "publication.verification." + string(result.Overall), "Package verification completed with status " + string(result.Overall), err
+		return result, err
 	default:
-		return nil, "", "", app.NewError(app.CodeUnavailable, "operation is not registered", nil)
+		return nil, app.NewError(app.CodeUnavailable, "operation is not registered", nil)
 	}
 }
 
-func (s *Server) dispatchInit(ctx context.Context, file string, input toolInput, operationAt ledger.Timestamp) (any, string, string, error) {
+func (s *Server) dispatchInit(ctx context.Context, file string, input toolInput, operationAt ledger.Timestamp) (any, error) {
 	if input.InitialSecretInputFile == "" && directVisibility(input.Request, true) == ledger.VisibilitySealed {
-		return nil, "", "", app.NewError(app.CodeUsage, "sealed initialization must use initial_secret_input_file", nil)
+		return nil, app.NewError(app.CodeUsage, "sealed initialization must use initial_secret_input_file", nil)
 	}
 	var value service.InitInput
 	if err := decodeDirectRequest(ctx, input.Request, service.InputSchemaInit, &value); err != nil {
-		return nil, "", "", err
+		return nil, err
 	}
 	if input.InitialSecretInputFile != "" {
 		if value.Question == nil || value.Question.InitialForecast == nil || value.Question.InitialForecast.Visibility != ledger.VisibilitySealed {
-			return nil, "", "", app.NewError(app.CodeUsage, "initial_secret_input_file requires direct sealed initial-forecast metadata", nil)
+			return nil, app.NewError(app.CodeUsage, "initial_secret_input_file requires direct sealed initial-forecast metadata", nil)
 		}
 		var private service.SealedForecastPrivateInput
 		if err := s.decodeProtected(ctx, input.InitialSecretInputFile, service.InputSchemaForecastSealPrivate, &private); err != nil {
-			return nil, "", "", err
+			return nil, err
 		}
 		mergeInitialForecastPrivate(value.Question.InitialForecast, private)
 	}
@@ -377,11 +343,11 @@ func (s *Server) dispatchInit(ctx context.Context, file string, input toolInput,
 	}
 	root, err := service.BuildLedgerRootAt(service.InitRootRequest{LedgerID: ledger.Slug(input.LedgerID), Timezone: input.Timezone, ForecasterID: ledger.Slug(input.ForecasterID), ForecasterName: input.ForecasterName, ForecasterKind: ledger.ForecasterKind(input.ForecasterKind), Input: value}, operationAt)
 	if err != nil {
-		return nil, "", "", err
+		return nil, err
 	}
 	shape, err := service.ClassifyInitInput(value)
 	if err != nil {
-		return nil, "", "", err
+		return nil, err
 	}
 	var model *ledger.Ledger
 	var sealed service.SealedInitialBuild
@@ -389,11 +355,11 @@ func (s *Server) dispatchInit(ctx context.Context, file string, input toolInput,
 	if input.KeyFile != "" {
 		keyPath, err = s.roots.Resolve(service.RootSecret, input.KeyFile, false)
 		if err != nil {
-			return nil, "", "", err
+			return nil, err
 		}
 	}
 	if shape != service.CreationSealedForecast && keyPath != "" {
-		return nil, "", "", app.NewError(app.CodeUsage, "key_file is only valid for a sealed initial forecast", nil)
+		return nil, app.NewError(app.CodeUsage, "key_file is only valid for a sealed initial forecast", nil)
 	}
 	switch shape {
 	case service.CreationLedgerOnly:
@@ -404,7 +370,7 @@ func (s *Server) dispatchInit(ctx context.Context, file string, input toolInput,
 		model, err = service.BuildInitialPublicLedgerAt(root, *value.Question, operationAt)
 	case service.CreationSealedForecast:
 		if input.InitialSecretInputFile == "" || keyPath == "" {
-			return nil, "", "", app.NewError(app.CodeUsage, "sealed initialization requires initial_secret_input_file and key_file in a secret root", nil)
+			return nil, app.NewError(app.CodeUsage, "sealed initialization requires initial_secret_input_file and key_file in a secret root", nil)
 		}
 		if input.DryRun {
 			model, err = service.PlanInitialSealedLedgerAt(root, *value.Question, operationAt)
@@ -414,77 +380,77 @@ func (s *Server) dispatchInit(ctx context.Context, file string, input toolInput,
 		}
 	}
 	if err != nil {
-		return nil, "", "", err
+		return nil, err
 	}
 	if input.DryRun {
 		if _, err := service.EncodeNewLedger(model, file); err != nil {
-			return nil, "", "", err
+			return nil, err
 		}
 		effects := []service.SideEffect{{Kind: service.EffectLedger, Action: service.EffectCreate, Status: service.EffectDeferred, Path: filepath.Base(file), Owned: true, Rollback: service.RollbackCreatedPublic}}
 		if shape == service.CreationSealedForecast {
 			effects = append([]service.SideEffect{{Kind: service.EffectKey, Action: service.EffectCreate, Status: service.EffectDeferred, Path: filepath.Base(keyPath), Owned: true, Rollback: service.RollbackRetainSecret}}, effects...)
 		}
-		return service.NewInitResult(model, effects, service.Recovery{State: service.RecoveryNone}), "ledger.init.planned", "Ledger initialization is valid; no files were written", nil
+		return service.NewInitResult(model, effects, service.Recovery{State: service.RecoveryNone}), nil
 	}
 	recovery := service.Recovery{State: service.RecoveryNone}
 	if shape == service.CreationSealedForecast {
 		commit, err := service.CommitInitialSealedFiles(ctx, file, keyPath, sealed, service.InitialCommitOptions{})
 		recovery = commit.Recovery
 		if err != nil {
-			return service.NewInitResult(model, nil, recovery), "", "", err
+			return service.NewInitResult(model, nil, recovery), err
 		}
 	} else {
 		if _, err = service.CommitNewLedger(file, model); err != nil {
-			return nil, "", "", err
+			return nil, err
 		}
 	}
 	effects := []service.SideEffect{{Kind: service.EffectLedger, Action: service.EffectCreate, Status: service.EffectCompleted, Path: filepath.Base(file), Owned: true, Rollback: service.RollbackCreatedPublic}}
 	if shape == service.CreationSealedForecast {
 		effects = append([]service.SideEffect{{Kind: service.EffectKey, Action: service.EffectCreate, Status: service.EffectCompleted, Path: filepath.Base(keyPath), Owned: true, Rollback: service.RollbackRetainSecret}}, effects...)
 	}
-	return service.NewInitResult(model, effects, recovery), "ledger.initialized", "Ledger was created", nil
+	return service.NewInitResult(model, effects, recovery), nil
 }
 
-func dispatchPlatformMutation(ctx context.Context, operation service.OperationName, file string, id ledger.Slug, raw json.RawMessage, dryRun bool) (any, string, string, error) {
+func dispatchPlatformMutation(ctx context.Context, operation service.OperationName, file string, id ledger.Slug, raw json.RawMessage, dryRun bool) (any, error) {
 	if operation == service.OperationPlatformAdd {
 		var value service.PlatformCreateInput
 		if err := decodeDirectRequest(ctx, raw, service.InputSchemaPlatformCreate, &value); err != nil {
-			return nil, "", "", err
+			return nil, err
 		}
 		if dryRun {
 			result, err := service.PlanPlatformAddFile(ctx, file, id, value)
-			return result, "platform.add.planned", "Platform addition is valid; no file was changed", err
+			return result, err
 		}
 		result, err := service.CommitPlatformAddFile(ctx, file, id, value)
-		return result, "platform.added", "Platform was added", err
+		return result, err
 	}
 	var value service.PlatformPatchInput
 	if err := decodeDirectRequest(ctx, raw, service.InputSchemaPlatformPatch, &value); err != nil {
-		return nil, "", "", err
+		return nil, err
 	}
 	if dryRun {
 		result, err := service.PlanPlatformUpdateFile(ctx, file, id, value)
-		return result, "platform.update.planned", "Platform update is valid; no file was changed", err
+		return result, err
 	}
 	result, err := service.CommitPlatformUpdateFile(ctx, file, id, value)
-	return result, "platform.updated", "Platform was updated", err
+	return result, err
 }
 
-func (s *Server) dispatchQuestionAdd(ctx context.Context, file string, input toolInput, now ledger.Timestamp) (any, string, string, error) {
+func (s *Server) dispatchQuestionAdd(ctx context.Context, file string, input toolInput, now ledger.Timestamp) (any, error) {
 	if input.InitialSecretInputFile == "" && directVisibility(input.Request, false) == ledger.VisibilitySealed {
-		return nil, "", "", app.NewError(app.CodeUsage, "a sealed first forecast must use initial_secret_input_file", nil)
+		return nil, app.NewError(app.CodeUsage, "a sealed first forecast must use initial_secret_input_file", nil)
 	}
 	var value service.QuestionAddInput
 	if err := decodeDirectRequest(ctx, input.Request, service.InputSchemaQuestionAdd, &value); err != nil {
-		return nil, "", "", err
+		return nil, err
 	}
 	if input.InitialSecretInputFile != "" {
 		if value.InitialForecast == nil || value.InitialForecast.Visibility != ledger.VisibilitySealed {
-			return nil, "", "", app.NewError(app.CodeUsage, "initial_secret_input_file requires direct sealed initial-forecast metadata", nil)
+			return nil, app.NewError(app.CodeUsage, "initial_secret_input_file requires direct sealed initial-forecast metadata", nil)
 		}
 		var private service.SealedForecastPrivateInput
 		if err := s.decodeProtected(ctx, input.InitialSecretInputFile, service.InputSchemaForecastSealPrivate, &private); err != nil {
-			return nil, "", "", err
+			return nil, err
 		}
 		mergeInitialForecastPrivate(value.InitialForecast, private)
 	}
@@ -494,87 +460,87 @@ func (s *Server) dispatchQuestionAdd(ctx context.Context, file string, input too
 	normalized := service.NormalizedQuestionCreate{ID: ledger.Slug(input.Question), Type: ledger.QuestionType(input.Type), Input: value}
 	shape, err := service.ClassifyQuestionAddInput(value)
 	if err != nil {
-		return nil, "", "", err
+		return nil, err
 	}
 	if shape != service.CreationSealedForecast && input.KeyFile != "" {
-		return nil, "", "", app.NewError(app.CodeUsage, "key_file is only valid for a sealed initial forecast", nil)
+		return nil, app.NewError(app.CodeUsage, "key_file is only valid for a sealed initial forecast", nil)
 	}
 	if shape == service.CreationQuestionOnly {
 		if input.DryRun {
 			result, err := service.PlanQuestionAddEmptyFile(ctx, file, normalized, now)
-			return result, "question.add.planned", "Question addition is valid; no file was changed", err
+			return result, err
 		}
 		result, err := service.CommitQuestionAddEmptyFile(ctx, file, normalized, now)
-		return result, "question.added", "Question was added", err
+		return result, err
 	}
 	if shape == service.CreationPublicForecast {
 		if input.DryRun {
 			result, err := service.PlanQuestionAddPublicFile(ctx, file, normalized, now)
-			return result, "question.add.planned", "Question addition is valid; no file was changed", err
+			return result, err
 		}
 		result, err := service.CommitQuestionAddPublicFile(ctx, file, normalized, now)
-		return result, "question.added", "Question and first forecast were added", err
+		return result, err
 	}
 	if shape != service.CreationSealedForecast || input.InitialSecretInputFile == "" || input.KeyFile == "" {
-		return nil, "", "", app.NewError(app.CodeUsage, "a sealed first forecast requires initial_secret_input_file and key_file in a secret root", nil)
+		return nil, app.NewError(app.CodeUsage, "a sealed first forecast requires initial_secret_input_file and key_file in a secret root", nil)
 	}
 	keyPath, err := s.roots.Resolve(service.RootSecret, input.KeyFile, false)
 	if err != nil {
-		return nil, "", "", err
+		return nil, err
 	}
 	if input.DryRun {
 		result, err := service.PlanQuestionAddSealedFile(ctx, file, keyPath, normalized, now)
-		return result, "question.add.planned", "Question addition is valid; no file was changed", err
+		return result, err
 	}
 	result, err := service.CommitQuestionAddSealedFile(ctx, file, keyPath, normalized, now, s.effects)
-	return result, "question.added", "Question and first forecast were added", err
+	return result, err
 }
 
-func dispatchQuestionTerminal(ctx context.Context, operation service.OperationName, file string, id ledger.Slug, raw json.RawMessage, now ledger.Timestamp, dryRun bool) (any, string, string, error) {
+func dispatchQuestionTerminal(ctx context.Context, operation service.OperationName, file string, id ledger.Slug, raw json.RawMessage, now ledger.Timestamp, dryRun bool) (any, error) {
 	switch operation {
 	case service.OperationQuestionResolve:
 		var value service.ResolutionInput
 		if err := decodeDirectRequest(ctx, raw, service.InputSchemaResolution, &value); err != nil {
-			return nil, "", "", err
+			return nil, err
 		}
 		if dryRun {
 			result, err := service.PlanQuestionResolveFile(ctx, file, id, value, now)
-			return result, "question.resolve.planned", "Question resolution is valid; no file was changed", err
+			return result, err
 		}
 		result, err := service.CommitQuestionResolveFile(ctx, file, id, value, now)
-		return result, "question.resolved", "Question was resolved", err
+		return result, err
 	case service.OperationQuestionAnnul:
 		var value service.AnnulInput
 		if err := decodeDirectRequest(ctx, raw, service.InputSchemaAnnul, &value); err != nil {
-			return nil, "", "", err
+			return nil, err
 		}
 		if dryRun {
 			result, err := service.PlanQuestionAnnulFile(ctx, file, id, value, now)
-			return result, "question.annul.planned", "Question annulment is valid; no file was changed", err
+			return result, err
 		}
 		result, err := service.CommitQuestionAnnulFile(ctx, file, id, value, now)
-		return result, "question.annulled", "Question was annulled", err
+		return result, err
 	default:
 		var value service.DisputeInput
 		if err := decodeDirectRequest(ctx, raw, service.InputSchemaDispute, &value); err != nil {
-			return nil, "", "", err
+			return nil, err
 		}
 		if dryRun {
 			result, err := service.PlanQuestionDisputeFile(ctx, file, id, value, now)
-			return result, "question.dispute.planned", "Question dispute is valid; no file was changed", err
+			return result, err
 		}
 		result, err := service.CommitQuestionDisputeFile(ctx, file, id, value, now)
-		return result, "question.disputed", "Question was disputed", err
+		return result, err
 	}
 }
 
-func (s *Server) dispatchForecastSeal(ctx context.Context, file string, input toolInput, now ledger.Timestamp) (any, string, string, error) {
+func (s *Server) dispatchForecastSeal(ctx context.Context, file string, input toolInput, now ledger.Timestamp) (any, error) {
 	if input.SecretInputFile == "" || input.KeyFile == "" {
-		return nil, "", "", app.NewError(app.CodeUsage, "forecast_seal requires secret_input_file and key_file references", nil)
+		return nil, app.NewError(app.CodeUsage, "forecast_seal requires secret_input_file and key_file references", nil)
 	}
 	var private service.SealedForecastPrivateInput
 	if err := s.decodeProtected(ctx, input.SecretInputFile, service.InputSchemaForecastSealPrivate, &private); err != nil {
-		return nil, "", "", err
+		return nil, err
 	}
 	value := service.SealedForecastInput{Value: private.Value, Rationale: private.Rationale, KeyFactors: private.KeyFactors, Comment: private.Comment}
 	if input.ForecastedAt != "" {
@@ -595,34 +561,34 @@ func (s *Server) dispatchForecastSeal(ctx context.Context, file string, input to
 	}
 	keyPath, err := s.roots.Resolve(service.RootSecret, input.KeyFile, false)
 	if err != nil {
-		return nil, "", "", err
+		return nil, err
 	}
 	if input.DryRun {
 		result, err := service.PlanForecastSealFile(ctx, file, keyPath, ledger.Slug(input.Question), ledger.Slug(input.Forecast), value, now)
-		return result, "forecast.seal.planned", "Sealed forecast creation is valid; no file was changed", err
+		return result, err
 	}
 	result, err := service.CommitForecastSealFile(ctx, file, keyPath, ledger.Slug(input.Question), ledger.Slug(input.Forecast), value, now, s.effects)
-	return result, "forecast.sealed", "Sealed forecast and protected key were created", err
+	return result, err
 }
 
-func (s *Server) dispatchForecastReveal(ctx context.Context, file string, input toolInput, now ledger.Timestamp) (any, string, string, error) {
+func (s *Server) dispatchForecastReveal(ctx context.Context, file string, input toolInput, now ledger.Timestamp) (any, error) {
 	keyPath, err := s.roots.Resolve(service.RootSecret, input.KeyFile, true)
 	if err != nil {
-		return nil, "", "", err
+		return nil, err
 	}
 	revealedAt := now
 	if input.RevealedAt != "" {
 		revealedAt, err = optionalTimestamp(input.RevealedAt, "revealed_at")
 		if err != nil {
-			return nil, "", "", err
+			return nil, err
 		}
 	}
 	if input.DryRun {
 		result, err := service.PlanForecastRevealFile(ctx, file, keyPath, ledger.Slug(input.Question), ledger.Slug(input.Forecast), revealedAt)
-		return result, "forecast.reveal.planned", "Forecast reveal is valid; no file was changed", err
+		return result, err
 	}
 	result, err := service.CommitForecastRevealFile(ctx, file, keyPath, ledger.Slug(input.Question), ledger.Slug(input.Forecast), revealedAt)
-	return result, "forecast.revealed", "Forecast was authenticated and revealed", err
+	return result, err
 }
 
 func (s *Server) decodeProtected(ctx context.Context, reference string, schema service.InputSchemaName, destination any) error {
@@ -686,21 +652,6 @@ func mergeInitialForecastPrivate(target *service.InitialForecastInput, private s
 	target.Comment = &private.Comment
 }
 
-func resultFailureCode(data any) app.ErrorCode {
-	switch value := data.(type) {
-	case service.VerificationReport:
-		return value.FailureCode
-	case service.PublicationVerifyResult:
-		return value.FailureCode
-	case service.TimestampVerifyResult:
-		return value.FailureCode
-	case service.TimestampArtifactResult:
-		return value.FailureCode
-	default:
-		return ""
-	}
-}
-
 func errorToolResult(operation service.OperationName, err error) *sdk.CallToolResult {
 	var applicationErr *app.Error
 	if !errors.As(err, &applicationErr) {
@@ -712,10 +663,16 @@ func errorToolResult(operation service.OperationName, err error) *sdk.CallToolRe
 }
 
 func marshalToolResult(value toolEnvelope, isError bool) *sdk.CallToolResult {
-	data, err := json.Marshal(value)
+	safe, err := presentation.Redact(value)
 	if err != nil {
-		data = []byte(`{"operation":"unknown","code":"internal","message":"tool result could not be encoded"}`)
+		safe = map[string]any{"operation": "unknown", "code": "internal", "message": "tool result could not be encoded"}
 		isError = true
 	}
-	return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: string(data)}}, StructuredContent: value, IsError: isError}
+	data, err := json.Marshal(safe)
+	if err != nil {
+		data = []byte(`{"operation":"unknown","code":"internal","message":"tool result could not be encoded"}`)
+		safe = map[string]any{"operation": "unknown", "code": "internal", "message": "tool result could not be encoded"}
+		isError = true
+	}
+	return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: string(data)}}, StructuredContent: safe, IsError: isError}
 }

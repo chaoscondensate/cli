@@ -244,8 +244,9 @@ time, or substantive outcome-source correctness.
   `v0.6.1` is published through the explicit release workflow; version
   stability does not imply feature completeness or audit.
 - No independent security or cryptographic audit is recorded. A pinned
-  `govulncheck` run reported no reachable dependency vulnerability on
-  2026-08-29; that result is not an audit or a security guarantee.
+  `go tool govulncheck ./...` completed on 2026-08-31 with no reachable
+  vulnerability and one required-module advisory in code this project does not
+  call. That bounded result is not an audit or a security guarantee.
 - Local validation and status are offline. No telemetry or runtime update check
   is implemented. Only RFC 3161 stamp uses the network; omission contacts the
   built-in FreeTSA HTTPS profile, while custom URLs remain public HTTPS-only.

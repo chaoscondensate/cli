@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/chaoscondensate/cli/internal/app"
+	"github.com/chaoscondensate/cli/internal/document"
 	"github.com/chaoscondensate/cli/internal/service"
 	"github.com/chaoscondensate/cli/internal/storage"
 	"github.com/chaoscondensate/cli/internal/timestamp/rfc3161"
@@ -25,6 +27,47 @@ import (
 type fixedMCPClock struct{ value time.Time }
 
 func (clock fixedMCPClock) Now() time.Time { return clock.value }
+
+func TestMCPForecastMutationRetriesAutomaticLedgerRecovery(t *testing.T) {
+	ledgerRoot := t.TempDir()
+	path := filepath.Join(ledgerRoot, "ledger.json")
+	copyFixture(t, filepath.Join("..", "..", "schema", "testdata", "forecast-ledger", "v1.3.0", "individual-ledger.json"), path)
+	err := storage.UpdateLedger(t.Context(), path, storage.TransactionOptions{
+		Validate: func(parsed *document.Document) error {
+			return service.ValidateLedgerDocument(parsed, os.DirFS(ledgerRoot))
+		},
+		Mutate: func(parsed *document.Document) ([]byte, error) {
+			return document.ReplaceScalars(parsed, []document.ScalarEdit{{Pointer: "/title", Value: "Interrupted title"}})
+		},
+		Fault: func(stage storage.TransactionStage) error {
+			if stage == storage.StageJournalSynced {
+				return errors.New("simulated stop")
+			}
+			return nil
+		},
+	})
+	if app.ErrorCodeOf(err) != app.CodeIO {
+		t.Fatalf("interrupted write error=%v", err)
+	}
+	server, err := New(Config{LedgerRoots: []string{"main=" + ledgerRoot}, Timeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := connectClient(t, t.Context(), server)
+	defer client.Close()
+	result, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "forecast_add", Arguments: map[string]any{
+		"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-002",
+		"forecasted_at": "2026-09-01T09:00:00+01:00", "recorded_at": "2026-09-01T09:01:00+01:00", "value": map[string]any{"kind": "multiple_choice", "probabilities": []any{
+			map[string]any{"option_id": "centre-left", "probability_bp": 5000}, map[string]any{"option_id": "centre-right", "probability_bp": 3500}, map[string]any{"option_id": "other", "probability_bp": 1500},
+		}},
+	}})
+	if err != nil || result.IsError || !strings.Contains(toolText(result), `"code":"forecast.added"`) {
+		t.Fatalf("MCP retry result=%s err=%v", toolText(result), err)
+	}
+	if _, statErr := os.Stat(storage.JournalPath(path)); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("MCP retry retained journal: %v", statErr)
+	}
+}
 
 func TestMCPForecastDefaultsUseOneLedgerTimezoneObservation(t *testing.T) {
 	ledgerRoot := t.TempDir()
@@ -195,6 +238,31 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 	if err != nil || targetCheck.IsError || !strings.Contains(toolText(targetCheck), `"state":"not_applicable"`) || !strings.Contains(toolText(targetCheck), "content.no_retained_target") {
 		t.Fatalf("MCP unretained target result=%s err=%v", toolText(targetCheck), err)
 	}
+	targetBuild, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "target_build", Arguments: map[string]any{"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-001"}})
+	if err != nil || targetBuild.IsError {
+		t.Fatalf("MCP target build result=%s err=%v", toolText(targetBuild), err)
+	}
+	targetPath := filepath.Join(ledgerRoot, "proofs", "targets", "f-election-coalition-001.json")
+	if err := os.WriteFile(targetPath, []byte("tampered"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	failedTarget, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "target_check", Arguments: map[string]any{"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-001"}})
+	if err != nil || !failedTarget.IsError || !strings.Contains(toolText(failedTarget), `"code":"target.failed"`) || !strings.Contains(toolText(failedTarget), `"state":"fail"`) || !strings.Contains(toolText(failedTarget), `"actual_sha256"`) {
+		t.Fatalf("MCP failed target report=%s err=%v", toolText(failedTarget), err)
+	}
+	if err := os.Remove(targetPath); err != nil {
+		t.Fatal(err)
+	}
+	if targetBuild, err = callToolForTest(t, client, &sdk.CallToolParams{Name: "target_build", Arguments: map[string]any{"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-001"}}); err != nil || targetBuild.IsError {
+		t.Fatalf("MCP target rebuild result=%s err=%v", toolText(targetBuild), err)
+	}
+	publicationPlan, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "publication_build", Arguments: map[string]any{"file": "main:ledger.json", "output": "packages:dry-run", "dry_run": true}})
+	if err != nil || publicationPlan.IsError || !strings.Contains(toolText(publicationPlan), `"code":"publication.build.planned"`) || strings.Contains(toolText(publicationPlan), `"code":"publication.built"`) {
+		t.Fatalf("MCP publication dry-run result=%s err=%v", toolText(publicationPlan), err)
+	}
+	if _, statErr := os.Stat(filepath.Join(outputRoot, "dry-run")); !os.IsNotExist(statErr) {
+		t.Fatalf("MCP publication dry-run created output: %v", statErr)
+	}
 	forecastShow, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "forecast_show", Arguments: map[string]any{"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-001"}})
 	if err != nil || forecastShow.IsError || !strings.Contains(toolText(forecastShow), `"integrity":{"status":"unanchored"}`) {
 		t.Fatalf("MCP forecast integrity result=%s err=%v", toolText(forecastShow), err)
@@ -213,7 +281,7 @@ func TestMCPDiscoveryClosedSchemasModesAndParityCall(t *testing.T) {
 		"file": "main:ledger.json", "question": "q-election-coalition", "forecast": "f-election-coalition-001",
 		"tsa_url": "https://127.0.0.1", "ca_bundle": "tsa.pem",
 	}})
-	if err != nil || !tsaFailure.IsError || !strings.Contains(toolText(tsaFailure), `"code":"network"`) || !strings.Contains(toolText(tsaFailure), `"timing.tsa_unavailable"`) || !strings.Contains(toolText(tsaFailure), `"request_count":1`) {
+	if err != nil || !tsaFailure.IsError || !strings.Contains(toolText(tsaFailure), `"code":"timestamp.not_checked"`) || !strings.Contains(toolText(tsaFailure), `"timing.tsa_unavailable"`) || !strings.Contains(toolText(tsaFailure), `"request_count":1`) {
 		t.Fatalf("MCP safe TSA failure result=%s err=%v", toolText(tsaFailure), err)
 	}
 	sessionStillAlive, err := callToolForTest(t, client, &sdk.CallToolParams{Name: "ledger_validate", Arguments: map[string]any{"file": "main:ledger.json"}})

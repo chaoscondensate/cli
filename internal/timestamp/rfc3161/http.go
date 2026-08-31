@@ -9,12 +9,13 @@ import (
 	"mime"
 	"net"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"strings"
 	"time"
 
 	tspclient "github.com/notaryproject/tspclient-go"
+
+	"github.com/chaoscondensate/cli/internal/netpolicy"
 )
 
 const DefaultHTTPTimeout = 15 * time.Second
@@ -122,7 +123,7 @@ func (c HTTPClient) resolveEndpoint(ctx context.Context, normalized string) (*ur
 		return nil, nil, failure(ReasonTransport, "timestamp authority host could not be resolved")
 	}
 	for _, address := range addresses {
-		if !publicIP(address.IP) {
+		if !netpolicy.PublicIP(address.IP) {
 			return nil, nil, failure(ReasonRequestProfile, "timestamp authority resolves to a non-public address")
 		}
 	}
@@ -206,33 +207,4 @@ func normalizedOrigin(value *url.URL) string {
 		}
 	}
 	return value.Scheme + "://" + net.JoinHostPort(host, port)
-}
-
-func publicIP(value net.IP) bool {
-	address, ok := netip.AddrFromSlice(value)
-	if !ok {
-		return false
-	}
-	address = address.Unmap()
-	if !address.IsValid() || !address.IsGlobalUnicast() || address.IsPrivate() || address.IsLoopback() || address.IsLinkLocalUnicast() || address.IsLinkLocalMulticast() || address.IsMulticast() || address.IsUnspecified() {
-		return false
-	}
-	for _, prefix := range reservedPrefixes {
-		if prefix.Contains(address) {
-			return false
-		}
-	}
-	return true
-}
-
-var reservedPrefixes = []netip.Prefix{
-	netip.MustParsePrefix("0.0.0.0/8"),
-	netip.MustParsePrefix("100.64.0.0/10"),
-	netip.MustParsePrefix("192.0.0.0/24"),
-	netip.MustParsePrefix("192.0.2.0/24"),
-	netip.MustParsePrefix("198.18.0.0/15"),
-	netip.MustParsePrefix("198.51.100.0/24"),
-	netip.MustParsePrefix("203.0.113.0/24"),
-	netip.MustParsePrefix("240.0.0.0/4"),
-	netip.MustParsePrefix("2001:db8::/32"),
 }

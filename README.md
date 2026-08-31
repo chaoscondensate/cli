@@ -316,6 +316,14 @@ Use stable JSON output in scripts:
 forecast-ledger --json status --file ledger.yaml
 ```
 
+CLI JSON and MCP tool envelopes use the same service-owned outcome codes.
+Dry-runs use `*.planned`, supported no-op mutations use `*.unchanged`, and a
+report-bearing verification failure keeps its typed `data` even though the CLI
+exits nonzero or MCP sets `isError: true`. Timestamp verification data is flat:
+fields such as `question_id`, `forecast_id`, and `verification` are siblings.
+Treat codes as the machine contract; human messages may become clearer without
+changing their meaning.
+
 Inspect the binary and exact embedded contract:
 
 ```sh
@@ -366,6 +374,7 @@ gofmt -w cmd internal
 go mod verify
 go test ./...
 go vet ./...
+go tool govulncheck ./...
 ```
 
 Create a local archive and Linux-package snapshot with:

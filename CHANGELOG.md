@@ -3,6 +3,25 @@
 Notable user-visible changes to Forecast Ledger CLI are recorded here. Release
 tags and downloadable files are published on GitHub Releases.
 
+## Unreleased
+
+### Fixed
+
+- Preserve standard Go JSON shape while redacting secret-named fields. Embedded
+  timestamp fields remain flat, JSON tags and large integers are kept, and MCP
+  text and structured content use the same sanitized value.
+- Use one service-owned outcome contract for CLI and MCP. Timestamp success is
+  `timestamp.verified`, package dry-run is `publication.build.planned`, no-op
+  mutations use stable `*.unchanged` codes, and failed target checks retain
+  their typed report with `target.failed`.
+- Recover an unambiguous ledger write journal automatically under the next
+  writer lock, while preserving ambiguous state for investigation.
+- Bind optional outcome-source checks to the public numeric address actually
+  dialed, disable environment proxies, and reject mixed or reserved DNS answers
+  including CGNAT.
+- Pin `govulncheck` as a project tool and require its completed analysis before
+  CI snapshots and tag releases.
+
 ## 0.6.1 - 2026-08-30
 
 ### Fixed
