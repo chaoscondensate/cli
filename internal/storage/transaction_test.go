@@ -196,7 +196,7 @@ func TestRecoveryCompletesCrashAfterJournalSync(t *testing.T) {
 	assertNoTransactionTemps(t, filepath.Dir(path))
 }
 
-func TestTransactionRefusesExistingJournalAndChangedRecoveryTarget(t *testing.T) {
+func TestTransactionAutomaticallyRecoversExistingJournalAndRefusesChangedTarget(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "ledger.json")
 	if err := os.WriteFile(path, []byte("{\"value\":1}\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -216,8 +216,30 @@ func TestTransactionRefusesExistingJournalAndChangedRecoveryTarget(t *testing.T)
 		t.Fatal("fault did not stop transaction")
 	}
 	err = UpdateLedger(context.Background(), path, TransactionOptions{Mutate: func(parsed *document.Document) ([]byte, error) { return parsed.Raw, nil }})
-	if app.ErrorCodeOf(err) != app.CodeConflict {
-		t.Fatalf("existing journal was ignored: %v", err)
+	if err != nil {
+		t.Fatalf("automatic recovery failed: %v", err)
+	}
+	recovered, readErr := os.ReadFile(path)
+	if readErr != nil || string(recovered) != "{\"value\":2}\n" {
+		t.Fatalf("automatic recovery data=%q err=%v", recovered, readErr)
+	}
+	if _, statErr := os.Stat(JournalPath(path)); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("automatic recovery retained journal: %v", statErr)
+	}
+
+	err = UpdateLedger(context.Background(), path, TransactionOptions{
+		Mutate: func(parsed *document.Document) ([]byte, error) {
+			return document.ReplaceScalars(parsed, []document.ScalarEdit{{Pointer: "/value", Value: int64(3)}})
+		},
+		Fault: func(stage TransactionStage) error {
+			if stage == StageJournalSynced {
+				return errors.New("stop again")
+			}
+			return nil
+		},
+	})
+	if err == nil {
+		t.Fatal("second fault did not stop transaction")
 	}
 	if err := os.WriteFile(path, []byte("{\"value\":99}\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -225,6 +247,96 @@ func TestTransactionRefusesExistingJournalAndChangedRecoveryTarget(t *testing.T)
 	err = RecoverLedger(context.Background(), path, 0, nil)
 	if app.ErrorCodeOf(err) != app.CodeConflict {
 		t.Fatalf("changed recovery target accepted: %v", err)
+	}
+}
+
+func TestAutomaticRecoveryRefusesMissingChangedAndInvalidTemporaryFiles(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		change func(t *testing.T, tempPath string)
+	}{
+		{name: "missing", change: func(t *testing.T, tempPath string) {
+			t.Helper()
+			if err := os.Remove(tempPath); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{name: "changed", change: func(t *testing.T, tempPath string) {
+			t.Helper()
+			if err := os.WriteFile(tempPath, []byte("{\"value\":7}\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			directory := t.TempDir()
+			path := filepath.Join(directory, "ledger.json")
+			if err := os.WriteFile(path, []byte("{\"value\":1}\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			err := UpdateLedger(context.Background(), path, TransactionOptions{
+				Mutate: func(parsed *document.Document) ([]byte, error) {
+					return document.ReplaceScalars(parsed, []document.ScalarEdit{{Pointer: "/value", Value: int64(2)}})
+				},
+				Fault: func(stage TransactionStage) error {
+					if stage == StageJournalSynced {
+						return errors.New("stop")
+					}
+					return nil
+				},
+			})
+			if err == nil {
+				t.Fatal("fault did not stop transaction")
+			}
+			journalBytes, err := os.ReadFile(JournalPath(path))
+			if err != nil {
+				t.Fatal(err)
+			}
+			journal, err := decodeRecoveryJournal(journalBytes, path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tempPath := filepath.Join(directory, journal.TempBase)
+			test.change(t, tempPath)
+			err = UpdateLedger(context.Background(), path, TransactionOptions{Mutate: func(parsed *document.Document) ([]byte, error) { return parsed.Raw, nil }})
+			if app.ErrorCodeOf(err) != app.CodeConflict {
+				t.Fatalf("automatic recovery error=%v, want conflict", err)
+			}
+			if _, statErr := os.Stat(JournalPath(path)); statErr != nil {
+				t.Fatalf("ambiguous journal was not preserved: %v", statErr)
+			}
+		})
+	}
+}
+
+func TestAutomaticRecoveryHonorsCancellationBeforeMutation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ledger.json")
+	if err := os.WriteFile(path, []byte("{\"value\":1}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := UpdateLedger(context.Background(), path, TransactionOptions{
+		Mutate: func(parsed *document.Document) ([]byte, error) {
+			return document.ReplaceScalars(parsed, []document.ScalarEdit{{Pointer: "/value", Value: int64(2)}})
+		},
+		Fault: func(stage TransactionStage) error {
+			if stage == StageJournalSynced {
+				return errors.New("stop")
+			}
+			return nil
+		},
+	})
+	if err == nil {
+		t.Fatal("fault did not stop transaction")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	mutated := false
+	err = UpdateLedger(ctx, path, TransactionOptions{Mutate: func(parsed *document.Document) ([]byte, error) { mutated = true; return parsed.Raw, nil }})
+	if app.ErrorCodeOf(err) != app.CodeInterrupted || mutated {
+		t.Fatalf("cancelled retry err=%v mutated=%v", err, mutated)
+	}
+	if _, statErr := os.Stat(JournalPath(path)); statErr != nil {
+		t.Fatalf("cancelled retry removed journal: %v", statErr)
 	}
 }
 
@@ -363,7 +475,7 @@ func TestFaultInjectionCoversEveryDurabilityAndCleanupBoundary(t *testing.T) {
 					if _, statErr := os.Stat(JournalPath(path)); statErr != nil {
 						t.Fatalf("recoverable failure has no journal: %v", statErr)
 					}
-					if err := RecoverLedger(context.Background(), path, 0, nil); err != nil {
+					if err := UpdateLedger(context.Background(), path, TransactionOptions{Mutate: func(parsed *document.Document) ([]byte, error) { return parsed.Raw, nil }}); err != nil {
 						t.Fatal(err)
 					}
 					recovered, _ := os.ReadFile(path)

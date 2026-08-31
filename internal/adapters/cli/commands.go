@@ -101,6 +101,28 @@ func commandEffects(command *urfavecli.Command) service.Effects {
 	return service.ProductionEffects()
 }
 
+func presentOperationOutcome(command *urfavecli.Command, operation service.OperationName, dryRun bool, data any, operationErr error, humanMessage string) error {
+	outcome := service.ClassifyOperationOutcome(operation, service.OutcomeInput{DryRun: dryRun, Data: data, Err: operationErr})
+	if operationErr != nil && !outcome.HasData {
+		return operationErr
+	}
+	presenter := presenterFor(command)
+	message := outcome.Message
+	if humanMessage != "" && presenter.Mode() != presentation.ModeJSON && presenter.Mode() != presentation.ModeQuiet {
+		message = humanMessage
+	}
+	if err := presenter.Success(outcome.Code, message, data); err != nil {
+		return err
+	}
+	if operationErr != nil {
+		return presentedApplicationError{operationErr}
+	}
+	if outcome.FailureCode != "" {
+		return presentedApplicationError{app.NewError(outcome.FailureCode, outcome.Message, nil)}
+	}
+	return nil
+}
+
 func ledgerCommand() *urfavecli.Command {
 	authorFlags := rootPatchFlags()
 	flags := append([]urfavecli.Flag{fileFlag(false)}, authorFlags...)
@@ -119,20 +141,15 @@ func ledgerUpdateAction(ctx context.Context, command *urfavecli.Command) error {
 		return err
 	}
 	var result service.RootMetadataFileResult
-	code, message := "ledger.updated", "Ledger metadata was updated"
 	if runtime.DryRun {
 		result, err = service.PlanRootMetadataFileUpdate(operationContext, command.String("file"), input)
-		code, message = "ledger.update.planned", "Ledger metadata update is valid; no file was changed"
 	} else {
 		result, err = service.CommitRootMetadataFileUpdate(operationContext, command.String("file"), input)
-		if err == nil && !result.Changed {
-			code, message = "ledger.unchanged", "Ledger metadata is already up to date"
-		}
 	}
 	if err != nil {
 		return err
 	}
-	return presenterFor(command).Success(code, message, result)
+	return presentOperationOutcome(command, service.OperationLedgerUpdate, runtime.DryRun, result, nil, "")
 }
 
 func initCommand() *urfavecli.Command {
@@ -250,7 +267,7 @@ func initAction(ctx context.Context, command *urfavecli.Command) error {
 		}
 		result := service.NewInitResult(model, effects, service.Recovery{State: service.RecoveryNone})
 		result.NormalizedTimes = normalizedTimes
-		return presenterFor(command).Success("ledger.init.planned", "Ledger initialization is valid; no files were written", result)
+		return presentOperationOutcome(command, service.OperationLedgerInit, true, result, nil, "")
 	}
 	recovery := service.Recovery{State: service.RecoveryNone}
 	if shape == service.CreationSealedForecast {
@@ -270,7 +287,7 @@ func initAction(ctx context.Context, command *urfavecli.Command) error {
 	}
 	result := service.NewInitResult(model, completedEffects, recovery)
 	result.NormalizedTimes = normalizedTimes
-	return presenterFor(command).Success("ledger.initialized", "Ledger was created", result)
+	return presentOperationOutcome(command, service.OperationLedgerInit, false, result, nil, "")
 }
 
 func withRecovery(err error, recovery service.Recovery) error {
@@ -299,9 +316,8 @@ func ledgerReadCommand(name, usage string, stdinAllowed bool) *urfavecli.Command
 		if err != nil {
 			return err
 		}
-		presenter := presenterFor(command)
 		if name == "validate" {
-			return presenter.Success("ledger.valid", "Ledger is valid", map[string]any{"ledger_id": loaded.Model.LedgerID, "schema_version": loaded.Model.SchemaVersion})
+			return presentOperationOutcome(command, service.OperationLedgerValidate, false, map[string]any{"ledger_id": loaded.Model.LedgerID, "schema_version": loaded.Model.SchemaVersion}, nil, "")
 		}
 		status, err := service.StatusForLedger(loaded)
 		if err != nil {
@@ -309,7 +325,7 @@ func ledgerReadCommand(name, usage string, stdinAllowed bool) *urfavecli.Command
 		}
 		message := fmt.Sprintf("%s: %d questions, %d forecasts; integrity: %d unanchored, %d pending, %d verified, %d failed",
 			status.LedgerID, status.Questions, status.Forecasts, status.Unanchored, status.Pending, status.Verified, status.Failed)
-		return presenter.Success("ledger.status", message, status)
+		return presentOperationOutcome(command, service.OperationLedgerStatus, false, status, nil, message)
 	}
 	return command
 }
@@ -342,17 +358,15 @@ func platformAddAction(ctx context.Context, command *urfavecli.Command) error {
 	}
 	id := ledger.Slug(command.String("platform"))
 	var result service.PlatformFileResult
-	code, message := "platform.added", "Platform was added"
 	if runtime.DryRun {
 		result, err = service.PlanPlatformAddFile(operationContext, command.String("file"), id, input)
-		code, message = "platform.add.planned", "Platform addition is valid; no file was changed"
 	} else {
 		result, err = service.CommitPlatformAddFile(operationContext, command.String("file"), id, input)
 	}
 	if err != nil {
 		return err
 	}
-	return presenterFor(command).Success(code, message, result)
+	return presentOperationOutcome(command, service.OperationPlatformAdd, runtime.DryRun, result, nil, "")
 }
 
 func platformUpdateAction(ctx context.Context, command *urfavecli.Command) error {
@@ -365,20 +379,15 @@ func platformUpdateAction(ctx context.Context, command *urfavecli.Command) error
 	}
 	id := ledger.Slug(command.String("platform"))
 	var result service.PlatformFileResult
-	code, message := "platform.updated", "Platform was updated"
 	if runtime.DryRun {
 		result, err = service.PlanPlatformUpdateFile(operationContext, command.String("file"), id, input)
-		code, message = "platform.update.planned", "Platform update is valid; no file was changed"
 	} else {
 		result, err = service.CommitPlatformUpdateFile(operationContext, command.String("file"), id, input)
-		if err == nil && !result.Changed {
-			code, message = "platform.unchanged", "Platform is already up to date"
-		}
 	}
 	if err != nil {
 		return err
 	}
-	return presenterFor(command).Success(code, message, result)
+	return presentOperationOutcome(command, service.OperationPlatformUpdate, runtime.DryRun, result, nil, "")
 }
 
 func platformListAction(ctx context.Context, command *urfavecli.Command) error {
@@ -400,7 +409,7 @@ func platformListAction(ctx context.Context, command *urfavecli.Command) error {
 	if message == "" {
 		message = "No platforms"
 	}
-	return presenterFor(command).Success("platform.list", message, map[string]any{"ledger_id": ledgerID, "platforms": items})
+	return presentOperationOutcome(command, service.OperationPlatformList, false, map[string]any{"ledger_id": ledgerID, "platforms": items}, nil, message)
 }
 
 func platformShowAction(ctx context.Context, command *urfavecli.Command) error {
@@ -412,7 +421,7 @@ func platformShowAction(ctx context.Context, command *urfavecli.Command) error {
 		return err
 	}
 	message := fmt.Sprintf("%s\t%s\t%s\t%d", result.ID, result.Platform.Kind, result.Platform.Name, len(result.ReferencingQuestionIDs))
-	return presenterFor(command).Success("platform.show", message, map[string]any{"ledger_id": ledgerID, "platform": result})
+	return presentOperationOutcome(command, service.OperationPlatformShow, false, map[string]any{"ledger_id": ledgerID, "platform": result}, nil, message)
 }
 
 func platformRemoveAction(ctx context.Context, command *urfavecli.Command) error {
@@ -425,7 +434,7 @@ func platformRemoveAction(ctx context.Context, command *urfavecli.Command) error
 		if err != nil {
 			return err
 		}
-		return presenterFor(command).Success("platform.remove.planned", "Platform removal is valid; no file was changed", result)
+		return presentOperationOutcome(command, service.OperationPlatformRemove, true, result, nil, "")
 	}
 	approved, err := runtime.Confirm(operationContext, fmt.Sprintf("Remove platform %s?", id))
 	if err != nil {
@@ -438,7 +447,7 @@ func platformRemoveAction(ctx context.Context, command *urfavecli.Command) error
 	if err != nil {
 		return err
 	}
-	return presenterFor(command).Success("platform.removed", "Platform was removed", result)
+	return presentOperationOutcome(command, service.OperationPlatformRemove, false, result, nil, "")
 }
 
 func questionCommand() *urfavecli.Command {
@@ -510,7 +519,7 @@ func questionAddAction(ctx context.Context, command *urfavecli.Command) error {
 		return err
 	}
 	var result service.QuestionFileResult
-	code, message := "question.added", "Question was added"
+	humanMessage := ""
 	if shape != service.CreationSealedForecast && keyPath != "" {
 		return app.NewError(app.CodeUsage, "--key-file is only valid for a sealed initial forecast", nil)
 	}
@@ -522,14 +531,14 @@ func questionAddAction(ctx context.Context, command *urfavecli.Command) error {
 			result, err = service.CommitQuestionAddEmptyFile(operationContext, command.String("file"), normalized, observedAt)
 		}
 	case service.CreationPublicForecast:
-		message = "Question and initial forecast were added"
+		humanMessage = "Question and initial forecast were added"
 		if runtime.DryRun {
 			result, err = service.PlanQuestionAddPublicFile(operationContext, command.String("file"), normalized, observedAt)
 		} else {
 			result, err = service.CommitQuestionAddPublicFile(operationContext, command.String("file"), normalized, observedAt)
 		}
 	case service.CreationSealedForecast:
-		message = "Question and initial forecast were added"
+		humanMessage = "Question and initial forecast were added"
 		protectedInputPath := command.String("initial-secret-input")
 		protectedArgument := "--initial-secret-input"
 		if protectedInputPath != "-" {
@@ -551,9 +560,9 @@ func questionAddAction(ctx context.Context, command *urfavecli.Command) error {
 	}
 	result.NormalizedTimes = normalizedTimes
 	if runtime.DryRun {
-		code, message = "question.add.planned", "Question addition is valid; no file was changed"
+		humanMessage = ""
 	}
-	return presenterFor(command).Success(code, message, result)
+	return presentOperationOutcome(command, service.OperationQuestionAdd, runtime.DryRun, result, nil, humanMessage)
 }
 
 func questionUpdateAction(ctx context.Context, command *urfavecli.Command) error {
@@ -581,21 +590,16 @@ func questionUpdateAction(ctx context.Context, command *urfavecli.Command) error
 	}
 	id := ledger.Slug(command.String("question"))
 	var result service.QuestionFileResult
-	code, message := "question.updated", "Question was updated"
 	if runtime.DryRun {
 		result, err = service.PlanQuestionUpdateFile(operationContext, command.String("file"), id, input)
-		code, message = "question.update.planned", "Question update is valid; no file was changed"
 	} else {
 		result, err = service.CommitQuestionUpdateFile(operationContext, command.String("file"), id, input)
-		if err == nil && !result.Changed {
-			code, message = "question.unchanged", "Question is already up to date"
-		}
 	}
 	if err != nil {
 		return err
 	}
 	result.NormalizedTimes = normalizedTimes
-	return presenterFor(command).Success(code, message, result)
+	return presentOperationOutcome(command, service.OperationQuestionUpdate, runtime.DryRun, result, nil, "")
 }
 
 func questionListAction(ctx context.Context, command *urfavecli.Command) error {
@@ -617,7 +621,7 @@ func questionListAction(ctx context.Context, command *urfavecli.Command) error {
 	if message == "" {
 		message = "No questions"
 	}
-	return presenterFor(command).Success("question.list", message, map[string]any{"ledger_id": ledgerID, "questions": items})
+	return presentOperationOutcome(command, service.OperationQuestionList, false, map[string]any{"ledger_id": ledgerID, "questions": items}, nil, message)
 }
 
 func questionShowAction(ctx context.Context, command *urfavecli.Command) error {
@@ -634,12 +638,12 @@ func questionShowAction(ctx context.Context, command *urfavecli.Command) error {
 	if presenter.Mode() != presentation.ModeJSON && presenter.Mode() != presentation.ModeQuiet {
 		message = formatQuestionView(presenter.Mode(), result)
 	}
-	return presenter.Success("question.show", message, map[string]any{"ledger_id": ledgerID, "question": result})
+	return presentOperationOutcome(command, service.OperationQuestionShow, false, map[string]any{"ledger_id": ledgerID, "question": result}, nil, message)
 }
 
 func questionResolveAction(ctx context.Context, command *urfavecli.Command) error {
 	var input service.ResolutionInput
-	return questionTerminalAction(ctx, command, service.InputSchemaResolution, &input, lifecycleFlags(true), func(command *urfavecli.Command) error {
+	return questionTerminalAction(ctx, command, func(command *urfavecli.Command) error {
 		value, err := buildResolutionInput(command)
 		input = value
 		return err
@@ -653,7 +657,7 @@ func questionResolveAction(ctx context.Context, command *urfavecli.Command) erro
 
 func questionAnnulAction(ctx context.Context, command *urfavecli.Command) error {
 	var input service.AnnulInput
-	return questionTerminalAction(ctx, command, service.InputSchemaAnnul, &input, lifecycleFlags(false), func(command *urfavecli.Command) error {
+	return questionTerminalAction(ctx, command, func(command *urfavecli.Command) error {
 		reason, recordedAt, sources, err := buildReasonInput(command)
 		input = service.AnnulInput{Reason: reason, RecordedAt: recordedAt, Sources: sources}
 		return err
@@ -667,7 +671,7 @@ func questionAnnulAction(ctx context.Context, command *urfavecli.Command) error 
 
 func questionDisputeAction(ctx context.Context, command *urfavecli.Command) error {
 	var input service.DisputeInput
-	return questionTerminalAction(ctx, command, service.InputSchemaDispute, &input, lifecycleFlags(false), func(command *urfavecli.Command) error {
+	return questionTerminalAction(ctx, command, func(command *urfavecli.Command) error {
 		reason, recordedAt, sources, err := buildReasonInput(command)
 		input = service.DisputeInput{Reason: reason, RecordedAt: recordedAt, Sources: sources}
 		return err
@@ -679,7 +683,7 @@ func questionDisputeAction(ctx context.Context, command *urfavecli.Command) erro
 	})
 }
 
-func questionTerminalAction(ctx context.Context, command *urfavecli.Command, _ service.InputSchemaName, _ any, _ []urfavecli.Flag, buildDirect func(*urfavecli.Command) error, verb string, execute func(context.Context, ledger.Slug, ledger.Timestamp, bool) (service.QuestionFileResult, error)) error {
+func questionTerminalAction(ctx context.Context, command *urfavecli.Command, buildDirect func(*urfavecli.Command) error, verb string, execute func(context.Context, ledger.Slug, ledger.Timestamp, bool) (service.QuestionFileResult, error)) error {
 	runtime := RuntimeFromCommand(command)
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
@@ -714,14 +718,17 @@ func questionTerminalAction(ctx context.Context, command *urfavecli.Command, _ s
 		return err
 	}
 	result.NormalizedTimes = normalizedTimes
-	code, message := "question."+verb+"d", "Question was "+verb+"d"
-	if verb == "annul" {
-		code, message = "question.annulled", "Question was annulled; the question and forecasts were retained"
+	operation := service.OperationQuestionDispute
+	humanMessage := ""
+	if verb == "resolve" {
+		operation = service.OperationQuestionResolve
+	} else if verb == "annul" {
+		operation = service.OperationQuestionAnnul
+		if !runtime.DryRun {
+			humanMessage = "Question was annulled; the question and forecasts were retained"
+		}
 	}
-	if runtime.DryRun {
-		code, message = "question."+verb+".planned", "Question lifecycle change is valid; no file was changed"
-	}
-	return presenterFor(command).Success(code, message, result)
+	return presentOperationOutcome(command, operation, runtime.DryRun, result, nil, humanMessage)
 }
 
 func forecastCommand() *urfavecli.Command {
@@ -776,10 +783,8 @@ func forecastAddAction(ctx context.Context, command *urfavecli.Command) error {
 	}
 	questionID, forecastID := ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast"))
 	var result service.ForecastFileResult
-	code, message := "forecast.added", "Forecast was added"
 	if runtime.DryRun {
 		result, err = service.PlanPublicForecastAddFile(operationContext, command.String("file"), questionID, forecastID, input, observedAt)
-		code, message = "forecast.add.planned", "Forecast addition is valid; no file was changed"
 	} else {
 		result, err = service.CommitPublicForecastAddFile(operationContext, command.String("file"), questionID, forecastID, input, observedAt)
 	}
@@ -787,7 +792,7 @@ func forecastAddAction(ctx context.Context, command *urfavecli.Command) error {
 		return err
 	}
 	result.NormalizedTimes = normalizedTimes
-	return presenterFor(command).Success(code, message, result)
+	return presentOperationOutcome(command, service.OperationForecastAdd, runtime.DryRun, result, nil, "")
 }
 
 func forecastListAction(ctx context.Context, command *urfavecli.Command) error {
@@ -810,7 +815,7 @@ func forecastListAction(ctx context.Context, command *urfavecli.Command) error {
 	if message == "" {
 		message = "No forecasts"
 	}
-	return presenterFor(command).Success("forecast.list", message, map[string]any{"ledger_id": ledgerID, "question_id": questionID, "forecasts": items})
+	return presentOperationOutcome(command, service.OperationForecastList, false, map[string]any{"ledger_id": ledgerID, "question_id": questionID, "forecasts": items}, nil, message)
 }
 
 func forecastShowAction(ctx context.Context, command *urfavecli.Command) error {
@@ -827,7 +832,7 @@ func forecastShowAction(ctx context.Context, command *urfavecli.Command) error {
 	if presenter.Mode() != presentation.ModeJSON && presenter.Mode() != presentation.ModeQuiet {
 		message = formatForecastView(presenter.Mode(), result)
 	}
-	return presenter.Success("forecast.show", message, map[string]any{"ledger_id": ledgerID, "question_id": questionID, "forecast": result})
+	return presentOperationOutcome(command, service.OperationForecastShow, false, map[string]any{"ledger_id": ledgerID, "question_id": questionID, "forecast": result}, nil, message)
 }
 
 func forecastSealAction(ctx context.Context, command *urfavecli.Command) error {
@@ -861,10 +866,8 @@ func forecastSealAction(ctx context.Context, command *urfavecli.Command) error {
 	}
 	questionID, forecastID := ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast"))
 	var result service.ForecastFileResult
-	code, message := "forecast.sealed", "Sealed forecast and protected key were created"
 	if runtime.DryRun {
 		result, err = service.PlanForecastSealFile(operationContext, command.String("file"), command.String("key-file"), questionID, forecastID, input, observedAt)
-		code, message = "forecast.seal.planned", "Sealed forecast creation is valid; no key or ledger file was changed"
 	} else {
 		result, err = service.CommitForecastSealFile(operationContext, command.String("file"), command.String("key-file"), questionID, forecastID, input, observedAt, commandEffects(command))
 	}
@@ -872,7 +875,7 @@ func forecastSealAction(ctx context.Context, command *urfavecli.Command) error {
 		return withRecovery(err, result.Recovery)
 	}
 	result.NormalizedTimes = normalizedTimes
-	return presenterFor(command).Success(code, message, result)
+	return presentOperationOutcome(command, service.OperationForecastSeal, runtime.DryRun, result, nil, "")
 }
 
 func forecastRevealAction(ctx context.Context, command *urfavecli.Command) error {
@@ -892,20 +895,15 @@ func forecastRevealAction(ctx context.Context, command *urfavecli.Command) error
 		revealedAt = ledger.Timestamp(commandEffects(command).Clock.Now().Format(time.RFC3339))
 	}
 	var result service.ForecastFileResult
-	code, message := "forecast.revealed", "Forecast was authenticated and revealed"
 	if runtime.DryRun {
 		result, err = service.PlanForecastRevealFile(operationContext, command.String("file"), command.String("key-file"), questionID, forecastID, revealedAt)
-		code, message = "forecast.reveal.planned", "Forecast reveal is valid; no file was changed"
 	} else {
 		result, err = service.CommitForecastRevealFile(operationContext, command.String("file"), command.String("key-file"), questionID, forecastID, revealedAt)
-		if err == nil && !result.Changed {
-			code, message = "forecast.reveal.unchanged", "Forecast was already revealed with this authenticated key"
-		}
 	}
 	if err != nil {
 		return err
 	}
-	return presenterFor(command).Success(code, message, result)
+	return presentOperationOutcome(command, service.OperationForecastReveal, runtime.DryRun, result, nil, "")
 }
 
 func forecastKeyHintUpdateAction(ctx context.Context, command *urfavecli.Command) error {
@@ -916,20 +914,15 @@ func forecastKeyHintUpdateAction(ctx context.Context, command *urfavecli.Command
 	keyHint := command.String("key-hint")
 	var result service.ForecastFileResult
 	var err error
-	code, message := "forecast.key_hint.updated", "Forecast key hint was updated"
 	if runtime.DryRun {
 		result, err = service.PlanForecastKeyHintUpdateFile(operationContext, command.String("file"), questionID, forecastID, keyHint)
-		code, message = "forecast.key_hint.update.planned", "Key hint update is valid; no file was changed"
 	} else {
 		result, err = service.CommitForecastKeyHintUpdateFile(operationContext, command.String("file"), questionID, forecastID, keyHint)
-		if err == nil && !result.Changed {
-			code, message = "forecast.key_hint.unchanged", "Forecast key hint is already up to date"
-		}
 	}
 	if err != nil {
 		return err
 	}
-	return presenterFor(command).Success(code, message, result)
+	return presentOperationOutcome(command, service.OperationForecastKeyHintUpdate, runtime.DryRun, result, nil, "")
 }
 
 func decodePrivateOperationInputForArgument(ctx context.Context, path string, stdin io.Reader, schema service.InputSchemaName, destination any, argument string) error {
@@ -985,17 +978,15 @@ func targetBuildAction(ctx context.Context, command *urfavecli.Command) error {
 	questionID, forecastID := ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast"))
 	var result service.TargetOperationResult
 	var err error
-	code, message := "target.built", "Forecast target artifacts were built"
 	if runtime.DryRun {
 		result, err = service.PlanTargetBuild(operationContext, command.String("file"), all, questionID, forecastID)
-		code, message = "target.build.planned", "Target build is valid; no files were written"
 	} else {
 		result, err = service.CommitTargetBuild(operationContext, command.String("file"), all, questionID, forecastID)
 	}
 	if err != nil {
 		return withRecovery(err, result.Recovery)
 	}
-	return presenterFor(command).Success(code, message, result)
+	return presentOperationOutcome(command, service.OperationTargetBuild, runtime.DryRun, result, nil, "")
 }
 
 func targetCheckAction(ctx context.Context, command *urfavecli.Command) error {
@@ -1006,28 +997,12 @@ func targetCheckAction(ctx context.Context, command *urfavecli.Command) error {
 	if err != nil {
 		return err
 	}
-	code, message := "target.valid", "Forecast target artifacts match the ledger"
-	if result.FailureCode != "" {
-		code, message = "target.failed", "Target inspection completed with failures"
-	} else {
-		for _, target := range result.Targets {
-			if string(target.State) == string(service.LayerNotApplicable) {
-				code, message = "target.checked", "Target inspection completed; some forecasts have no retained target"
-				break
-			}
-		}
-	}
 	presenter := presenterFor(command)
+	humanMessage := ""
 	if presenter.Mode() != presentation.ModeJSON && presenter.Mode() != presentation.ModeQuiet {
-		message = formatTargetInspection(presenter.Mode(), result)
+		humanMessage = formatTargetInspection(presenter.Mode(), result)
 	}
-	if err := presenter.Success(code, message, result); err != nil {
-		return err
-	}
-	if result.FailureCode != "" {
-		return presentedApplicationError{app.NewError(result.FailureCode, "target inspection found failures", nil)}
-	}
-	return nil
+	return presentOperationOutcome(command, service.OperationTargetCheck, false, result, nil, humanMessage)
 }
 
 func formatTargetInspection(mode presentation.Mode, result service.TargetOperationResult) string {
@@ -1094,32 +1069,12 @@ func timestampStampAction(ctx context.Context, command *urfavecli.Command) error
 	if err != nil && result.FailureCode == "" {
 		return withRecovery(err, result.Recovery)
 	}
-	code, message := "timestamp.verified", "RFC 3161 response was verified and retained"
-	if result.FailureCode == app.CodeNetwork {
-		code, message = "timestamp.not_checked", "The timestamp authority request did not complete"
-	}
-	if result.FailureCode == app.CodeVerification {
-		code, message = "timestamp.invalid_response", "No timestamp authority response passed local verification"
-	}
-	if result.State == service.TimestampPending {
-		if result.FailureCode != app.CodeNetwork {
-			code, message = "timestamp.pending", "RFC 3161 response was retained as pending"
-		}
-	}
-	if runtime.DryRun {
-		code, message = "timestamp.stamp.planned", "Timestamp stamp is valid; no entropy, network request, or file write occurred"
-	}
 	presenter := presenterFor(command)
+	humanMessage := ""
 	if presenter.Mode() != presentation.ModeJSON && presenter.Mode() != presentation.ModeQuiet {
-		message = formatTimestampArtifact(presenter.Mode(), result)
+		humanMessage = formatTimestampArtifact(presenter.Mode(), result)
 	}
-	if presentErr := presenter.Success(code, message, result); presentErr != nil {
-		return presentErr
-	}
-	if err != nil {
-		return presentedApplicationError{err}
-	}
-	return nil
+	return presentOperationOutcome(command, service.OperationTimestampStamp, runtime.DryRun, result, err, humanMessage)
 }
 
 func timestampStatusAction(ctx context.Context, command *urfavecli.Command) error {
@@ -1135,7 +1090,7 @@ func timestampStatusAction(ctx context.Context, command *urfavecli.Command) erro
 	if presenter.Mode() != presentation.ModeJSON && presenter.Mode() != presentation.ModeQuiet {
 		message = formatTimestampArtifact(presenter.Mode(), result)
 	}
-	return presenter.Success("timestamp.status", message, result)
+	return presentOperationOutcome(command, service.OperationTimestampStatus, false, result, nil, message)
 }
 
 func timestampVerifyAction(ctx context.Context, command *urfavecli.Command) error {
@@ -1143,27 +1098,15 @@ func timestampVerifyAction(ctx context.Context, command *urfavecli.Command) erro
 	operationContext, cancel := runtime.Context(ctx)
 	defer cancel()
 	result, err := service.CommitTimestampVerify(operationContext, command.String("file"), ledger.Slug(command.String("question")), ledger.Slug(command.String("forecast")), service.TimestampVerifyOptions{DryRun: runtime.DryRun, Effects: commandEffects(command)})
-	if err != nil {
+	if err != nil && result.FailureCode == "" {
 		return err
-	}
-	code, message := "timestamp.verification."+string(result.Verification.State), "Timestamp verification completed with status "+string(result.Verification.State)
-	if result.Verification.State == service.LayerPass {
-		code, message = "timestamp.verified", "RFC 3161 evidence was verified locally"
-	}
-	if runtime.DryRun {
-		code, message = "timestamp.verify.planned", "Timestamp verification is valid; the ledger update was deferred"
 	}
 	presenter := presenterFor(command)
+	humanMessage := ""
 	if presenter.Mode() != presentation.ModeJSON && presenter.Mode() != presentation.ModeQuiet {
-		message = formatTimestampVerification(presenter.Mode(), result)
+		humanMessage = formatTimestampVerification(presenter.Mode(), result)
 	}
-	if err := presenter.Success(code, message, result); err != nil {
-		return err
-	}
-	if result.FailureCode != "" {
-		return presentedApplicationError{app.NewError(result.FailureCode, "timestamp verification completed with status "+string(result.Verification.State), nil)}
-	}
-	return nil
+	return presentOperationOutcome(command, service.OperationTimestampVerify, runtime.DryRun, result, err, humanMessage)
 }
 
 func verifyCommand() *urfavecli.Command {
@@ -1197,17 +1140,11 @@ func verificationAction(ctx context.Context, command *urfavecli.Command) error {
 		return err
 	}
 	presenter := presenterFor(command)
-	message := "Verification completed with status " + string(report.Overall)
+	humanMessage := ""
 	if presenter.Mode() != presentation.ModeJSON && presenter.Mode() != presentation.ModeQuiet {
-		message = formatVerificationReport(presenter.Mode(), report)
+		humanMessage = formatVerificationReport(presenter.Mode(), report)
 	}
-	if err := presenter.Success("verification."+string(report.Overall), message, report); err != nil {
-		return err
-	}
-	if report.FailureCode != "" {
-		return presentedApplicationError{app.NewError(report.FailureCode, "verification completed with status "+string(report.Overall), nil)}
-	}
-	return nil
+	return presentOperationOutcome(command, service.OperationVerificationRun, false, report, nil, humanMessage)
 }
 
 func publishCommand() *urfavecli.Command {
@@ -1230,11 +1167,7 @@ func publicationBuildAction(ctx context.Context, command *urfavecli.Command) err
 	if err != nil {
 		return err
 	}
-	code, message := "publication.built", "Evidence package was built"
-	if runtime.DryRun {
-		code, message = "publication.build.planned", "Evidence package build is valid; no files were written"
-	}
-	return presenterFor(command).Success(code, message, result)
+	return presentOperationOutcome(command, service.OperationPublicationBuild, runtime.DryRun, result, nil, "")
 }
 
 func publicationVerifyAction(ctx context.Context, command *urfavecli.Command) error {
@@ -1246,17 +1179,11 @@ func publicationVerifyAction(ctx context.Context, command *urfavecli.Command) er
 		return err
 	}
 	presenter := presenterFor(command)
-	message := "Package verification completed with status " + string(result.Overall)
+	humanMessage := ""
 	if presenter.Mode() != presentation.ModeJSON && presenter.Mode() != presentation.ModeQuiet {
-		message = formatPublicationVerification(presenter.Mode(), result)
+		humanMessage = formatPublicationVerification(presenter.Mode(), result)
 	}
-	if err := presenter.Success("publication.verification."+string(result.Overall), message, result); err != nil {
-		return err
-	}
-	if result.FailureCode != "" {
-		return presentedApplicationError{app.NewError(result.FailureCode, "package verification completed with status "+string(result.Overall), nil)}
-	}
-	return nil
+	return presentOperationOutcome(command, service.OperationPublicationVerify, false, result, nil, humanMessage)
 }
 
 func mcpCommand() *urfavecli.Command {
@@ -1539,7 +1466,11 @@ func writeDisplayFields(output *strings.Builder, mode presentation.Mode, fields 
 }
 
 func compactPublicJSON(value any) string {
-	encoded, err := json.Marshal(presentation.Redact(value))
+	redacted, err := presentation.Redact(value)
+	if err != nil {
+		return ""
+	}
+	encoded, err := json.Marshal(redacted)
 	if err != nil {
 		return ""
 	}

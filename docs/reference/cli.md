@@ -92,6 +92,14 @@ use `incomplete`/exit 9 with overall `no_evidence` when no applicable
 forecast-evidence layer exists. Passing document, manifest, or file checks
 remain visible but do not turn that aggregate into `pass`.
 
+Current-main JSON uses one outcome contract for both adapters. Compared with
+v0.6.1, successful local timestamp verification is `timestamp.verified`; a
+publication build dry-run is `publication.build.planned`; supported no-op
+updates use `ledger.unchanged`, `platform.unchanged`, `question.unchanged`,
+`forecast.reveal.unchanged`, or `forecast.key_hint.unchanged`; and a target
+integrity failure is `target.failed` with the complete target report. Embedded
+timestamp fields are serialized at the same level as `verification`.
+
 `mcp serve` also accepts repeatable named `--output-root` and `--secret-root`,
 whole-server `--read-only` and `--offline`, default-off `--allow-reveal`, and
 bounded `--max-concurrent` and `--max-tool-bytes` limits. It has no general

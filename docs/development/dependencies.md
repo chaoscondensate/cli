@@ -38,8 +38,9 @@ third-party notices, including the MCP SDK's mixed-license history.
 ## Security review
 
 - `go mod verify` reported that every downloaded module matched its checksum.
-- `govulncheck` from `golang.org/x/vuln/cmd/govulncheck@v1.7.0` reported no
-  reachable vulnerabilities on 2026-08-25.
+- The project tool `govulncheck` is pinned at `v1.7.0` in `go.mod`. A completed
+  scan reported no reachable vulnerabilities on 2026-08-31. It also reported
+  one advisory in a required module that is not called by this code.
 - MCP SDK releases before the selected baseline had high-severity advisories;
   `v1.7.0` includes the fixes and a patched `segmentio/encoding v0.5.4`.
 - Stdio is the only MCP v1 transport. HTTP-specific origin and DNS-rebinding
@@ -61,8 +62,14 @@ update and before release:
 go mod verify
 go test ./...
 go vet ./...
-go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+go tool govulncheck ./...
 ```
+
+`govulncheck` distinguishes reachable findings from advisories in required
+modules that the analyzed code does not call. Either is useful review input,
+but only a completed scan supports either conclusion. Package-loading errors,
+advisory-data errors, or an interrupted scan are failed checks, not clean
+results. This automated analysis is not an independent security audit.
 
 Do not add a runtime logging, configuration, assertion, secret-manager, or
 general-purpose cryptography dependency without a documented need, license

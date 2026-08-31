@@ -24,6 +24,12 @@ Add `--offline` to prevent those optional requests:
 forecast-ledger verify --file ledger.yaml --check-sources --offline
 ```
 
+When network checks are enabled, only public HTTPS destinations are eligible.
+The client does not use environment proxies and rejects mixed DNS answers or
+reserved destinations, including CGNAT, on the connection it actually opens
+and again after redirects. A rejected or unavailable source is `not_checked`;
+it is not evidence that the recorded outcome is false.
+
 Narrow the report with `--question`; `--forecast` also requires its question.
 The ordered layers are document validity, content binding, existence timing,
 reveal authentication, and outcome evidence. Human, plain, and JSON output

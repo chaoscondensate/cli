@@ -15,8 +15,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  security:
+    name: Dependency vulnerability analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify modules
+        run: go mod verify
+
+      - name: Analyze reachable vulnerabilities
+        run: go tool govulncheck ./...
+
   release:
     name: GoReleaser
+    needs: security
     runs-on: windows-latest
     environment: release
     steps:

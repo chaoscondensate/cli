@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -63,7 +64,7 @@ func JournalPath(ledgerPath string) string {
 // UpdateLedger executes lock, parse, validate, mutate, reparse, revalidate,
 // durable sibling write, journal, and safe replacement in that order.
 func UpdateLedger(ctx context.Context, ledgerPath string, options TransactionOptions) error {
-	resolved, err := ResolveLedgerPath(ledgerPath, true)
+	resolved, err := ResolveLedgerPath(ledgerPath, false)
 	if err != nil {
 		return err
 	}
@@ -75,14 +76,15 @@ func UpdateLedger(ctx context.Context, ledgerPath string, options TransactionOpt
 	if err := contextError(ctx); err != nil {
 		return err
 	}
-	if _, err := os.Lstat(JournalPath(resolved)); err == nil {
-		return app.NewError(app.CodeConflict, "ledger has an unfinished recovery journal", nil)
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		return app.NewError(app.CodeIO, "recovery journal cannot be inspected", err)
+	if _, err := recoverLedgerLocked(ctx, resolved, options.Validate); err != nil {
+		return err
 	}
 
 	original, err := os.ReadFile(resolved)
 	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return app.NewError(app.CodeNotFound, "ledger file does not exist", err)
+		}
 		return app.NewError(app.CodeIO, "ledger file cannot be read", err)
 	}
 	format := detectFormat(resolved, original)
@@ -206,58 +208,136 @@ func RecoverLedger(ctx context.Context, ledgerPath string, lockWait time.Duratio
 		return err
 	}
 	defer lock.Release()
+	recovered, err := recoverLedgerLocked(ctx, resolved, validate)
+	if err != nil {
+		return err
+	}
+	if !recovered {
+		return app.NewError(app.CodeNotFound, "no recovery journal exists", fs.ErrNotExist)
+	}
+	return nil
+}
+
+// recoverLedgerLocked completes or cleans one journal while the caller holds
+// the ledger writer lock. It returns false when no journal exists.
+func recoverLedgerLocked(ctx context.Context, resolved string, validate ValidateDocumentFunc) (bool, error) {
+	if err := contextError(ctx); err != nil {
+		return false, err
+	}
 	journalPath := JournalPath(resolved)
 	journalBytes, err := os.ReadFile(journalPath)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return app.NewError(app.CodeNotFound, "no recovery journal exists", err)
+			return false, nil
 		}
-		return app.NewError(app.CodeIO, "recovery journal cannot be read", err)
+		return false, app.NewError(app.CodeIO, "recovery journal cannot be read", err)
 	}
-	var journal recoveryJournal
-	decoder := json.NewDecoder(bytes.NewReader(journalBytes))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&journal); err != nil || journal.Version != 1 || journal.LedgerBase != filepath.Base(resolved) || filepath.Base(journal.TempBase) != journal.TempBase {
-		return app.NewError(app.CodeConflict, "recovery journal is invalid", err)
+	journal, err := decodeRecoveryJournal(journalBytes, resolved)
+	if err != nil {
+		return false, err
 	}
 	current, err := os.ReadFile(resolved)
 	targetMissing := errors.Is(err, fs.ErrNotExist)
 	if err != nil && !targetMissing {
-		return app.NewError(app.CodeIO, "ledger cannot be read during recovery", err)
+		return false, app.NewError(app.CodeIO, "ledger cannot be read during recovery", err)
 	}
 	currentDigest := sha256Hex(current)
 	tempPath := filepath.Join(filepath.Dir(resolved), journal.TempBase)
 	if !targetMissing && currentDigest == journal.ExpectedSHA256 {
-		_ = os.Remove(tempPath)
-		return removeJournalAndSync(journalPath, filepath.Dir(resolved))
+		if err := validateRecoveryDocument(resolved, current, validate, "recovered ledger"); err != nil {
+			return false, err
+		}
+		if err := removeMatchingRecoveryTemp(tempPath, journal.ExpectedSHA256); err != nil {
+			return false, err
+		}
+		if err := contextError(ctx); err != nil {
+			return false, err
+		}
+		return true, removeJournalAndSync(journalPath, filepath.Dir(resolved))
 	}
 	if !targetMissing && currentDigest != journal.OriginalSHA256 {
-		return app.NewError(app.CodeConflict, "ledger changed after the recovery journal was created", nil)
+		return false, app.NewError(app.CodeConflict, "ledger changed after the recovery journal was created", nil)
 	}
 	temp, err := os.ReadFile(tempPath)
 	if err != nil {
-		return app.NewError(app.CodeIO, "recovery temporary file cannot be read", err)
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, app.NewError(app.CodeConflict, "recovery temporary file is missing", err)
+		}
+		return false, app.NewError(app.CodeIO, "recovery temporary file cannot be read", err)
 	}
 	if sha256Hex(temp) != journal.ExpectedSHA256 {
-		return app.NewError(app.CodeConflict, "recovery temporary file digest does not match the journal", nil)
+		return false, app.NewError(app.CodeConflict, "recovery temporary file digest does not match the journal", nil)
 	}
-	format := detectFormat(resolved, current)
-	parsed, err := parseDocument(temp, format)
+	if err := validateRecoveryDocument(resolved, temp, validate, "recovery temporary file"); err != nil {
+		return false, err
+	}
+	if err := contextError(ctx); err != nil {
+		return false, err
+	}
+	if err := safeReplace(tempPath, resolved); err != nil {
+		return false, app.NewError(app.CodeIO, "recovery replacement failed", err)
+	}
+	if err := syncParentDirectory(filepath.Dir(resolved)); err != nil {
+		return false, app.NewError(app.CodeIO, "recovery replacement could not be flushed", err)
+	}
+	if err := removeJournalAndSync(journalPath, filepath.Dir(resolved)); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func decodeRecoveryJournal(data []byte, resolved string) (recoveryJournal, error) {
+	var journal recoveryJournal
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&journal); err != nil {
+		return recoveryJournal{}, app.NewError(app.CodeConflict, "recovery journal is invalid", err)
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err == nil {
+		return recoveryJournal{}, app.NewError(app.CodeConflict, "recovery journal has trailing data", nil)
+	} else if !errors.Is(err, io.EOF) {
+		return recoveryJournal{}, app.NewError(app.CodeConflict, "recovery journal has trailing data", err)
+	}
+	expectedTempPrefix := "." + filepath.Base(resolved) + ".forecast-ledger-"
+	validTemp := filepath.Base(journal.TempBase) == journal.TempBase && strings.HasPrefix(journal.TempBase, expectedTempPrefix) && strings.HasSuffix(journal.TempBase, ".tmp")
+	_, originalErr := hex.DecodeString(journal.OriginalSHA256)
+	_, expectedErr := hex.DecodeString(journal.ExpectedSHA256)
+	_, createdErr := time.Parse(time.RFC3339Nano, journal.CreatedAt)
+	if journal.Version != 1 || journal.LedgerBase != filepath.Base(resolved) || !validTemp || len(journal.OriginalSHA256) != sha256.Size*2 || len(journal.ExpectedSHA256) != sha256.Size*2 || originalErr != nil || expectedErr != nil || createdErr != nil || journal.OriginalSHA256 == journal.ExpectedSHA256 {
+		return recoveryJournal{}, app.NewError(app.CodeConflict, "recovery journal is invalid", nil)
+	}
+	return journal, nil
+}
+
+func validateRecoveryDocument(resolved string, data []byte, validate ValidateDocumentFunc, label string) error {
+	parsed, err := parseDocument(data, detectFormat(resolved, data))
 	if err != nil {
-		return app.NewError(app.CodeInvalidData, "recovery temporary file cannot be parsed", err)
+		return app.NewError(app.CodeInvalidData, label+" cannot be parsed", err)
 	}
 	if validate != nil {
 		if err := validate(parsed); err != nil {
-			return app.NewError(app.CodeInvalidData, "recovery temporary file is not valid", err)
+			return validationFailure(label+" is not valid", err)
 		}
 	}
-	if err := safeReplace(tempPath, resolved); err != nil {
-		return app.NewError(app.CodeIO, "recovery replacement failed", err)
+	return nil
+}
+
+func removeMatchingRecoveryTemp(path, expectedDigest string) error {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
 	}
-	if err := syncParentDirectory(filepath.Dir(resolved)); err != nil {
-		return app.NewError(app.CodeIO, "recovery replacement could not be flushed", err)
+	if err != nil {
+		return app.NewError(app.CodeIO, "recovery temporary file cannot be read", err)
 	}
-	return removeJournalAndSync(journalPath, filepath.Dir(resolved))
+	if sha256Hex(data) != expectedDigest {
+		return app.NewError(app.CodeConflict, "recovery temporary file digest does not match the completed ledger", nil)
+	}
+	if err := os.Remove(path); err != nil {
+		return app.NewError(app.CodeIO, "recovery temporary file cannot be removed", err)
+	}
+	return nil
 }
 
 func writeSiblingTemp(ledgerPath string, data []byte, mode fs.FileMode, options TransactionOptions) (string, error) {

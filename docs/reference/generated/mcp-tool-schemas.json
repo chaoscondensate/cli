@@ -5,6 +5,10 @@
   "tools": {
     "forecast_add": {
       "operation": "forecast.add",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -378,6 +382,11 @@
     },
     "forecast_key_hint_update": {
       "operation": "forecast.key_hint.update",
+      "outcome_states": [
+        "success",
+        "planned",
+        "unchanged"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -435,6 +444,9 @@
     },
     "forecast_list": {
       "operation": "forecast.list",
+      "outcome_states": [
+        "success"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -462,6 +474,11 @@
     },
     "forecast_reveal": {
       "operation": "forecast.reveal",
+      "outcome_states": [
+        "success",
+        "planned",
+        "unchanged"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -513,6 +530,10 @@
     },
     "forecast_seal": {
       "operation": "forecast.seal",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -576,6 +597,9 @@
     },
     "forecast_show": {
       "operation": "forecast.show",
+      "outcome_states": [
+        "success"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -609,6 +633,10 @@
     },
     "ledger_init": {
       "operation": "ledger.init",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -1448,6 +1476,9 @@
     },
     "ledger_status": {
       "operation": "ledger.status",
+      "outcome_states": [
+        "success"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -1469,6 +1500,11 @@
     },
     "ledger_update": {
       "operation": "ledger.update",
+      "outcome_states": [
+        "success",
+        "planned",
+        "unchanged"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -1684,6 +1720,9 @@
     },
     "ledger_validate": {
       "operation": "ledger.validate",
+      "outcome_states": [
+        "success"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -1705,6 +1744,10 @@
     },
     "platform_add": {
       "operation": "platform.add",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -1825,6 +1868,9 @@
     },
     "platform_list": {
       "operation": "platform.list",
+      "outcome_states": [
+        "success"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -1846,6 +1892,10 @@
     },
     "platform_remove": {
       "operation": "platform.remove",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -1882,6 +1932,9 @@
     },
     "platform_show": {
       "operation": "platform.show",
+      "outcome_states": [
+        "success"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -1909,6 +1962,11 @@
     },
     "platform_update": {
       "operation": "platform.update",
+      "outcome_states": [
+        "success",
+        "planned",
+        "unchanged"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -2085,6 +2143,10 @@
     },
     "publication_build": {
       "operation": "publication.build",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -2116,6 +2178,11 @@
     "publication_verify": {
       "description": "Pass requires at least one applicable forecast-evidence layer; an empty or all-not-applicable selection returns no_evidence.",
       "operation": "publication.verify",
+      "outcome_states": [
+        "success",
+        "pending",
+        "partial_failure"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -2142,6 +2209,10 @@
     },
     "question_add": {
       "operation": "question.add",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -2739,6 +2810,10 @@
     },
     "question_annul": {
       "operation": "question.annul",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -2855,6 +2930,10 @@
     },
     "question_dispute": {
       "operation": "question.dispute",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -2971,6 +3050,9 @@
     },
     "question_list": {
       "operation": "question.list",
+      "outcome_states": [
+        "success"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -2992,6 +3074,10 @@
     },
     "question_resolve": {
       "operation": "question.resolve",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -3142,6 +3228,9 @@
     },
     "question_show": {
       "operation": "question.show",
+      "outcome_states": [
+        "success"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -3169,6 +3258,11 @@
     },
     "question_update": {
       "operation": "question.update",
+      "outcome_states": [
+        "success",
+        "planned",
+        "unchanged"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -3369,6 +3463,10 @@
     },
     "target_build": {
       "operation": "target.build",
+      "outcome_states": [
+        "success",
+        "planned"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -3407,6 +3505,10 @@
     },
     "target_check": {
       "operation": "target.check",
+      "outcome_states": [
+        "success",
+        "partial_failure"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -3441,6 +3543,12 @@
     },
     "timestamp_stamp": {
       "operation": "timestamp.stamp",
+      "outcome_states": [
+        "success",
+        "planned",
+        "pending",
+        "partial_failure"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -3494,6 +3602,9 @@
     },
     "timestamp_status": {
       "operation": "timestamp.status",
+      "outcome_states": [
+        "success"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },
@@ -3528,6 +3639,12 @@
     "timestamp_verify": {
       "description": "Returns a structured timing report for pending, not-checked, mismatch, and verified outcomes; source unavailability is not proof failure.",
       "operation": "timestamp.verify",
+      "outcome_states": [
+        "success",
+        "planned",
+        "pending",
+        "partial_failure"
+      ],
       "result_schema": {
         "allOf": [
           {
@@ -3578,6 +3695,11 @@
     "verification_run": {
       "description": "Pass requires at least one applicable forecast-evidence layer; an empty or all-not-applicable selection returns no_evidence.",
       "operation": "verification.run",
+      "outcome_states": [
+        "success",
+        "pending",
+        "partial_failure"
+      ],
       "result_schema": {
         "$ref": "result.schema.json"
       },

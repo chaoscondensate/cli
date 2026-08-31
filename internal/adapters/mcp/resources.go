@@ -10,6 +10,7 @@ import (
 
 	"github.com/chaoscondensate/cli/internal/app"
 	"github.com/chaoscondensate/cli/internal/ledger"
+	"github.com/chaoscondensate/cli/internal/presentation"
 	"github.com/chaoscondensate/cli/internal/publication"
 	"github.com/chaoscondensate/cli/internal/service"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -60,11 +61,23 @@ func (s *Server) resourceHandler(ctx context.Context, request *sdk.ReadResourceR
 	if err != nil {
 		return nil, resourceError(request.Params.URI, err)
 	}
-	encoded, err := json.Marshal(data)
+	encoded, err := marshalResourceData(data)
 	if err != nil {
-		return nil, app.NewError(app.CodeInternal, "resource result cannot be encoded", err)
+		return nil, err
 	}
-	return &sdk.ReadResourceResult{Contents: []*sdk.ResourceContents{{URI: request.Params.URI, MIMEType: "application/json", Text: string(encoded)}}}, nil
+	return &sdk.ReadResourceResult{Contents: []*sdk.ResourceContents{{URI: request.Params.URI, MIMEType: "application/json", Text: encoded}}}, nil
+}
+
+func marshalResourceData(data any) (string, error) {
+	safe, err := presentation.Redact(data)
+	if err != nil {
+		return "", app.NewError(app.CodeInternal, "resource result cannot be sanitized", err)
+	}
+	encoded, err := json.Marshal(safe)
+	if err != nil {
+		return "", app.NewError(app.CodeInternal, "resource result cannot be encoded", err)
+	}
+	return string(encoded), nil
 }
 
 func (s *Server) readLedgerResource(ctx context.Context, kind, file string, query url.Values) (any, error) {

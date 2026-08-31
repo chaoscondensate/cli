@@ -3,14 +3,18 @@ package service
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/chaoscondensate/cli/internal/app"
+	"github.com/chaoscondensate/cli/internal/document"
 	"github.com/chaoscondensate/cli/internal/ledger"
 	contractschema "github.com/chaoscondensate/cli/internal/schema"
+	"github.com/chaoscondensate/cli/internal/storage"
 )
 
 func TestCommitRootMetadataFileUpdatePreservesUnrelatedYAMLBytes(t *testing.T) {
@@ -53,6 +57,44 @@ func TestCommitRootMetadataFileUpdatePreservesUnrelatedYAMLBytes(t *testing.T) {
 	}
 	if loaded.Model.Forecaster.ID != ledger.Slug("example-research-team") || loaded.Model.Publication != nil && loaded.Model.Publication.History == "" {
 		t.Fatalf("immutable metadata changed: %#v", loaded.Model)
+	}
+}
+
+func TestServiceMutationAutomaticallyRecoversInterruptedLedgerWrite(t *testing.T) {
+	raw, err := fs.ReadFile(contractschema.Conformance(), "individual-ledger.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := t.TempDir()
+	path := filepath.Join(directory, "ledger.json")
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err = storage.UpdateLedger(t.Context(), path, storage.TransactionOptions{
+		Validate: func(parsed *document.Document) error { return ValidateLedgerDocument(parsed, os.DirFS(directory)) },
+		Mutate: func(parsed *document.Document) ([]byte, error) {
+			return document.ReplaceScalars(parsed, []document.ScalarEdit{{Pointer: "/title", Value: "Interrupted title"}})
+		},
+		Fault: func(stage storage.TransactionStage) error {
+			if stage == storage.StageJournalSynced {
+				return errors.New("simulated stop")
+			}
+			return nil
+		},
+	})
+	if app.ErrorCodeOf(err) != app.CodeIO {
+		t.Fatalf("fault error=%v", err)
+	}
+	result, err := CommitRootMetadataFileUpdate(t.Context(), path, RootMetadataPatchInput{Title: Optional[string]{Set: true, Value: "Retried title"}})
+	if err != nil || !result.Changed {
+		t.Fatalf("retry result=%+v err=%v", result, err)
+	}
+	loaded, err := LoadAndValidateLedger(t.Context(), path, nil)
+	if err != nil || loaded.Model.Title == nil || *loaded.Model.Title != "Retried title" {
+		t.Fatalf("recovered ledger title=%v err=%v", loaded.Model.Title, err)
+	}
+	if _, statErr := os.Stat(storage.JournalPath(path)); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("retry retained journal: %v", statErr)
 	}
 }
 
