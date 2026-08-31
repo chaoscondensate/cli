@@ -1,8 +1,8 @@
 # Verification claims and evidence terms
 
 <!-- doc-metadata
-coverage: v0.6.1
-reviewed: 2026-08-30
+coverage: v0.7.0
+reviewed: 2026-08-31
 owner: security
 generated: false
 security-critical: true
@@ -10,8 +10,8 @@ prerequisites: ../getting-started/index.md
 next: ../security/index.md
 -->
 
-Applies to: Forecast Ledger CLI release v0.6.1 (Preview).
-Last substantive review: 2026-08-29.
+Applies to: Forecast Ledger CLI release v0.7.0 (Preview).
+Last substantive review: 2026-08-31.
 Owner: security and interface owners
 
 This page defines the strongest conclusion the documentation may draw from a

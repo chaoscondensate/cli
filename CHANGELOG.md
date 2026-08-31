@@ -3,7 +3,7 @@
 Notable user-visible changes to Forecast Ledger CLI are recorded here. Release
 tags and downloadable files are published on GitHub Releases.
 
-## Unreleased
+## 0.7.0 - 2026-08-31
 
 ### Fixed
 
