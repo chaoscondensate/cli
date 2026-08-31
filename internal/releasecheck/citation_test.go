@@ -9,7 +9,7 @@ func TestCurrentCitation(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join("..", "..", "CITATION.cff")
-	if err := CheckCitation(path, "0.8.0-rc.2", "2026-08-31"); err != nil {
+	if err := CheckCitation(path, "0.8.0", "2026-08-31"); err != nil {
 		t.Fatal(err)
 	}
 }
