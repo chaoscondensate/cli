@@ -18,10 +18,10 @@ const (
 	ForecastTargetProfile  = "forecast-envelope/v1"
 )
 
-//go:embed vendor/forecast-ledger/v1.3.0/forecast-ledger.schema.json
+//go:embed contract/forecast-ledger/v1.3.0/forecast-ledger.schema.json
 var contract []byte
 
-//go:embed vendor/forecast-ledger/v1.3.0/LICENSE
+//go:embed contract/forecast-ledger/v1.3.0/LICENSE
 var license []byte
 
 //go:embed testdata/forecast-ledger/v1.3.0/*

@@ -41,7 +41,7 @@ func TestActiveSurfaceHasNoGenericPublicAuthoringTransport(t *testing.T) {
 				return err
 			}
 			relative = filepath.ToSlash(relative)
-			if directAuthoringNegativeTests[relative] || strings.Contains(relative, "/schema/vendor/forecast-ledger/v1.2.0/") || strings.Contains(relative, "/schema/testdata/forecast-ledger/v1.2.0/") {
+			if directAuthoringNegativeTests[relative] || strings.Contains(relative, "/schema/contract/forecast-ledger/v1.2.0/") || strings.Contains(relative, "/schema/testdata/forecast-ledger/v1.2.0/") {
 				return nil
 			}
 			content, err := os.ReadFile(path)

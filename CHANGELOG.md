@@ -16,6 +16,11 @@ tags and downloadable files are published on GitHub Releases.
   instead of a hard-coded repository slug, and publish package metadata and
   Homebrew download URLs under the canonical repository name.
 
+### Fixed
+
+- Keep the embedded contract outside Go's reserved `vendor` directory so
+  versioned `go install` builds include the schema and license bytes.
+
 ## 0.7.0 - 2026-08-31
 
 ### Fixed
